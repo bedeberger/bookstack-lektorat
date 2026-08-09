@@ -31,7 +31,6 @@
      1px Standard (Card-Rand, Inputs), 2px Akzentband (Tabs-Active,
      Card-Accent-Stripe, Findings-Severity). */
   --border-thin:   0.5px;
-  --border:        1px;
   --border-thick:  2px;
 
   /* === Radius-Token-Stufen ===

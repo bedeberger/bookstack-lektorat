@@ -18,6 +18,7 @@ import { ensureTrailingParagraph } from './auto-slot.js';
 import { markCitesAtomic } from '../../sources/cite-html.js';
 import { markXrefsAtomic } from '../../xrefs/xref-html.js';
 import { markDiagramsAtomic } from '../../diagram/mermaid-html.js';
+import { markTablesAtomic } from '../../table/table-html.js';
 
 // Setzt `html` in `el` und stellt Block-Konsistenz + Caret-Slot her.
 // Liefert `{ repaired }` — true, wenn `normalizeEditorBlocks` am gelieferten
@@ -50,6 +51,11 @@ export function mountEditorHtml(el, html) {
   // und wird ausschliesslich über den Diagramm-Dialog bearbeitet. Gleiche
   // Begründung wie oben — Laufzeit-Attribut, keine Inhaltsreparatur.
   markDiagramsAtomic(el);
+  // Tabellen ebenso: Chromium baeckt beim Zell-Merge berechnete CSS-Werte als
+  // Inline-`style` ein, und `style` darf nicht in die Persistenz. Bearbeitet
+  // wird ausschliesslich im Gitter-Dialog (notebook-only). Auch hier nur ein
+  // Laufzeit-Attribut.
+  markTablesAtomic(el);
   return { repaired };
 }
 

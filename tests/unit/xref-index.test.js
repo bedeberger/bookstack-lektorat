@@ -10,7 +10,7 @@ process.env.DB_PATH = path.join('/tmp', `xref-idx-test-${process.pid}-${Date.now
 const schema = require('../../db/schema');
 const { db } = require('../../db/schema');
 const xrefs = require('../../db/xrefs');
-const { reindexPageXrefs, XREF_HINT, ANCHOR_HINT } = require('../../lib/xref-index');
+const { reindexPageXrefs, XREF_HINT, ANCHOR_HINTS } = require('../../lib/xref-index');
 const { XREF_ATTR_ID } = { XREF_ATTR_ID: 'data-xref-id' };
 
 // ── Fixture: zwei Buecher, je ein Kapitel und eine Seite ─────────────────────
@@ -33,8 +33,11 @@ test('Marker-Hints entsprechen der Markup-SSoT', () => {
   // Der Vorab-Test in lib/xref-index.js darf nicht von der SSoT abdriften —
   // sonst wird eine Seite mit Verweisen gar nicht erst geparst.
   assert.equal(XREF_HINT, XREF_ATTR_ID);
-  assert.equal(ANCHOR_HINT, '<figure');
+  // Beide Anker-Typen: fehlt einer, wird eine Seite, die nur diesen Typ traegt,
+  // gar nicht geparst — und der Verweis darauf findet sein Ziel nicht.
+  assert.deepEqual(ANCHOR_HINTS, ['<figure', '<table']);
 });
+
 
 test('Anker und Verweise einer Seite werden indiziert', async () => {
   const res = await reindexPageXrefs(8010, `<p>Text</p>${FIG}<p>Siehe ${REF_CH}.</p>`);
@@ -149,4 +152,36 @@ test('reindexAllXrefs laeuft ueber alle Buecher', async () => {
   const r = await reindexAllXrefs();
   assert.ok(r.books >= 2, `erwartet >= 2 Buecher, war ${r.books}`);
   assert.ok(r.pages >= 3);
+});
+
+// Ans Dateiende, nicht dazwischen: die Tests dieser Datei teilen eine DB, und
+// `listBookAnchors(900)` in den frueheren Faellen zaehlt buchweit — ein Anker,
+// den ein vorgezogener Test anlegt, laesst sie fehlschlagen.
+test('eine Tabelle wird als Anker indiziert', async () => {
+  const TBL = '<table data-bid="bbbbbbbbbbbbbbbb"><caption>Umsatz</caption>'
+    + '<thead><tr><th scope="col">Jahr</th></tr></thead><tbody><tr><td>2023</td></tr></tbody></table>';
+  const res = await reindexPageXrefs(8011, `<p>Text</p>${TBL}`);
+  assert.equal(res.anchors, 1, 'ohne den Anker gibt es kein Verweis-Ziel und keine Nummer');
+  const row = xrefs.listBookAnchors(900).find(a => a.bid === 'bbbbbbbbbbbbbbbb');
+  assert.ok(row, 'die Tabelle muss in xref_anchors stehen');
+  assert.equal(row.kind, 'table');
+  assert.equal(row.caption, 'Umsatz', 'die Beschriftung kommt aus <caption>');
+});
+
+test('Verweis auf eine Tabelle wird indiziert (Anker auf Seite B, Verweis von Seite A)', async () => {
+  const REF = '<span class="xref" data-xref="table" data-xref-id="bbbbbbbbbbbbbbbb">Tab. 1</span>';
+  const res = await reindexPageXrefs(8010, `<p>Siehe ${REF}.</p>`);
+  assert.equal(res.links, 1, 'der Tabellen-Anker auf 8011 liegt im selben Buch — der Buch-Guard muss durchlassen');
+  const back = xrefs.listXrefBacklinks('table', 'bbbbbbbbbbbbbbbb');
+  assert.equal(back.length, 1, 'die Rueckwaertsfrage muss den Verweis finden');
+});
+
+test('Typ-Guard: ein table-Verweis auf eine ABBILDUNG wird nicht indiziert', async () => {
+  // Der Abbildungs-Anker `aaaa…` liegt auf Seite A. Ein `data-xref="table"`
+  // darauf ist ein kaputter Verweis und bekommt keine Zeile — sonst zeigte
+  // „Tab. 9" auf eine Abbildung.
+  await reindexPageXrefs(8010, `<p>Text</p>${FIG}`);
+  const REF = '<span class="xref" data-xref="table" data-xref-id="aaaaaaaaaaaaaaaa">Tab. 9</span>';
+  const res = await reindexPageXrefs(8011, `<p>Siehe ${REF}.</p>`);
+  assert.equal(res.links, 0);
 });

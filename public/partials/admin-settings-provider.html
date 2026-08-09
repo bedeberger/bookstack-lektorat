@@ -3,7 +3,7 @@
       <p class="muted-msg muted-msg--sm" x-text="$app.t('admin.settings.help.providerChoice')"></p>
 
       <nav class="admin-settings-subtabs" role="tablist">
-        <template x-for="p in ['claude','ollama','openai-compat']" :key="p">
+        <template x-for="p in ['claude','ollama','openai-compat','profiles']" :key="p">
           <button type="button" role="tab"
                   :class="['admin-settings-subtab', adminSettingsProviderSubtab === p ? 'is-active' : '', adminSettingsForm['ai.provider'] === p ? 'is-default-provider' : '']"
                   @click="adminSettingsProviderSubtab = p">
@@ -22,11 +22,11 @@
 
         <h4 class="admin-settings-subheading"><span x-text="$app.t('admin.settings.claude.komplettTitle')"></span></h4>
         <small class="muted-msg muted-msg--sm" x-text="$app.t('admin.settings.claude.komplettIntro')"></small>
-        <div x-data="settingField({ k: 'ai.claude.model.komplett', label: 'admin.settings.label.aiClaudeModelKomplett', ph: 'claude-opus-4-8', help: 'admin.settings.help.komplettModel', models: 'claude' })"></div>
+        <div x-data="settingField({ k: 'ai.claude.model.komplett', label: 'admin.settings.label.aiModelKomplett', ph: 'claude-opus-4-8', help: 'admin.settings.help.komplettModel', models: 'claude' })"></div>
         <div x-data="settingField({ k: 'ai.claude.model.komplett.extract', label: 'admin.settings.label.aiClaudeModelKomplettExtract', ph: 'claude-sonnet-5', help: 'admin.settings.help.komplettModelExtract', models: 'claude' })"></div>
-        <div x-data="settingField({ k: 'ai.claude.context_window.komplett', type: 'num', label: 'admin.settings.label.aiClaudeContextWindowKomplett', num: { integer: true, min: 0, max: 2000000 }, help: 'admin.settings.help.komplettContextWindow' })"></div>
-        <div x-data="settingField({ k: 'ai.claude.max_tokens_out.komplett', type: 'num', label: 'admin.settings.label.aiClaudeMaxTokensOutKomplett', num: { integer: true, min: 0, max: 200000 }, help: 'admin.settings.help.komplettMaxTokensOut' })"></div>
-        <div x-data="settingField({ k: 'ai.claude.timeout_ms.komplett', type: 'num', label: 'admin.settings.label.aiClaudeTimeoutMsKomplett', num: { integer: true, min: 0, max: 3600000 }, help: 'admin.settings.help.komplettTimeoutMs' })"></div>
+        <div x-data="settingField({ k: 'ai.claude.context_window.komplett', type: 'num', label: 'admin.settings.label.aiContextWindowKomplett', num: { integer: true, min: 0, max: 2000000 }, help: 'admin.settings.help.komplettContextWindow' })"></div>
+        <div x-data="settingField({ k: 'ai.claude.max_tokens_out.komplett', type: 'num', label: 'admin.settings.label.aiMaxTokensOutKomplett', num: { integer: true, min: 0, max: 200000 }, help: 'admin.settings.help.komplettMaxTokensOut' })"></div>
+        <div x-data="settingField({ k: 'ai.claude.timeout_ms.komplett', type: 'num', label: 'admin.settings.label.aiTimeoutMsKomplett', num: { integer: true, min: 0, max: 3600000 }, help: 'admin.settings.help.komplettTimeoutMs' })"></div>
         <div x-data="settingField({ k: 'ai.claude.effort.komplett', label: 'admin.settings.label.aiClaudeEffortKomplett', ph: 'high', help: 'admin.settings.help.komplettEffort' })"></div>
         <div x-data="settingField({ k: 'ai.claude.effort.komplett.extract', label: 'admin.settings.label.aiClaudeEffortKomplettExtract', ph: 'medium', help: 'admin.settings.help.komplettEffortExtract' })"></div>
         <div x-data="settingField({ k: 'ai.komplett.completeness_passes', type: 'num', label: 'admin.settings.label.komplettCompletenessPasses', num: { integer: true, min: 0, max: 3 }, help: 'admin.settings.help.completenessPasses' })"></div>
@@ -51,8 +51,8 @@
 
         <h4 class="admin-settings-subheading"><span x-text="$app.t('admin.settings.claude.advancedTitle')"></span></h4>
         <small class="muted-msg muted-msg--sm" x-text="$app.t('admin.settings.help.advancedClaude')"></small>
-        <div x-data="settingField({ k: 'ai.claude.retry_max', type: 'num', label: 'admin.settings.label.aiClaudeRetryMax', num: { step: 1, min: 0, max: 10 } })"></div>
-        <div x-data="settingField({ k: 'ai.claude.timeout_ms', type: 'num', label: 'admin.settings.label.aiClaudeTimeoutMs', num: { step: 1, min: 1000, max: 3600000 } })"></div>
+        <div x-data="settingField({ k: 'ai.claude.retry_max', type: 'num', label: 'admin.settings.label.aiRetryMax', num: { step: 1, min: 0, max: 10 } })"></div>
+        <div x-data="settingField({ k: 'ai.claude.timeout_ms', type: 'num', label: 'admin.settings.label.aiTimeoutMs', num: { step: 1, min: 1000, max: 3600000 } })"></div>
         <div x-data="settingField({ k: 'ai.claude.phase1_concurrency', type: 'num', label: 'admin.settings.label.aiClaudePhase1Concurrency', num: { step: 1, min: 1, max: 16 } })"></div>
       </div>
 
@@ -77,9 +77,20 @@
         <div x-data="settingField({ k: 'ai.openai-compat.think', type: 'toggle', label: 'admin.settings.label.aiThink', help: 'admin.settings.help.thinkOpenaiCompat' })"></div>
         <div x-data="settingField({ k: 'ai.openai-compat.cloud', type: 'toggle', label: 'admin.settings.label.cloudModel', help: 'admin.settings.help.cloudOpenaiCompat' })"></div>
         <div x-data="settingField({ k: 'ai.openai-compat.max_parallel', type: 'num', label: 'admin.settings.label.maxParallel', num: { integer: true, min: 1, max: 16 }, help: 'admin.settings.help.maxParallelOpenaiCompat' })"></div>
+        <div x-data="settingField({ k: 'ai.openai-compat.timeout_ms', type: 'num', label: 'admin.settings.label.aiTimeoutMs', num: { integer: true, min: 1000, max: 3600000 }, help: 'admin.settings.help.timeoutMsOpenaiCompat' })"></div>
+        <div x-data="settingField({ k: 'ai.openai-compat.retry_max', type: 'num', label: 'admin.settings.label.aiRetryMax', num: { integer: true, min: 0, max: 10 }, help: 'admin.settings.help.retryMaxOpenaiCompat' })"></div>
+
+        <h4 class="admin-settings-subheading"><span x-text="$app.t('admin.settings.openaiCompat.komplettTitle')"></span></h4>
+        <small class="muted-msg muted-msg--sm" x-text="$app.t('admin.settings.openaiCompat.komplettIntro')"></small>
+        <div x-data="settingField({ k: 'ai.openai-compat.model.komplett', label: 'admin.settings.label.aiModelKomplett', help: 'admin.settings.help.komplettModelOpenaiCompat', models: { target: 'openai-compat', hostKey: 'ai.openai-compat.host' } })"></div>
+        <div x-data="settingField({ k: 'ai.openai-compat.context_window.komplett', type: 'num', label: 'admin.settings.label.aiContextWindowKomplett', num: { integer: true, min: 0, max: 2000000 }, help: 'admin.settings.help.komplettContextWindowOpenaiCompat' })"></div>
+        <div x-data="settingField({ k: 'ai.openai-compat.max_tokens_out.komplett', type: 'num', label: 'admin.settings.label.aiMaxTokensOutKomplett', num: { integer: true, min: 0, max: 200000 }, help: 'admin.settings.help.komplettMaxTokensOutOpenaiCompat' })"></div>
+        <div x-data="settingField({ k: 'ai.openai-compat.timeout_ms.komplett', type: 'num', label: 'admin.settings.label.aiTimeoutMsKomplett', num: { integer: true, min: 0, max: 3600000 }, help: 'admin.settings.help.komplettTimeoutMsOpenaiCompat' })"></div>
       </div>
 
-      <template x-if="adminSettingsBudget(adminSettingsProviderSubtab)">
+      <!-- @include admin-settings-profiles -->
+
+      <template x-if="adminSettingsProviderSubtab !== 'profiles' && adminSettingsBudget(adminSettingsProviderSubtab)">
         <div class="admin-settings-budget"
              :class="{ 'is-warn': adminSettingsBudget(adminSettingsProviderSubtab).level === 'warn', 'is-bad': adminSettingsBudget(adminSettingsProviderSubtab).level === 'bad' }">
           <strong x-text="$app.t('admin.settings.komplett.title')"></strong>
@@ -90,7 +101,7 @@
         </div>
       </template>
 
-      <div class="admin-settings-actions">
+      <div class="admin-settings-actions" x-show="adminSettingsProviderSubtab !== 'profiles'">
         <button type="button"
                 @click="adminSettingsForm['ai.provider'] = adminSettingsProviderSubtab"
                 :disabled="adminSettingsForm['ai.provider'] === adminSettingsProviderSubtab"

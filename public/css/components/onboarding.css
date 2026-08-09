@@ -1,3 +1,4 @@
+@layer components {
 /* Erste Schritte — Onboarding-Fortschritts-Checkliste (Karte `.card--onboarding`)
    + First-Login-Willkommens-Banner. Akzent pro Karte via var(--card-accent)
    (SSoT card-accents.css). Markup: public/partials/onboarding.html; Banner in
@@ -28,7 +29,7 @@
 .onboarding-progress-count {
   flex: 0 0 auto;
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   font-variant-numeric: tabular-nums;
   color: var(--color-muted);
 }
@@ -40,7 +41,7 @@
   background: var(--color-accent-bg);
   color: var(--color-accent-text);
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .onboarding-steps {
@@ -75,12 +76,12 @@
   background: var(--color-accent-bg);
   color: var(--color-accent-text);
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   font-variant-numeric: tabular-nums;
 }
 .onboarding-step.is-done .onboarding-step-num {
   background: var(--card-accent, var(--color-accent));
-  color: #fff;
+  color: var(--color-on-accent-fill);
 }
 .onboarding-step-body {
   display: flex;
@@ -91,7 +92,7 @@
 }
 .onboarding-step-title {
   font-size: var(--font-size-md);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--color-text);
 }
 .onboarding-step-desc {
@@ -106,7 +107,7 @@
   background: var(--color-accent-bg);
   color: var(--color-accent-text);
   font-size: var(--font-size-mini);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 .onboarding-step-cta {
   flex: 0 0 auto;
@@ -132,7 +133,7 @@
 }
 .onboarding-demo-title {
   font-size: var(--font-size-md);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--color-text);
 }
 .onboarding-demo-desc {
@@ -195,4 +196,5 @@
   .onboarding-welcome-banner {
     flex-wrap: wrap;
   }
+}
 }

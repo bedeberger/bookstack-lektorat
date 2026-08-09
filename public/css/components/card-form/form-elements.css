@@ -111,7 +111,7 @@ textarea:disabled,
   display: block;
 }
 .card-form-label {
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   font-size: var(--font-size-sm);
   padding-top: var(--space-6);
   color: var(--color-text);
@@ -163,7 +163,7 @@ textarea:disabled,
   margin: var(--space-sm) 0 0;
   font-size: var(--font-size-mini);
   color: var(--color-success);
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   display: inline-flex;
   align-items: center;
   gap: var(--space-6);
@@ -383,7 +383,7 @@ select[aria-invalid="true"],
 }
 .form-check-title {
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--color-text);
   display: block;
 }
@@ -407,7 +407,7 @@ select[aria-invalid="true"],
 }
 .form-size-hint {
   margin-left: var(--space-6);
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   opacity: var(--opacity-strong);
 }
 

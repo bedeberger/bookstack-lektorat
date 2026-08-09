@@ -373,7 +373,7 @@ test('buildKontinuitaetSinglePassPrompt: leere Entitäten-Listen → kein Block 
 });
 
 // ── Provider-Varianten: zwei Instanzen gleichzeitig ──────────────────────────
-// Deckt den Mischbetrieb ab (app_users.ai_provider_override): die Prompt-Schicht
+// Deckt den Mischbetrieb ab (KI-Profil aus app_users.ai_profile_id): die Prompt-Schicht
 // muss cloud- UND local-Variante NEBENEINANDER halten können, sonst bekommt ein
 // User die Prompts des jeweils anderen Providers. Fährt bewusst über den
 // Produktions-Loader-Hook (lib/prompts-variant-hooks.mjs) — ein blosser

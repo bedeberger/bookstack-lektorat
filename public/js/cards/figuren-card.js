@@ -3,6 +3,7 @@
 // Eigener State:
 //   - Graph-Modus (figurenGraphModus, figurenGraphKapitel, figurenGraphFullscreen)
 //   - vis-network-Internals (_figurenNetwork, _figurenHash, _figurenNodes, _figurenEdges)
+//   - aufgelöste Canvas-Farben (_graphTheme) + Theme-Observer (_themeObserver)
 //   - figurenUpdatedAt (Render-Timestamp im Card-Header)
 //
 // Geteilt:
@@ -17,6 +18,7 @@ import { graphMethods } from '../graph.js';
 import { presenceMethods } from '../book/figuren-presence.js';
 import { setupCardLifecycle } from './card-lifecycle.js';
 import { attachFullscreenSync } from '../fullscreen.js';
+import { observeThemeChange } from '../graph-kit.js';
 
 const FIGUR_TYP_ORDER = { hauptfigur: 0, antagonist: 1, mentor: 2, nebenfigur: 3, randfigur: 4, andere: 5 };
 
@@ -78,6 +80,10 @@ export function registerFigurenCard() {
     _figurenHash: null,
     _figurenNodes: null,
     _figurenEdges: null,
+    // Aufgelöste Canvas-Farben (Hell/Dunkel). Wird pro Render in renderFigurGraph
+    // gesetzt; Overlays + Kapitel-Filter lesen daraus, statt selbst zu messen.
+    _graphTheme: null,
+    _themeObserver: null,
     // Ein Memo-Helper pro Modul (CLAUDE.md): filteredFiguren()/figurenKapitelListe()/
     // figurenSeitenListe() werden im Template (inkl. Combobox-x-effect) mehrfach pro
     // Render gelesen → Cache mit shallow-Array-Deps. Reset via this._memos = {} im load-Pfad.
@@ -156,6 +162,14 @@ export function registerFigurenCard() {
         if (window.__app.showFiguresCard && figuren?.length) this.renderFigurGraph();
       });
 
+      // Theme-Wechsel (Hell/Dunkel) → neu zeichnen. Die Canvas-Farben stecken im
+      // gezeichneten Bild; ein CSS-Wechsel erreicht sie nicht.
+      this._themeObserver = observeThemeChange(() => {
+        if (window.__app.showFiguresCard && Alpine.store('catalog').figuren?.length) {
+          this.renderFigurGraph();
+        }
+      });
+
       // Native Fullscreen-API: State spiegeln, Canvas neu fitten, beim Verlassen
       // (Esc / Browser-UI) Toggle-Flag sauber zurücksetzen.
       attachFullscreenSync({
@@ -180,7 +194,10 @@ export function registerFigurenCard() {
         try { document.exitFullscreen?.(); } catch {}
       }
       this._lifecycle?.destroy();
+      this._themeObserver?.disconnect();
+      this._themeObserver = null;
       if (this._figurenNetwork) { this._figurenNetwork.destroy(); this._figurenNetwork = null; }
+      this._graphTheme = null;
     },
 
     // Ein Memo-Helper pro Modul (CLAUDE.md): Cache mit shallow-Array-Deps-

@@ -5,6 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
+import JSZip from 'jszip';
 
 process.env.DB_PATH = path.join('/tmp', `builders-${process.pid}-${Date.now()}.db`);
 await import('../../../db/schema.js');
@@ -180,3 +181,121 @@ test('pdf scope=page: %PDF-Header + kein Cover-Page', async () => {
   const buf = await buildPdf(pageBundle, { token: null, lang: 'de' });
   assert.equal(buf.slice(0, 5).toString(), '%PDF-');
 }, { timeout: 60000 });
+
+// ── Tabellen ────────────────────────────────────────────────────────────────
+// Der Walker (lib/pdf-render/html-walker.js) ist GETEILT: PDF, DOCX, Markdown
+// und Substack lesen dieselbe Blockliste. Ein neuer Blocktyp faellt in ihrem
+// `default` und verschwindet lautlos — darum fahren alle Wege hier gegen
+// dieselbe Zusage: DER INHALT DER ZELLEN KOMMT AN. TXT geht bewusst nicht durch
+// den Walker (parserfrei) und ist trotzdem mit dabei, weil die Zusage dieselbe
+// ist.
+
+const TABLE_HTML = '<table>'
+  + '<caption>Umsatz nach Jahr</caption>'
+  + '<thead><tr><th scope="col">Jahr</th><th scope="col" data-align="right">Umsatz</th></tr></thead>'
+  + '<tbody><tr><td>2023</td><td data-align="right">1.2 Mio</td></tr>'
+  + '<tr><td>2024</td><td data-align="right">1.8 Mio</td></tr></tbody></table>';
+
+const tableBundle = {
+  scope: 'page', book, chapter,
+  page: { id: 9, name: 'Tabellenseite', html: `<p>davor</p>${TABLE_HTML}<p>danach</p>` },
+  groups: [{ chapterId: 10, chapter, pages: [
+    { p: { id: 9, name: 'Tabellenseite' }, pd: { html: `<p>davor</p>${TABLE_HTML}<p>danach</p>` } },
+  ] }],
+};
+
+// Jede Zelle, die Beschriftung und der Text drumherum — pro Ausgabeweg.
+const TABLE_BITS = ['Jahr', 'Umsatz', '2023', '1.2 Mio', '2024', '1.8 Mio', 'Umsatz nach Jahr', 'davor', 'danach'];
+
+test('txt: Tabelle wird zum Zeilenraster, kein Zellensalat', async () => {
+  const s = (await buildTxt(tableBundle)).toString('utf8');
+  for (const bit of TABLE_BITS) assert.ok(s.includes(bit), `fehlt in txt: ${bit}`);
+  assert.ok(s.includes('Jahr | Umsatz'), 'Kopfzeile muss als eine Zeile erkennbar sein');
+  assert.ok(s.includes('2023 | 1.2 Mio'), 'Datenzeile muss als eine Zeile erkennbar sein');
+  assert.ok(!/2023 1\.2 Mio 2024/.test(s), 'Zellen duerfen nicht zu einer Textwurst zusammenlaufen');
+});
+
+test('md: GFM-Pipe-Tabelle mit Ausrichtungszeile', async () => {
+  const s = (await buildMd(tableBundle)).toString('utf8');
+  for (const bit of TABLE_BITS) assert.ok(s.includes(bit), `fehlt in md: ${bit}`);
+  assert.ok(s.includes('| Jahr | Umsatz |'), 'Kopfzeile als Pipe-Zeile');
+  assert.ok(/\|\s*---\s*\|\s*---:\s*\|/.test(s), 'Trennzeile muss die rechte Ausrichtung tragen');
+  assert.ok(s.includes('*Umsatz nach Jahr*'), 'Beschriftung als kursive Zeile');
+});
+
+test('md: Tabelle ohne Kopfzeile bekommt eine leere — sonst rendert GFM nichts', async () => {
+  const html = '<table><tbody><tr><td>a</td><td>b</td></tr></tbody></table>';
+  const b = { scope: 'page', book, chapter, page: { id: 1, name: 'p', html },
+    groups: [{ chapterId: 10, chapter, pages: [{ p: { id: 1, name: 'p' }, pd: { html } }] }] };
+  const s = (await buildMd(b)).toString('utf8');
+  assert.ok(/\|\s*---\s*\|\s*---\s*\|/.test(s), 'Trennzeile ist in GFM Pflicht');
+  assert.ok(s.includes('| a | b |'));
+  assert.ok(!/\|\s*a\s*\|\s*b\s*\|\s*\n\s*\|\s*---/.test(s), 'die Datenzeile darf nicht zur Kopfzeile werden');
+});
+
+test('md: Pipe in einer Zelle wird escaped', async () => {
+  const html = '<table><tbody><tr><td>1.2 | Mio</td></tr></tbody></table>';
+  const b = { scope: 'page', book, chapter, page: { id: 1, name: 'p', html },
+    groups: [{ chapterId: 10, chapter, pages: [{ p: { id: 1, name: 'p' }, pd: { html } }] }] };
+  const s = (await buildMd(b)).toString('utf8');
+  assert.ok(s.includes('1.2 \\| Mio'), 'ein rohes | beendet dort die Spalte');
+});
+
+test('html: Tabelle bleibt Tabelle, Ausrichtung ueberlebt', async () => {
+  const s = (await buildHtml(tableBundle)).toString('utf8');
+  for (const bit of TABLE_BITS) assert.ok(s.includes(bit), `fehlt in html: ${bit}`);
+  assert.ok(s.includes('<table'), 'kein Fliesstext-Fallback');
+  assert.ok(s.includes('data-align="right"'), 'Ausrichtung ist Teil des Markups');
+  assert.ok(/\[data-align="right"\]\s*\{\s*text-align:\s*right/.test(s), 'das Stylesheet muss data-align aufloesen');
+  assert.ok(s.includes('<caption>'), 'Beschriftung bleibt caption');
+});
+
+test('substack: Tabelle als HTML-Tabelle, Beschriftung als Absatz', async () => {
+  const s = (await buildSubstack(tableBundle)).toString('utf8');
+  for (const bit of TABLE_BITS) assert.ok(s.includes(bit), `fehlt in substack: ${bit}`);
+  assert.ok(s.includes('<table>'));
+  assert.ok(s.includes('<th>Jahr</th>'));
+  assert.ok(s.includes('<em>Umsatz nach Jahr</em>'), 'caption ueberlebt den Substack-Import nicht — darum Absatz');
+});
+
+test('epub: Tabelle im XHTML plus Stylesheet-Regeln', async () => {
+  const buf = await buildEpub(tableBundle);
+  const zip = await JSZip.loadAsync(buf);
+  const files = Object.keys(zip.files);
+  const xhtml = (await Promise.all(files.filter(f => f.endsWith('.xhtml'))
+    .map(f => zip.file(f).async('string')))).join('\n');
+  for (const bit of TABLE_BITS) assert.ok(xhtml.includes(bit), `fehlt im epub: ${bit}`);
+  assert.ok(/<table/i.test(xhtml));
+  // Die Ausrichtung MUSS als Klasse ankommen: epub-gen-memory filtert jedes
+  // Attribut gegen eine feste Allowlist, in der data-* nicht steht — ein
+  // `[data-align]`-Selektor im Stylesheet greift dort nie (siehe
+  // epub.js#_applyDataClasses).
+  assert.ok(/class="[^"]*\bta-right\b/.test(xhtml), 'data-align muss auf eine Klasse abgebildet werden');
+  const css = (await Promise.all(files.filter(f => f.endsWith('.css'))
+    .map(f => zip.file(f).async('string')))).join('\n');
+  assert.ok(/\.ta-right\s*\{\s*text-align:\s*right/.test(css), 'und das Stylesheet muss diese Klasse kennen');
+  assert.ok(!/\[data-align/.test(css), 'ein data-align-Selektor waere im EPUB toter Code');
+  assert.ok(/text-indent:\s*0/.test(css), 'der Erstzeilen-Einzug des Profils darf nicht in die Zelle schlagen');
+});
+
+test('epub: das belegte Blockzitat traegt seine Klasse — data-src allein greift nicht', async () => {
+  const html = '<blockquote data-src="7"><p>Zitat.</p></blockquote>';
+  const b = { scope: 'page', book, chapter, page: { id: 1, name: 'p', html },
+    groups: [{ chapterId: 10, chapter, pages: [{ p: { id: 1, name: 'p' }, pd: { html } }] }] };
+  const zip = await JSZip.loadAsync(await buildEpub(b));
+  const xhtml = (await Promise.all(Object.keys(zip.files).filter(f => f.endsWith('.xhtml'))
+    .map(f => zip.file(f).async('string')))).join('\n');
+  assert.ok(/<blockquote class="[^"]*\bcited-quote\b/.test(xhtml));
+  const css = (await Promise.all(Object.keys(zip.files).filter(f => f.endsWith('.css'))
+    .map(f => zip.file(f).async('string')))).join('\n');
+  assert.ok(!/blockquote\[data-src\]/.test(css), 'der Attribut-Selektor war im EPUB wirkungslos');
+});
+
+test('docx: Zellinhalt landet im Dokument', async () => {
+  const buf = await buildDocx(tableBundle);
+  const zip = await JSZip.loadAsync(buf);
+  const xml = await zip.file('word/document.xml').async('string');
+  for (const bit of TABLE_BITS) assert.ok(xml.includes(bit), `fehlt im docx: ${bit}`);
+  assert.ok(xml.includes('<w:tbl>'), 'Word braucht eine echte Tabelle, keinen Fliesstext');
+  assert.ok(xml.includes('<w:tblHeader/>'), 'die Kopfzeile muss sich nach Seitenumbruch wiederholen');
+});

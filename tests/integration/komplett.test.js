@@ -1497,3 +1497,65 @@ test('Komplettanalyse Voll-Lauf schreibt den Konsolidierungs-Checkpoint (Gegenpr
   const marker = ctx.dbSchema.loadCheckpoint('komplett-consolidation', BOOK_ID, email);
   assert.ok(marker && marker.sig, 'Voll-Lauf schreibt den Konsolidierungs-Checkpoint');
 });
+
+// ── Kapitel-Auftritte: der abgeleitete Index wird am Laufende aufgebaut ────────
+// `figure_appearances` speist sich aus drei Quellen, die im Job zu verschiedenen Zeiten
+// anfallen (KI-`kapitel`-Feld in Phase 2, Szenen + Ereignisse erst beim Szenen-Save).
+// Phase 2 darf den Index deshalb nicht schreiben — sonst verliert eine Figur mit leerem
+// `kapitel`-Feld ihre Kapitel, sobald ein Lauf zwischen beiden Punkten abbricht.
+test('Komplettanalyse: Figur ohne KI-`kapitel` erbt ihr Kapitel aus der Szene', async () => {
+  const BOOK_ID = 131;
+  const email = 'tester@test.dev';
+  seedTinyBook(BOOK_ID);
+
+  // Anna meldet ihr Kapitel selbst (haeufigkeit 4), Bert hat ein LEERES kapitel-Feld —
+  // er ist nur über die Szene belegt (der Fall der aus Szenen nachgetragenen Randfigur).
+  ctx.mockAi.on((e) => e.schemaKeys.includes('figuren') && !e.schemaKeys.includes('assignments') && !e.schemaKeys.includes('orte'), {
+    figuren: [
+      { id: 'fig_1', name: 'Anna', kurzname: 'Anna', typ: 'protagonist',
+        beschreibung: 'Hauptfigur', sozialschicht: 'mitte', praesenz: 'zentral',
+        kapitel: [{ name: 'Kapitel Eins', haeufigkeit: 4 }], eigenschaften: [], schluesselzitate: [] },
+      { id: 'fig_2', name: 'Bert', kurzname: 'Bert', typ: 'nebenfigur',
+        beschreibung: 'Begleiter', sozialschicht: 'mitte', praesenz: 'punktuell',
+        kapitel: [], eigenschaften: [], schluesselzitate: [] },
+    ],
+  });
+  ctx.mockAi.on((e) => e.schemaKeys.includes('orte') && e.schemaKeys.includes('szenen') && !e.schemaKeys.includes('figuren'), {
+    orte: [{ id: 'ort_1', name: 'Wald', typ: 'natur', beschreibung: 'kalt', kapitel: [{ name: 'Kapitel Eins', haeufigkeit: 1 }], figuren_namen: [] }],
+    songs: [],
+    szenen: [{ seite: 'Seite Eins', kapitel: 'Kapitel Eins', titel: 'Bert im Wald', wertung: 'mittel',
+               kommentar: 'k', figuren_namen: ['Bert'], orte_namen: ['Wald'] }],
+  });
+  ctx.mockAi.on((e) => e.schemaKeys.length === 1 && e.schemaKeys.includes('fakten'), faktenPassResponse());
+  ctx.mockAi.on((e) => e.schemaKeys.length === 1 && e.schemaKeys.includes('assignments'), eventsPassResponse());
+  ctx.mockAi.on((e) => e.schemaKeys.length === 1 && e.schemaKeys.includes('beziehungen'), beziehungenResponse());
+  ctx.mockAi.on((e) => e.schemaKeys.includes('zusammenfassung') && e.schemaKeys.includes('probleme'), kontinuitaetResponse());
+
+  const apps = () => ctx.dbSchema.db.prepare(`
+    SELECT f.name AS fig, fa.chapter_id, fa.haeufigkeit
+      FROM figure_appearances fa JOIN figures f ON f.id = fa.figure_id
+     WHERE f.book_id = ? ORDER BY f.name
+  `).all(BOOK_ID);
+
+  const run = async (n) => {
+    const jobId = ctx.shared.createJob('komplett-analyse', BOOK_ID, email, 'job.label.komplett');
+    ctx.shared.enqueueJob(jobId, () =>
+      ctx.komplett.runKomplettAnalyseJob(jobId, BOOK_ID, 'Buch', email, { id: 'tok', pw: 'pw' }, 'claude'));
+    const job = await waitForJob(ctx.shared, jobId, { timeoutMs: 8000 });
+    assert.equal(job.status, 'done', `Lauf ${n}: expected done, got ${job.status}: ${job.error || ''}`);
+  };
+
+  await run(1);
+  const after1 = apps();
+  assert.deepEqual(after1.map(r => r.fig), ['Anna', 'Bert'],
+    `beide Figuren haben ein Kapitel, got ${JSON.stringify(after1)}`);
+  assert.equal(after1.find(r => r.fig === 'Anna').haeufigkeit, 4,
+    'Annas KI-Häufigkeit gewinnt gegen den abgeleiteten Zähler');
+  assert.equal(after1.find(r => r.fig === 'Bert').haeufigkeit, 1,
+    'Bert erbt Kapitel + Zähler aus seiner Szene');
+
+  // Zweiter Lauf: der Reconcile matcht beide Figuren. Der Index darf danach nicht
+  // schmaler sein als vorher — genau das ging verloren, als Phase 2 ihn selbst schrieb.
+  await run(2);
+  assert.deepEqual(apps(), after1, 'Re-Analyse erhält den Auftritts-Index unverändert');
+});

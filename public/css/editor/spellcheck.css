@@ -1,3 +1,4 @@
+@layer components {
 /* LanguageTool-Spellcheck — shared zwischen Notebook-, Focus- und Bucheditor.
  *
  * Squiggles werden nativ via CSS Custom Highlight API gerendert (CSS.highlights
@@ -203,7 +204,7 @@
  * Tooltip-Hover; nicht klickbar (Status-Info nur). */
 .lt-badge {
   position: absolute;
-  z-index: var(--z-spellcheck, 9);
+  z-index: var(--z-spellcheck);
   transform: translateX(-100%);
   display: inline-flex;
   align-items: center;
@@ -493,4 +494,4 @@ textarea[data-spellcheck="spelling"]:not(.card-title--input, .page-head__input) 
   display: flex;
   gap: var(--space-6);
 }
-
+}

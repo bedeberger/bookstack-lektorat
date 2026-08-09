@@ -1,0 +1,39 @@
+/* Schliessen-Taste — das Primitive hinter der in DESIGN.md („Icon-Sprache" →
+   Schliessen) aufgezaehlten Familie. Alle Vertreter zentrieren dasselbe
+   `x`-Sprite-Icon in einer randlosen Flaeche und unterscheiden sich nur in
+   Groesse, Polsterung und Rahmen.
+
+   Der invariante Kern steht hier; die Varianz laeuft ueber zwei Variablen:
+     --close-size   Icon-/Schriftgroesse   (Default: --font-size-md)
+     --close-pad    Polsterung             (Default: 0 var(--space-xs))
+
+   ADOPTIERT: .figur-lookup-close, .synonym-picker-close.
+   NACHZIEHEN bei Beruehrung (gleiches Vorgehen wie bei .danger-zone):
+   .btn-card-close, .edit-find-close, .book-editor-find-close,
+   .entity-popover-close, .heatmap-detail-close, .job-toast-close,
+   .revision-viewer__close, .shortcuts-close. Sie tragen heute je eigene
+   font-size/padding-Werte — beim Umstellen den bestehenden Wert als
+   --close-size/--close-pad setzen, NICHT auf den Default vereinheitlichen
+   (das waere eine unbeabsichtigte Groessenaenderung an acht Stellen).
+
+   Destruktives Entfernen (Chip loeschen, Sitzung/Seite/Kapitel loeschen) ist
+   KEIN Schliessen und gehoert nicht hierher — eigene Semantik, eigenes Icon. */
+
+@layer components {
+
+  .btn-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    line-height: 1;
+    font-size: var(--close-size, var(--font-size-md));
+    padding: var(--close-pad, 0 var(--space-xs));
+    color: var(--color-muted);
+  }
+
+  .btn-close:hover { color: var(--color-text); }
+
+}

@@ -1,3 +1,4 @@
+@layer components {
 /* Recherche-/Wissensboard — buchweit geteiltes Schnipsel-Archiv.
    Akzentfarbe via var(--card-accent) (Mapping in card-accents.css). */
 
@@ -82,7 +83,7 @@ textarea.recherche-input { resize: vertical; min-height: 2.75rem; }
 .recherche-primary {
   background: var(--card-accent);
   border-color: var(--card-accent);
-  color: #fff;
+  color: var(--color-on-accent-fill);
 }
 .recherche-primary:hover:not(:disabled) { filter: brightness(1.08); }
 
@@ -169,7 +170,7 @@ textarea.recherche-input { resize: vertical; min-height: 2.75rem; }
   padding: 0.1em 0.5em;
   border-radius: var(--radius-sm);
   font-size: var(--font-size-xs);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
@@ -183,7 +184,7 @@ textarea.recherche-input { resize: vertical; min-height: 2.75rem; }
 /* Titel ist ein Button (Weg in die Detailansicht, tastaturerreichbar), sieht aber
    wie Text aus — die ganze Zeile ist ohnehin klickbar. */
 .research-item-title {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--color-text);
   background: none;
   border: 0;
@@ -355,7 +356,7 @@ textarea.recherche-input { resize: vertical; min-height: 2.75rem; }
 .research-link-goto:focus-visible .research-link-goto-label { text-decoration: underline; }
 
 .research-link-kind {
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   text-transform: uppercase;
   font-size: 0.72em;
   letter-spacing: 0.06em;
@@ -398,7 +399,7 @@ textarea.recherche-input { resize: vertical; min-height: 2.75rem; }
 }
 .research-suggestions-head {
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--color-muted);
 }
 .research-suggestions-empty { font-size: var(--font-size-sm); color: var(--color-muted); }
@@ -408,7 +409,7 @@ textarea.recherche-input { resize: vertical; min-height: 2.75rem; }
   gap: var(--space-xs);
   flex-wrap: wrap;
 }
-.research-suggestion-label { font-weight: 600; }
+.research-suggestion-label { font-weight: var(--fw-semibold); }
 .research-suggestion-reason { font-size: var(--font-size-sm); color: var(--color-muted); }
 .research-suggestion .btn-compact { margin-left: auto; }
 .research-suggestions-dismiss {
@@ -434,7 +435,7 @@ textarea.recherche-input { resize: vertical; min-height: 2.75rem; }
   border-radius: var(--radius-md);
   background: var(--color-bg);
 }
-.recherche-linkpicker-label { font-weight: 600; }
+.recherche-linkpicker-label { font-weight: var(--fw-semibold); }
 .recherche-linkpicker-target { min-width: 14rem; }
 
 /* ── Vollbild: ganze Karte nimmt den Viewport; die Liste bleibt einspaltig,
@@ -473,4 +474,5 @@ textarea.recherche-input { resize: vertical; min-height: 2.75rem; }
   .research-item-head { gap: var(--space-2xs); }
   /* iOS-Zoom-Schutz: Prosa-Inputs ≥16px (Klassen-font-size kann darunter liegen). */
   .recherche-input { font-size: 16px; }
+}
 }

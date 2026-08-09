@@ -12,7 +12,7 @@ const {
 } = require('../utils');
 const { mergeBeziehungenIntoFiguren, _normalizeName } = require('../figuren-merge');
 const appSettings = require('../../../../lib/app-settings');
-const { getContextConfigFor } = require('../../../../lib/ai');
+const { getContextConfigFor, providerClass } = require('../../../../lib/ai');
 const { komplettMaxTokens } = require('./tokens');
 
 /** Teilt ein Array in Gruppen der Grösse `size` (≥1). */
@@ -364,7 +364,7 @@ async function runSceneBackfill(ctx, { bookSystemBlock, claudeExtractCap, passB 
  * `{ passA, passB, failed }` zurück — der Caller bildet daraus partialFailure (Cache-/
  * Checkpoint-Skip-Gate).
  */
-async function extractSinglePassClaude(ctx, { claudeExtractCap }) {
+async function extractSinglePassSplit(ctx, { claudeExtractCap }) {
   const { jobId, bookName, call, tok, log, prompts, sys, pageContents, fullBookText, extractTier } = ctx;
   const failed = { relations: false, fakten: false, events: false };
 
@@ -539,8 +539,8 @@ async function extractSinglePass(ctx, { claudeExtractCap, callExtract }) {
   }
 
   updateJob(jobId, { progress: 12, statusText: 'job.phase.extracting' });
-  const { passA, passB, failed } = effectiveProvider === 'claude'
-    ? await extractSinglePassClaude(ctx, { claudeExtractCap })
+  const { passA, passB, failed } = providerClass(effectiveProvider) === 'cloud'
+    ? await extractSinglePassSplit(ctx, { claudeExtractCap })
     : await extractSinglePassLocal(ctx, { callExtract });
 
   const chapters = assembleSinglePassChapters(passA, passB);
@@ -574,7 +574,7 @@ async function extractSinglePass(ctx, { claudeExtractCap, callExtract }) {
 async function runMultiPassCompletenessGaps(ctx, { chunkTexts, chapters, concurrency }) {
   const { jobId, bookIdInt, email, bookName, call, tok, log, effectiveProvider, prompts, sys, extractTier } = ctx;
   const completenessPasses = ctx.completenessPasses || 0;
-  if (effectiveProvider !== 'claude' || completenessPasses <= 0 || !chunkTexts.length) return;
+  if (providerClass(effectiveProvider) !== 'cloud' || completenessPasses <= 0 || !chunkTexts.length) return;
 
   const claudeExtractCap = getContextConfigFor(effectiveProvider).maxTokensOut;
   const faktKey = (f) => `${f.subjekt || ''}: ${f.fakt || ''}`;
@@ -695,7 +695,9 @@ async function extractMultiPass(ctx, { chunks, chunkOrder, claudeExtractCap, cal
   // Für lokale Modelle zweigeteilte Extraktion: Pass A (figuren+assignments) / Pass B
   // (orte+fakten+szenen), Cache-Keys `${key}:figuren` / `${key}:orte` (getrennt von alten
   // kombinierten Caches, damit die sauber neu entstehen statt fälschlich getroffen zu werden).
-  const isSplit = effectiveProvider !== 'claude';
+  // Klassen-, nicht Namensfrage: ein gehostetes Frontier-Modell ueber openai-compat
+  // haelt den kombinierten Pass genauso durch wie Claude (lib/ai/config.js#providerClass).
+  const isSplit = providerClass(effectiveProvider) !== 'cloud';
   // Claude-Multi-Pass: Anthropic-TPM-Burst dämpfen. warmup: Erst-Chunk seriell → schreibt
   // Prompt-Cache, Folge-Chunks hitten ihn (~10× günstiger + kürzere Reqs). concurrency-Cap:
   // max. ai.claude.phase1_concurrency (Default 4, belastbar gegen Tier-1/2 bei ~25k tok/Chunk).
@@ -895,7 +897,7 @@ async function runPhase1(ctx) {
       // auf Multi-Pass aus (kapitelweise/geteilte Chunks). Nur Claude + echte Truncation; ein
       // eigener, kleinerer perChunkLimit erzwingt auch bei einem einzelnen grossen Kapitel einen
       // Split. AbortError + andere Fehler bleiben fatal.
-      if (e?.message === 'job.error.aiTruncated' && effectiveProvider === 'claude') {
+      if (e?.message === 'job.error.aiTruncated' && providerClass(effectiveProvider) === 'cloud') {
         const fbPerChunk = Math.max(10000, Math.floor(extractLimit / 2));
         const { chunkOrder: fbOrder, chunks: fbChunks } = splitGroupsIntoChunks(groups, groupOrder, fbPerChunk);
         if (fbOrder.length > 1) {

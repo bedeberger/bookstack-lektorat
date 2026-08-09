@@ -26,7 +26,7 @@
     cursor: pointer;
   }
   .plot-beat-rel:hover { color: var(--color-text); }
-  .plot-beat-rel-typ { font-weight: 600; color: var(--card-accent); }
+  .plot-beat-rel-typ { font-weight: var(--fw-semibold); color: var(--card-accent); }
   .plot-beat-rel-target { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   /* Beziehungs-Editor: Typ-Combobox + Ziel-Combobox + „Verknüpfen"-Button in einer

@@ -67,7 +67,7 @@
   color: var(--card-accent-kontinuitaet);
 }
 .kontinuitaet-empfehlung-value {
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--color-text);
 }
 
@@ -86,7 +86,7 @@
   padding: var(--pad-badge);
   border-radius: var(--radius-sm);
   font-size: var(--font-size-xs);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   background: var(--color-ok-bg);
   color: var(--color-ok-text);
   border: 1px solid var(--color-ok-border);
@@ -100,7 +100,7 @@
 .kontinuitaet-resolve-btn {
   padding: var(--space-6) 12px;
   font-size: var(--font-size-mini);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   border: 1px solid var(--color-ok-border);
   border-radius: var(--radius-sm);
   background: var(--color-surface);
@@ -163,7 +163,7 @@
   align-items: center;
   gap: var(--space-2xs);
   font-size: var(--font-size-mini);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--color-err-text);
@@ -196,7 +196,7 @@
   color: var(--color-err-text);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   white-space: nowrap;
 }
 .book-settings-btn-danger:hover:not(:disabled) {
@@ -249,7 +249,7 @@
   margin-bottom: var(--space-md);
 }
 .nameguard-canonical {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 .nameguard-count {
   color: var(--color-muted);

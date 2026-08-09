@@ -20,7 +20,7 @@
 }
 
 .diary-range-title {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   font-size: var(--font-em-85);
 }
 
@@ -71,7 +71,7 @@
 
 .diary-anniversary-weekday {
   font-size: var(--font-em-85);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   text-transform: capitalize;
 }
 

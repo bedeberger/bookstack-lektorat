@@ -37,10 +37,12 @@ export function defaultChapterLabels(chapters) {
   return out;
 }
 
-/** Abbildungs-Nummern in Buch-Leserichtung.
+/** Anker-Nummern EINES Typs in Buch-Leserichtung.
  *
- *  `anchors`: [{ bid, chapterId }] in Leserichtung (Seitenposition, dann
+ *  `anchors`: [{ bid, chapterId, kind? }] in Leserichtung (Seitenposition, dann
  *  Position innerhalb der Seite) — die Form von db/xrefs.js#listBookAnchors.
+ *  Die Liste ist bereits auf EINEN Typ gefiltert; das Filtern macht der
+ *  Aufrufer (buildXrefNumbers).
  *  `chapterLabels`: Map chapterId → Label (aus dem Render-Pfad oder
  *  defaultChapterLabels).
  *
@@ -58,7 +60,7 @@ export function defaultChapterLabels(chapters) {
  *
  *  @returns {Map<string,string>} bid → Nummer („3.2" bzw. „7")
  */
-export function figureNumbers(anchors, chapterLabels) {
+export function anchorNumbers(anchors, chapterLabels) {
   const list = (anchors || []).filter(a => a && a.bid);
   const labels = chapterLabels instanceof Map ? chapterLabels : new Map();
 
@@ -83,18 +85,30 @@ export function figureNumbers(anchors, chapterLabels) {
 
 /** Vollstaendige Nummern-Map fuer eine gerenderte Einheit.
  *
- *  Buendelt beide Achsen zu der Form, die lib/xref-render.js#resolveXrefsInHtml
+ *  Buendelt alle Achsen zu der Form, die lib/xref-render.js#resolveXrefsInHtml
  *  und die Legenden-Nummerierung erwarten:
  *
  *    { chapter: Map<chapterId, { number, title }>,
- *      figure:  Map<bid,       { number, title }> }
+ *      figure:  Map<bid,       { number, title }>,
+ *      table:   Map<bid,       { number, title }> }
+ *
+ *  ABBILDUNGEN UND TABELLEN ZAEHLEN GETRENNT: zwei Aufrufe von `anchorNumbers`
+ *  auf zwei gefilterten Listen. „Abb. 3.1" und „Tab. 3.1" stehen im Fachbuch
+ *  nebeneinander; ein gemeinsamer Zaehler machte aus der ersten Tabelle eines
+ *  Kapitels „Tab. 3.4", nur weil davor drei Abbildungen stehen. Die
+ *  Buchweit-Rueckfallebene (siehe anchorNumbers) faellt damit ebenfalls pro Typ —
+ *  eine Abbildung in einem unnummerierten Kapitel zieht die Tabellen nicht mit.
  *
  *  `title` ist der Kapiteltitel bzw. der Legendentext — gebraucht fuer die
  *  Anzeigeform `title` UND als Rueckfallebene, wenn es keine Nummer gibt.
  */
 export function buildXrefNumbers({ chapters = [], anchors = [], chapterLabels = null } = {}) {
   const labels = chapterLabels instanceof Map ? chapterLabels : defaultChapterLabels(chapters);
-  const figNums = figureNumbers(anchors, labels);
+  // Anker ohne `kind` gelten als Abbildung — Altdaten aus der Zeit, als es nur
+  // diesen Typ gab (db/xrefs.js schreibt `kind` seit der Einfuehrung mit).
+  const byKind = (k) => (anchors || []).filter(a => a && (a.kind || 'figure') === k);
+  const figNums = anchorNumbers(byKind('figure'), labels);
+  const tblNums = anchorNumbers(byKind('table'), labels);
 
   const chapter = new Map();
   for (const ch of chapters) {
@@ -104,10 +118,14 @@ export function buildXrefNumbers({ chapters = [], anchors = [], chapterLabels = 
   }
 
   const figure = new Map();
-  for (const a of anchors) {
+  const table = new Map();
+  for (const a of anchors || []) {
     if (!a || !a.bid) continue;
-    figure.set(a.bid, { number: figNums.get(a.bid) || null, title: a.caption || '' });
+    const kind = a.kind || 'figure';
+    const target = kind === 'table' ? table : figure;
+    const nums = kind === 'table' ? tblNums : figNums;
+    target.set(a.bid, { number: nums.get(a.bid) || null, title: a.caption || '' });
   }
 
-  return { chapter, figure };
+  return { chapter, figure, table };
 }

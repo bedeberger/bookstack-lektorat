@@ -98,7 +98,7 @@
 .lektorat-ins {
   text-decoration: none;
   color: var(--color-mark-ins-text);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   background: var(--color-mark-ins-bg);
   border-radius: var(--radius-sm);
   padding: 0 2px;
@@ -122,7 +122,7 @@
 .chat-mark-ins {
   text-decoration: none;
   color: var(--color-mark-ins-text);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   background: var(--color-mark-ins-bg);
   border-radius: var(--radius-sm);
   padding: 0 2px;
@@ -155,7 +155,7 @@
 }
 .lektorat-tip--visible { display: flex; }
 .lektorat-tip .badge { align-self: flex-start; }
-.lektorat-tip-korrektur { font-weight: 700; color: var(--color-mark-ins-text); }
+.lektorat-tip-korrektur { font-weight: var(--fw-bold); color: var(--color-mark-ins-text); }
 .lektorat-tip-erkl { color: var(--color-subtle); }
 
 }

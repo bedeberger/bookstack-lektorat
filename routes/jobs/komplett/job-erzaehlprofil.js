@@ -8,14 +8,15 @@ const { db } = require('../../../db/schema');
 const {
   makeJobLogger, updateJob, completeJob, failJob, contentHttpError,
   aiCall, getPrompts, getBookPrompts,
-  loadOrderedBookContents, loadPageContents, groupByChapter, buildSinglePassBookText, cleanPageTextForClaude,
+  loadOrderedBookContents, loadPageContents, groupByChapter, buildSinglePassBookText, cleanPageTextForAi,
   chunkLimitsFor, BATCH_SIZE, jobAbortControllers, tps,
 } = require('../shared');
 const appSettings = require('../../../lib/app-settings');
 const { setContext } = require('../../../lib/log-context');
 const { makePhaseTimer } = require('./utils');
 const { runErzaehlprofil } = require('./phases');
-const { _komplettClaudeOverrides } = require('./job-shared');
+const { _komplettAiOverrides } = require('./job-shared');
+const { providerClass } = require('../../../lib/ai');
 
 async function runErzaehlprofilJob(jobId, bookId, bookName, userEmail, userToken, provider = undefined) {
   const bookIdInt = parseInt(bookId);
@@ -25,10 +26,10 @@ async function runErzaehlprofilJob(jobId, bookId, bookName, userEmail, userToken
   // Effektiven Provider binden (siehe runKomplettAnalyseJob) — sonst kappt aiCall das
   // Output-Ceiling fälschlich auf den Claude-Default.
   const effectiveProvider = provider || appSettings.get('ai.provider') || 'claude';
-  const overrides = _komplettClaudeOverrides(effectiveProvider);
+  const overrides = _komplettAiOverrides(effectiveProvider);
   if (overrides) {
     setContext(overrides);
-    log.info(`Erzählprofil-Claude-Override: ${JSON.stringify(overrides)} (global model=${appSettings.get('ai.claude.model')}).`);
+    log.info(`Erzählprofil-Override (${effectiveProvider}): ${JSON.stringify(overrides.aiJob)} (global model=${appSettings.get(`ai.${effectiveProvider}.model`)}).`);
   }
   const call = (jobId_, tok_, prompt_, system_, fromPct, toPct, expectedChars, outputRatio, maxTokens, schema) =>
     aiCall(jobId_, tok_, prompt_, system_, fromPct, toPct, expectedChars, outputRatio, maxTokens, effectiveProvider, schema);
@@ -58,12 +59,12 @@ async function runErzaehlprofilJob(jobId, bookId, bookName, userEmail, userToken
       });
     }, userToken, jobAbortControllers.get(jobId)?.signal);
 
-    // Buchtext-Preprocessing claude-only (identisch zu job-komplett/-kontinuitaet).
-    if (effectiveProvider === 'claude') {
+    // Buchtext-Preprocessing nur Cloud-Klasse (identisch zu job-komplett/-kontinuitaet).
+    if (providerClass(effectiveProvider) === 'cloud') {
       let savedChars = 0;
       for (const p of pageContents) {
         const before = p.text.length;
-        p.text = cleanPageTextForClaude(p.text);
+        p.text = cleanPageTextForAi(p.text);
         savedChars += before - p.text.length;
       }
       if (savedChars > 0) log.info(`Buchtext-Preprocessing ${savedChars} Zeichen entfernt.`);

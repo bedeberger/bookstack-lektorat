@@ -1,0 +1,178 @@
+      <!-- Sub-Tab „Profile": benannte Modell-Konfigurationen, im Benutzer-Tab
+           einem User zuweisbar. Ein leeres Feld erbt den globalen Wert des
+           jeweiligen Provider-Sub-Tabs (Aufloesung: lib/ai/profile.js#aiSetting). -->
+      <div x-show="adminSettingsProviderSubtab === 'profiles'" class="admin-settings-subsection">
+        <p class="muted-msg muted-msg--sm" x-text="$app.t('admin.profiles.intro')"></p>
+
+        <div x-show="adminProfilesLoading" class="muted-msg" x-text="$app.t('common.loading')"></div>
+        <div x-show="adminProfilesError" class="error-msg" x-text="adminProfilesError"></div>
+
+        <div class="table-scroll" x-show="adminProfilesList.length && !adminProfilesEditing">
+          <table class="admin-profiles-table"
+                 x-data="sortableTable({
+                   rows: () => adminProfilesList,
+                   defaultKey: 'name',
+                   persistKey: 'admin.profiles',
+                   types: { user_count: 'number' },
+                 })">
+            <thead>
+              <tr>
+                <th class="sortable-th" :class="sortClass('name')" :aria-sort="ariaSort('name')"
+                    @click="sortBy('name')" x-text="$app.t('admin.profiles.col.name')"></th>
+                <th class="sortable-th" :class="sortClass('provider')" :aria-sort="ariaSort('provider')"
+                    @click="sortBy('provider')" x-text="$app.t('admin.profiles.col.provider')"></th>
+                <th x-text="$app.t('admin.profiles.col.model')"></th>
+                <th class="sortable-th" :class="sortClass('user_count')" :aria-sort="ariaSort('user_count')"
+                    @click="sortBy('user_count')" x-text="$app.t('admin.profiles.col.users')"></th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="p in sorted" :key="p.id">
+                <tr>
+                  <td>
+                    <div x-text="p.name"></div>
+                    <div class="muted-msg muted-msg--sm" x-show="p.notes" x-text="p.notes"></div>
+                  </td>
+                  <td>
+                    <span x-text="p.provider"></span>
+                    <span class="badge" x-show="p.cloud === true" x-text="$app.t('admin.profiles.badge.cloud')"></span>
+                  </td>
+                  <td>
+                    <span x-text="p.model || $app.t('admin.profiles.inherited')"></span>
+                    <div class="muted-msg muted-msg--sm" x-show="p.host" x-text="p.host"></div>
+                  </td>
+                  <td x-text="p.user_count"></td>
+                  <td class="admin-profiles-actions">
+                    <button type="button" @click="adminProfilesEdit(p)" x-text="$app.t('admin.profiles.edit')"></button>
+                    <button type="button" class="danger" @click="adminProfilesDelete(p)" x-text="$app.t('common.delete')"></button>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+
+        <p class="muted-msg" x-show="!adminProfilesList.length && !adminProfilesLoading && !adminProfilesEditing"
+           x-text="$app.t('admin.profiles.empty')"></p>
+
+        <div class="admin-settings-actions" x-show="!adminProfilesEditing">
+          <button type="button" @click="adminProfilesCreate()" x-text="$app.t('admin.profiles.create')"></button>
+        </div>
+
+        <!-- Formular: Anlegen + Bearbeiten -->
+        <fieldset class="admin-profiles-form" x-show="adminProfilesEditing">
+          <legend x-text="adminProfilesForm.id ? $app.t('admin.profiles.editTitle') : $app.t('admin.profiles.createTitle')"></legend>
+
+          <label class="card-form-row">
+            <span x-text="$app.t('admin.profiles.field.name')"></span>
+            <input type="text" x-model="adminProfilesForm.name" data-spellcheck="spelling"
+                   :placeholder="$app.t('admin.profiles.field.namePlaceholder')">
+          </label>
+
+          <label class="card-form-row">
+            <span x-text="$app.t('admin.profiles.field.provider')"></span>
+            <div x-data="combobox($app.t('admin.profiles.field.provider'))"
+                 x-modelable="value" x-model="adminProfilesForm.provider"
+                 x-effect="options = [
+                   { value: 'claude',        label: 'claude' },
+                   { value: 'ollama',        label: 'ollama' },
+                   { value: 'openai-compat', label: 'openai-compat' },
+                 ]"></div>
+          </label>
+
+          <label class="card-form-row">
+            <span x-text="$app.t('admin.profiles.field.model')"></span>
+            <input type="text" x-model="adminProfilesForm.model"
+                   :placeholder="$app.t('admin.profiles.inheritPlaceholder')">
+            <small class="muted-msg muted-msg--sm" x-text="adminProfilesGlobalHint('model')"></small>
+          </label>
+
+          <label class="card-form-row" x-show="adminProfilesForm.provider !== 'claude'">
+            <span x-text="$app.t('admin.settings.label.host')"></span>
+            <input type="url" x-model="adminProfilesForm.host"
+                   :placeholder="$app.t('admin.profiles.inheritPlaceholder')">
+            <small class="muted-msg muted-msg--sm" x-text="adminProfilesGlobalHint('host')"></small>
+          </label>
+
+          <label class="card-form-row">
+            <span x-text="$app.t('admin.settings.label.apiKey')"></span>
+            <input type="password" x-model="adminProfilesForm.api_key" autocomplete="off"
+                   :placeholder="adminProfilesForm.id ? $app.t('admin.profiles.keyUnchanged') : $app.t('admin.profiles.inheritPlaceholder')">
+            <small class="muted-msg muted-msg--sm" x-text="$app.t('admin.profiles.keyHelp')"></small>
+          </label>
+
+          <label class="card-form-row" x-show="adminProfilesForm.provider === 'openai-compat'">
+            <span x-text="$app.t('admin.settings.label.cloudModel')"></span>
+            <div x-data="combobox($app.t('admin.settings.label.cloudModel'))"
+                 x-modelable="value" x-model="adminProfilesForm.cloud"
+                 x-effect="options = [
+                   { value: '',     label: $app.t('admin.profiles.inherited') },
+                   { value: 'true',  label: $app.t('admin.profiles.cloudOn') },
+                   { value: 'false', label: $app.t('admin.profiles.cloudOff') },
+                 ]"></div>
+            <small class="muted-msg muted-msg--sm" x-text="$app.t('admin.settings.help.cloudOpenaiCompat')"></small>
+          </label>
+
+          <label class="card-form-row">
+            <span x-text="$app.t('admin.settings.label.contextWindow')"></span>
+            <input type="text" x-data="numInput({ integer: true, min: 2048, max: 2000000 })"
+                   x-modelable="value" x-model="adminProfilesForm.context_window"
+                   :placeholder="$app.t('admin.profiles.inheritPlaceholder')">
+            <small class="muted-msg muted-msg--sm" x-text="adminProfilesGlobalHint('context_window')"></small>
+          </label>
+
+          <label class="card-form-row">
+            <span x-text="$app.t('admin.settings.label.maxTokensOut')"></span>
+            <input type="text" x-data="numInput({ integer: true, min: 512, max: 200000 })"
+                   x-modelable="value" x-model="adminProfilesForm.max_tokens_out"
+                   :placeholder="$app.t('admin.profiles.inheritPlaceholder')">
+            <small class="muted-msg muted-msg--sm" x-text="adminProfilesGlobalHint('max_tokens_out')"></small>
+          </label>
+
+          <label class="card-form-row" x-show="adminProfilesForm.provider !== 'claude'">
+            <span x-text="$app.t('admin.settings.label.temperature')"></span>
+            <input type="text" x-data="numInput({ step: 0.01, decimals: 2, min: 0, max: 2 })"
+                   x-modelable="value" x-model="adminProfilesForm.temperature"
+                   :placeholder="$app.t('admin.profiles.inheritPlaceholder')">
+          </label>
+
+          <label class="card-form-row" x-show="adminProfilesForm.provider !== 'claude'">
+            <span x-text="$app.t('admin.settings.label.repeatPenalty')"></span>
+            <input type="text" x-data="numInput({ step: 0.05, decimals: 2, min: 1, max: 2 })"
+                   x-modelable="value" x-model="adminProfilesForm.repeat_penalty"
+                   :placeholder="$app.t('admin.profiles.inheritPlaceholder')">
+          </label>
+
+          <label class="card-form-row" x-show="adminProfilesForm.provider === 'openai-compat'">
+            <span x-text="$app.t('admin.settings.label.maxParallel')"></span>
+            <input type="text" x-data="numInput({ integer: true, min: 1, max: 16 })"
+                   x-modelable="value" x-model="adminProfilesForm.max_parallel"
+                   :placeholder="$app.t('admin.profiles.inheritPlaceholder')">
+            <small class="muted-msg muted-msg--sm" x-text="$app.t('admin.profiles.maxParallelHelp')"></small>
+          </label>
+
+          <label class="card-form-row" x-show="adminProfilesForm.provider !== 'claude'">
+            <span x-text="$app.t('admin.settings.label.aiThink')"></span>
+            <div x-data="combobox($app.t('admin.settings.label.aiThink'))"
+                 x-modelable="value" x-model="adminProfilesForm.think"
+                 x-effect="options = [
+                   { value: '',      label: $app.t('admin.profiles.inherited') },
+                   { value: 'true',  label: $app.t('admin.profiles.thinkOn') },
+                   { value: 'false', label: $app.t('admin.profiles.thinkOff') },
+                 ]"></div>
+          </label>
+
+          <label class="card-form-row">
+            <span x-text="$app.t('admin.profiles.field.notes')"></span>
+            <textarea x-model="adminProfilesForm.notes" rows="2" data-spellcheck="spelling"
+                      :placeholder="$app.t('admin.profiles.field.notesPlaceholder')"></textarea>
+          </label>
+
+          <div class="admin-settings-actions">
+            <button type="button" @click="adminProfilesSave()" :disabled="adminProfilesSaving || !adminProfilesForm.name"
+                    x-text="adminProfilesSaving ? $app.t('common.saving') : $app.t('common.save')"></button>
+            <button type="button" @click="adminProfilesCancel()" x-text="$app.t('common.cancel')"></button>
+          </div>
+        </fieldset>
+      </div>

@@ -4,29 +4,29 @@ Code: [lib/ai.js](../lib/ai.js). Drei Provider, ein Vertrag.
 
 ## Provider-Auswahl
 
-Admin setzt `ai.provider` global in `app_settings` (`claude` (Default) | `ollama` | `openai-compat`). Pro User kann ein Override via `app_users.ai_provider_override` gesetzt werden — siehe „Per-User-Override" weiter unten.
+Admin setzt `ai.provider` global in `app_settings` (`claude` (Default) | `ollama` | `openai-compat`). Pro User zieht ein zugewiesenes **KI-Profil** (`app_users.ai_profile_id`) das vor — siehe „Per-User-Zuweisung" weiter unten und „KI-Profile" am Ende.
 
 ### Auflösungs-Reihenfolge
 
 `lib/ai.js#resolveProvider({ userEmail })`:
 
-1. `app_users.ai_provider_override` (NULL = follows global)
+1. Provider des zugewiesenen KI-Profils (`app_users.ai_profile_id`; NULL = folgt global)
 2. `app_settings.ai.provider`
 3. Hardcoded `'claude'`
 
 `userEmail` kommt aus dem ALS-Context (Job-Queue: `runWithContext({ user: job.userEmail, … })`) oder explizit (Routes/SSE via `req.session.email`). Job-Pfade resolven den Provider einmalig am Job-Start (siehe `effectiveProvider` in `routes/jobs/review.js`, `kapitel.js`, `lektorat.js`, `synonyme.js`, `komplett/`). In-Flight-Override-Wechsel ändert den laufenden Job nicht.
 
-### Per-User-Override
+### Per-User-Zuweisung
 
-- **Wahl** pro User; **Credentials** bleiben global in `app_settings`. Kein Per-User-API-Key.
-- Admin setzt den Override in der AdminUsersCard (Combobox `(Global: …)` | `claude` | `ollama` | `openai-compat`). PUT `/admin/users/:email` mit `{ ai_provider_override: 'ollama' | null }`. NULL/'' löscht den Override.
-- API-Guard: Override auf nicht-konfigurierten Provider → `400 AI_PROVIDER_NOT_CONFIGURED`.
-- `GET /config` liefert den resolvten Provider read-only (`apiProvider`) für die Frontend-Statuszeile.
+- Zugewiesen wird ein **Profil**, nicht bloss ein Provider-Name: es trägt Modell, Host, Kontextfenster, Klasse und optional einen eigenen Schlüssel. Was das Profil offen lässt, kommt weiter aus `app_settings` (siehe „KI-Profile").
+- Admin weist es in der AdminUsersCard zu (Combobox `Global (…)` | Profilname · Provider). PUT `/admin/users/:email` mit `{ ai_profile_id: 7 | null }`; NULL/'' löst die Zuweisung.
+- API-Guard: Profil, dessen effektive Konfiguration (Profil ODER global) keinen Host bzw. Schlüssel hat → `400 AI_PROVIDER_NOT_CONFIGURED`. Unbekannte ID → `404 AI_PROFILE_NOT_FOUND`.
+- `GET /config` liefert den resolvten Provider read-only (`apiProvider`, `effectiveProvider`, `effectiveProviderClass`) plus die Modellnamen des effektiven Profils für die Frontend-Statuszeile.
 - Self-Service nein. Cost-Verteilung gehört zum Admin-Kontrakt.
 
-### Concurrency-Locks bleiben providerspezifisch
+### Concurrency-Locks bleiben endpunkt-spezifisch
 
-Locks serialisieren *pro Provider*, nicht pro User. Ollama läuft über einen strikten Mutex (`withOllamaLock`) — VRAM verträgt keine Parallelität. OpenAI-kompatibel läuft über eine **Semaphore** (`withOpenAICompatLock`, `makeSemaphore` in [lib/ai/shared.js](lib/ai/shared.js)) mit dynamisch gelesener Obergrenze `ai.openai-compat.max_parallel` (Default 1 = seriell wie Ollama, Admin-Setting, greift ohne Neustart). Höher setzen, wenn der lokale Server mehrere Slots verträgt (z.B. LocalAI); überzählige Calls warten in der Queue.
+Locks serialisieren *pro Ziel-Endpunkt* (ein Bucket je KI-Profil, sonst der globale), nicht pro User. Ollama läuft über einen strikten Mutex (`withOllamaLock`) — VRAM verträgt keine Parallelität. OpenAI-kompatibel läuft über eine **Semaphore** (`withOpenAICompatLock`, `makeSemaphore` in [lib/ai/shared.js](lib/ai/shared.js)) mit dynamisch gelesener Obergrenze `ai.openai-compat.max_parallel` (Default 1 = seriell wie Ollama, Admin-Setting, greift ohne Neustart). Höher setzen, wenn der lokale Server mehrere Slots verträgt (z.B. LocalAI); überzählige Calls warten in der Queue.
 
 ### Cache-Key-Erweiterung
 
@@ -60,7 +60,11 @@ Alle KI-Konfig liegt in der `app_settings`-Tabelle. Admin-PUT via `/admin/settin
 | `ai.openai-compat.context_window` | 32 000 | – | |
 | `ai.openai-compat.max_tokens_out` | 16 000 | – | |
 | `ai.openai-compat.think` | `false` | – | Reasoning an/aus; aus sendet `chat_template_kwargs.enable_thinking=false`, an sendet nichts (Modell-Default; nötig für echtes OpenAI) |
-| `ai.openai-compat.cloud` | `false` | – | Provider-Klasse (siehe unten): `true` = gehostetes Frontier-Modell (z.B. Kimi/Moonshot, OpenAI) → volle Cloud-Prompts, Lektorat-Split, parallele Calls |
+| `ai.openai-compat.cloud` | `false` | – | Provider-Klasse (siehe unten): `true` = gehostetes Frontier-Modell (z.B. Kimi/Moonshot, OpenAI) → volle Cloud-Prompts, Lektorat-Split, parallele Calls. Pro Profil überschreibbar |
+| `ai.openai-compat.max_parallel` | 1 | – | Max. gleichzeitige Calls je Endpunkt; eigener Bucket pro KI-Profil |
+| `ai.openai-compat.timeout_ms` | 600 000 | – | Hard-Timeout pro Call; ohne ihn hält ein stummer Endpunkt den Job-Slot unbegrenzt |
+| `ai.openai-compat.retry_max` | 3 | – | Retry-Versuche bei 408/429/5xx mit Exponential-Backoff |
+| `ai.openai-compat.{model,context_window,max_tokens_out,timeout_ms}.komplett` | leer / 0 | – | Per-Job-Overrides der Komplettanalyse (leer/0 = folgt global), siehe „Per-Job-Konfiguration“ |
 | `ai.chars_per_token` | provider-default (3 Claude / 4 lokal) | – | Tokenizer-Heuristik (Boot-frozen) |
 | `ai.chat_temperature` | – | – | Override nur für Seiten-/Buch-Chat |
 
@@ -70,7 +74,9 @@ Alle KI-Konfig liegt in der `app_settings`-Tabelle. Admin-PUT via `/admin/settin
 | `ollama` | NDJSON | Nein | Nein |
 | `openai-compat` | OpenAI-SSE | Nein | Nein |
 
-Ollama läuft über einen globalen **Mutex** (`withOllamaLock`) — VRAM-Schutz, parallele Calls würden das Modell abschmieren lassen. OpenAI-kompatibel läuft über eine **Semaphore** (`withOpenAICompatLock`) mit konfigurierbarer Obergrenze `ai.openai-compat.max_parallel` (Default 1). Jobs laufen weiter parallel; die KI-Calls am Server sind auf die Semaphore-Grenze gedrosselt (bzw. bei Ollama seriell).
+Beide entfernten Provider (`claude`, `openai-compat`) haben Hard-Timeout und Retry-Ladder; Details unter „Timeout + Retry“.
+
+Ollama läuft über einen globalen **Mutex** (`withOllamaLock`) — VRAM-Schutz, parallele Calls würden das Modell abschmieren lassen. OpenAI-kompatibel läuft über eine **Semaphore** (`withOpenAICompatLock`) mit konfigurierbarer Obergrenze `ai.openai-compat.max_parallel` (Default 1). Beide führen einen eigenen Bucket **je KI-Profil** (siehe unten) — verschiedene Endpunkte vertragen verschiedene Last. Jobs laufen weiter parallel; die KI-Calls am Server sind auf die Semaphore-Grenze gedrosselt (bzw. bei Ollama seriell).
 
 ### Reasoning/„Thinking" (nur lokale Provider)
 
@@ -245,12 +251,63 @@ Die Isolation trägt der ESM-Resolve-Hook [lib/prompts-variant-hooks.mjs](../lib
 
 Die Klassen-Entscheidung ist SSoT in `providerClass(provider)` ([lib/ai/config.js](../lib/ai/config.js)): `claude` → `cloud`, `ollama` → `local`, `openai-compat` → per Default `local` (llama.cpp/vLLM & Co), mit Admin-Toggle `ai.openai-compat.cloud = true` → `cloud` (gehostete Frontier-APIs wie Kimi/Moonshot oder OpenAI über denselben Endpoint-Typ). Per-Call gelesen → greift ohne Server-Restart; beim Flip wechselt `PROMPTS_VERSION` mit der Variante, Caches invalidieren dadurch automatisch.
 
-Drei Konsumenten hängen an der Klasse (nicht am Provider-Namen):
+Konsumenten der Klasse (nicht des Provider-Namens):
 - **Prompt-Variante** — `promptVariantFor` in [lib/prompts-loader.js](../lib/prompts-loader.js) (volle Cloud-Prompts inkl. `JSON_ONLY` vs. Slim-Prompts).
 - **Lektorat-Kontext + Split** — `_isLocalProvider` in [routes/jobs/lektorat.js](../routes/jobs/lektorat.js): Klasse `cloud` lädt Vorseiten-Kontext/Figuren-Beziehungen/POV-Block wieder und lässt den fokussierten Objektiv/Stil-Split zu (sofern `ai.lektorat_split` aktiv).
-- **Call-Serialisierung** — `settledAll` in [routes/jobs/shared/ai.js](../routes/jobs/shared/ai.js): Klasse `cloud` fährt parallel statt seriell; die Obergrenze bleibt die `max_parallel`-Semaphore (bei einem Frontier-Endpoint also `ai.openai-compat.max_parallel` hochsetzen).
+- **Call-Serialisierung** — `settledAll` in [routes/jobs/shared/ai.js](../routes/jobs/shared/ai.js): Klasse `cloud` fährt parallel statt seriell; die Obergrenze bleibt die `max_parallel`-Semaphore.
+- **Komplettanalyse-Strategie** — die Pipeline entscheidet durchgehend an der Klasse (`isCloudModel` in [job-komplett.js](../routes/jobs/komplett/job-komplett.js), `providerClass(effectiveProvider)` in den Phasen): kombinierter Extraktions-Pass statt Pass-A/B-Split, Single-Pass für Kontinuität und Erzählprofil, Completeness-Gap-Pässe, Coverage-Feedback + Self-Audit, Szenen-Backfill, Alias-Cluster, Entity-Reconcile-Judge, Soziogramm-Refine, Attribut-Check, Verify-Filter, Remap-Rescue und das Buchtext-Preprocessing.
+- **Kontinuität + Erzählprofil auf allen drei Schichten** — `/config` (`komplett.continuity`/`narrativeProfile`, [routes/proxies.js](../routes/proxies.js)), Karten-Gate (`requiresCloudModel` in [feature-registry.js](../public/js/cards/feature-registry.js), gelesen aus `$store.config.effectiveProviderClass`) und Route-Guard (`400 CONTINUITY_PROVIDER_UNSUPPORTED` / `NARRATIVE_PROFILE_PROVIDER_UNSUPPORTED` in [routes/jobs/komplett/index.js](../routes/jobs/komplett/index.js)) stellen **dieselbe** Frage. Weichen sie auseinander, ist die Karte sichtbar und der Knopf antwortet 400.
+- **Klasse am effektiven Provider, nicht am globalen.** Die beiden Job-seitigen Gates (`settledAll`, `_isLocalProvider`) lösen über `effectiveProviderClass()` auf. An `ai.provider` gelesen führe der Mischbetrieb sonst genau in die Irre, für die es die Zwei-Instanzen-Prompt-Schicht überhaupt gibt: ein Claude-User liefe seriell, weil global Ollama eingestellt ist, und ein Ollama-User parallel in den VRAM-Überlauf.
 
-Bewusst **nicht** klassen-, sondern provider-gegatet (`=== 'claude'`): Prompt-Caching (`cache_control`), Tool-Use (`callAIWithTools`, agentischer Buch-Chat, Recherche-Chat), Tiered Routing sowie die Claude-only-Jobs (Kontinuitäts-Verify, Faktencheck, Erzählprofil). Ein openai-compat-Frontier-Modell bekommt mit dem Schalter also die volle Prompt- und Strategie-Behandlung, aber keine Claude-API-Features — der Recherche-Chat bleibt für solche User ausgeblendet.
+Bewusst **nicht** klassen-, sondern provider-gegatet (`=== 'claude'`): Prompt-Caching (`cache_control`) inklusive Warmup-Reihenfolge, Tool-Use (`callAIWithTools`, agentischer Buch-Chat, Recherche-Chat), Tiered Routing (`extractTier` — Claude-Modellnamen + `effort`), `ai.claude.phase1_concurrency`, der `web_search`-Faktencheck (`400 FACTCHECK_CLAUDE_ONLY`) und die aus dem Claude-Fenster abgeleitete Chunk-Obergrenze. Ein openai-compat-Frontier-Modell bekommt mit dem Schalter also die volle Prompt- und Strategie-Behandlung, aber keine Claude-API-Features — der Recherche-Chat bleibt für solche User ausgeblendet.
+
+### Per-Job-Konfiguration: der ALS-Bag `aiJob`
+
+Job-Familien, die mit eigener Modell-/Fenster-Konfiguration laufen dürfen, setzen **einen** provider-skopierten Bag in den ALS-Context:
+
+```js
+setContext({ aiJob: { provider, model, contextWindow, maxTokensOut, timeoutMs, effort } })
+```
+
+Gelesen wird er ausschliesslich über `jobOverride(provider, field)` ([lib/ai/config.js](../lib/ai/config.js)) — und **nur, wenn der anfragende Provider derselbe ist**. Ohne diese Grenze bekäme ein Call gegen einen anderen Provider fremde Modell-Parameter (dieselbe Falle, gegen die auch das Profil-Overlay abgesichert ist). Leerstring/0/null zählen als „nicht gesetzt" und fallen auf den globalen Wert zurück.
+
+Präzedenz: **per-Call-Tier > Job-Bag > Profil > Instanz-Setting.**
+
+| Setzer | Provider | Settings-Präfix |
+|--------|----------|-----------------|
+| `_komplettAiOverrides` ([job-shared.js](../routes/jobs/komplett/job-shared.js)) | `claude`, `openai-compat` | `ai.<provider>.{model,context_window,max_tokens_out,timeout_ms}.komplett` (+ `effort.komplett` nur Claude) |
+| `_bookChatClaudeOverrides` ([book-chat.js](../routes/jobs/chat/book-chat.js)) | `claude` (Tool-Use) | `ai.claude.*.bookchat` |
+
+Ollama hat bewusst keinen Override-Satz: dort ist das Modell an das geladene Gewicht gebunden.
+
+### Timeout + Retry: geteilte Mechanik, provider-eigene Auslöser
+
+`combineSignals` / `timeoutError` / `sleep` / `parseRetryAfter` / `retryDelayMs` / `overloadError` liegen einmal in [lib/ai/shared.js](../lib/ai/shared.js) und werden von Claude **und** openai-compat benutzt. Provider-eigen bleibt nur, **welche** Antwort transient ist:
+
+| Provider | Hard-Timeout | Retry-Versuche | transient |
+|----------|--------------|----------------|-----------|
+| `claude` | `ai.claude.timeout_ms` (600 000) | `ai.claude.retry_max` (3) | 429, 529, `overloaded_error` im Body |
+| `openai-compat` | `ai.openai-compat.timeout_ms` (600 000) | `ai.openai-compat.retry_max` (3) | 408, 429, 500, 502, 503, 504 |
+| `ollama` | — (lokaler Mutex, kein entfernter Endpunkt) | — | — |
+
+Zwei Regeln gelten für beide: **wiederholt wird nur, was vor dem ersten Delta scheitert** (ein mitten im Stream abgerissener Call hat schon Text emittiert; den fängt `retryOnTransientAi` in [routes/jobs/shared/ai.js](../routes/jobs/shared/ai.js) auf Job-Ebene ab), und `state.timedOut` trennt Timeout von User-Abbruch — beides kommt sonst als `AbortError` an, und ein hängender Endpunkt verschwände als „vom User abgebrochen" statt als retrybares `AI_TIMEOUT`.
+
+## KI-Profile: mehrere Modelle pro Provider, pro User zugewiesen
+
+Die globalen `ai.<provider>.*`-Settings beschreiben **eine** Konfiguration je Provider. Ein Instanz-Betrieb braucht oft mehr: ein lokales llama.cpp **und** ein gehostetes Frontier-Modell laufen beide über `openai-compat`, mit verschiedenem Host, Key, Kontextfenster und verschiedener Klasse.
+
+Dafür gibt es `ai_profiles` (Tabelle, Admin unter **Einstellungen → Provider → KI-Profile**, Routen `/admin/ai-profiles`). Ein Profil trägt einen Provider plus beliebig viele Parameter-Überschreibungen und wird im Benutzer-Tab einem User zugewiesen (`app_users.ai_profile_id`, `ON DELETE SET NULL`). **Es gibt keine zweite Zuweisungs-Achse daneben** — das Profil ersetzt den früheren `ai_provider_override`; Migration 271 überführt bestehende Overrides in gleichnamige Profile ohne eigene Parameter.
+
+**NULL heisst global, nicht leer.** Jede Parameter-Spalte ist nullbar und fällt dann auf `ai.<provider>.<key>` zurück. Ein Profil trägt darum nur, was wirklich anders sein soll (oft nur `model`), und eine Änderung an der Instanz-Einstellung zieht weiterhin mit. Aufgelöst wird das an **einer** Stelle: `aiSetting(provider, key, { userEmail })` in [lib/ai/profile.js](../lib/ai/profile.js) — überall dort, wo früher `appSettings.get('ai.<provider>.<key>')` stand (Provider-Module, `getContextConfigFor`, `providerClass`, `_modelName`, die Semaphore). Der User kommt wie bei `resolveProvider` aus dem ALS-Context, sofern der Aufrufer ihn nicht mitgibt.
+
+**Das Overlay greift nur beim eigenen Provider.** `aiSetting('ollama', 'model')` liefert für einen User mit openai-compat-Profil den globalen Ollama-Wert — sonst bekäme ein Call gegen einen anderen Provider die Parameter eines fremden Modells (etwa den Claude-Modellnamen als `model` an einen llama.cpp-Server).
+
+Drei Folgen, die leicht übersehen werden:
+- **Cache-Schlüssel.** `_modelName(provider)` ([routes/jobs/shared/model.js](../routes/jobs/shared/model.js)) geht in jeden `cacheVersion`-String und löst deshalb über das Profil auf. Der `provider`-Anteil im PRIMARY KEY der Cache-Tabellen unterscheidet zwei openai-compat-Profile ja nicht — ohne den Profil-Modellnamen träfen sie gegenseitig ihre Zeilen.
+- **Semaphore je Endpunkt.** `withOpenAICompatLock` / `withOllamaLock` ([lib/ai/shared.js](../lib/ai/shared.js)) führen einen Bucket **pro Profil**. Ein gemeinsamer Zähler würde entweder den lokalen Server überfahren oder den gehosteten ausbremsen. Die Obergrenze liest `aiSettingByProfileKey` — gegen den Bucket, nicht gegen den ALS-Context: der Zähler wird beim Freiwerden eines Slots neu ausgewertet, und das passiert im Kontext eines fremden Calls.
+- **Fenster-Validierung beim Speichern.** Der Boot-Check in [lib/ai/config.js](../lib/ai/config.js) prüft nur die globalen Keys. Ein Profil mit `max_tokens_out + Puffer >= context_window` würde das Input-Budget still auf den 2000-Token-Floor kollabieren lassen — deshalb scheitert es in [routes/admin-ai-profiles.js](../routes/admin-ai-profiles.js) beim Speichern mit `CONTEXT_WINDOW_TOO_SMALL`, und `getContextConfigFor` warnt zusätzlich im Log.
+
+Der API-Key liegt verschlüsselt (`enc:v1:`, [lib/crypto.js](../lib/crypto.js)) und verlässt den Server nie; die Admin-UI schickt beim Bearbeiten `__unchanged__`, wenn das Feld leer bleibt. `has_api_key` ist das einzige, was die Liste darüber verrät.
 
 ## Chat-Temperatur
 

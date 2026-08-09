@@ -44,6 +44,7 @@ export const SLASH_ITEMS = [
   { key: 'blankpage',  tag: 'hr', className: 'blankpage',  group: 'break' },
   { key: 'bild',       upload: 'image',        group: 'insert' },
   { key: 'diagramm',   diagram: true,          group: 'insert' },
+  { key: 'tabelle',    table: true,            group: 'insert' },
   { key: 'heute',      insertText: 'date',     group: 'insert' },
   { key: 'jetzt',      insertText: 'datetime', group: 'insert' },
   { key: 'zeit',       insertText: 'time',     group: 'insert' },

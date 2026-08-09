@@ -66,7 +66,7 @@
 
 .card-title {
   font-family: var(--font-serif);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   font-size: var(--font-size-lg);
   letter-spacing: -0.01em;
   overflow-wrap: anywhere;
@@ -110,7 +110,7 @@
   max-width: 100%;
   box-sizing: border-box;
   font-family: var(--font-serif);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   font-size: var(--font-size-lg);
   letter-spacing: -0.01em;
   line-height: 1.2;
@@ -156,22 +156,7 @@
   color: var(--color-muted);
   line-height: 1.4;
 }
-.card-subline .save-indicator { margin-left: 0; }
-.card-subline-link {
-  color: var(--color-muted);
-  text-decoration: none;
-  border-bottom: var(--border-thin) solid transparent;
-  transition: color var(--transition-base), border-color var(--transition-base);
-}
-.card-subline-link:hover {
-  color: var(--color-text);
-  border-bottom-color: var(--color-border);
-}
-.card-subline-sep {
-  color: var(--color-subtle);
-  user-select: none;
-}
-.card-header-aside {
+.card-subline .save-indicator { margin-left: 0; }.card-header-aside {
   display: flex;
   align-items: center;
   gap: var(--space-14);

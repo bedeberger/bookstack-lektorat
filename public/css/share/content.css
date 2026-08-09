@@ -175,12 +175,17 @@
   box-shadow: inset 2px 0 0 0 var(--share-accent);
 }
 
-/* Findings-Marks und Spellcheck-Squiggles aus Editor-Runtime neutralisieren:
-   landen nicht im persistierten HTML, aber falls Klassen doch durchblitzen
-   (Custom-Highlights API hat Browser-Quirks), keine farbigen Marker im Reader. */
-.share-content .finding-mark,
-.share-content .lt-squiggle,
-.share-content [data-finding] {
+/* Lektorats-/Chat-Marks und Spellcheck-Squiggles aus der Editor-Runtime
+   neutralisieren: landen nicht im persistierten HTML (html-clean.js unwrapped
+   bzw. entfernt sie), aber falls Klassen doch durchblitzen, keine farbigen
+   Marker im Reader. Die Namen sind aus
+   public/js/editor/shared/html-clean.js gespiegelt — driften sie dort, muss
+   diese Liste mit. */
+.share-content .lektorat-mark,
+.share-content .lektorat-ins,
+.share-content .chat-mark,
+.share-content .chat-mark-ins,
+.share-content [class*="lt-squiggle"] {
   background: transparent !important;
   border-bottom: none !important;
   text-decoration: none !important;

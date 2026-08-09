@@ -41,7 +41,7 @@
 .ideen-section { margin-top: var(--space-md); }
 .ideen-section-title {
   font-size: var(--font-size-xs);
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   color: var(--color-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;

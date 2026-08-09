@@ -10,6 +10,7 @@ const { getNarrativeReport, saveAutorenBefund } = require('../../../../db/narrat
 const { updateJob, toSystemBlocks, retryOnTransientAi, settledAll } = require('../../shared');
 const { buildBookSystemBlockText } = require('../utils');
 const { komplettMaxTokens } = require('./tokens');
+const { providerClass } = require('../../../../lib/ai');
 
 /** @returns {number} Anzahl gespeicherter Kapitel-Profile (0 wenn nichts erzeugt). */
 async function runErzaehlprofil(ctx, opts = {}) {
@@ -21,7 +22,7 @@ async function runErzaehlprofil(ctx, opts = {}) {
   if (!groupOrder?.length) return 0;
 
   const cap = komplettMaxTokens(effectiveProvider);
-  const singlePass = totalChars <= singlePassLimit && effectiveProvider === 'claude';
+  const singlePass = totalChars <= singlePassLimit && providerClass(effectiveProvider) === 'cloud';
   updateJob(jobId, { progress: fromPct, statusText: 'job.phase.narrativeProfile' });
 
   let profiles = [];
@@ -62,8 +63,8 @@ async function runErzaehlprofil(ctx, opts = {}) {
   log.info(`Erzählprofil gespeichert: ${saved} Kapitel${singlePass ? ' (Single-Pass)' : ' (Multi-Pass)'}.`);
 
   // KI-Dach-Befund (Autoren-Befund) über die jetzt frisch berechenbaren, DETERMINISTISCHEN
-  // Struktur-Befunde. Nur Claude, non-critical (Fehler kippt das Kapitel-Profil nicht).
-  if (saved > 0 && effectiveProvider === 'claude') {
+  // Struktur-Befunde. Nur Cloud-Klasse, non-critical (Fehler kippt das Kapitel-Profil nicht).
+  if (saved > 0 && providerClass(effectiveProvider) === 'cloud') {
     try {
       await runAutorenBefund(ctx, { declared, fromPct: toPct, toPct });
     } catch (e) {

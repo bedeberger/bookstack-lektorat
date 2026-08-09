@@ -1,0 +1,111 @@
+/* Schwebender Werkzeug-Dock am Rand der Lesefläche: runde Icon-Taste(n) plus
+   eine Status-Pille mit Punkt-Indikator. Geteilte SSoT für DREI Konsumenten,
+   die dieselbe Form tragen, aber unterschiedlich verankert sind:
+
+     .stt-dock  (page/stt-dock.css)  — Notebook-Editor, sticky, unten RECHTS
+     .tts-dock  (page/tts-dock.css)  — Notebook-Leseansicht, sticky, unten LINKS
+     .tts-dock  (share/tts.css)      — Share-Reader-SSR, fixed, unten links
+
+   Hier steht nur, was alle drei teilen: Dock-Rahmung, Tasten-Form, Pillen-Form,
+   Punkt-Geometrie. Verankerung (sticky vs. fixed, welche Ecke), Zustandsfarben
+   (Aufnahme rot / Wiedergabe akzentfarben) und die Puls-Animationen bleiben beim
+   Konsumenten — genau daran unterscheiden sich die drei.
+
+   Token-Brücke: neutrale --dock-*-Variablen mit Fallback auf die SPA-Tokens.
+   Die zwei SPA-Docks brauchen darum KEIN Mapping; der Share-Reader mappt sie in
+   share/tts.css auf seine --share-*-Tokens (er lädt tokens.css nicht — dasselbe
+   Muster wie bei comment-rail.css und manuscript-stream.css).
+
+   Markup-Vertrag: das Dock-Element trägt `dock`, jede Taste `dock-btn`
+   (Sekundärtaste zusätzlich `dock-btn--sub`), die Status-Pille `dock-status`.
+   Die feature-eigene Klasse steht daneben und trägt die Zustände. */
+
+@layer components {
+
+  .dock {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--dock-gap, var(--space-xs));
+    /* Nur die Kinder sind klickbar — der freie Bereich um den Dock trifft
+       weiterhin den Text darunter (Cursor-Setzen neben dem Dock). */
+    pointer-events: none;
+  }
+  .dock > * { pointer-events: auto; }
+
+  /* Der Share-Reader steuert Sichtbarkeit über `element.hidden` statt Alpine.
+     Ohne diese Zeile überschriebe die `display: inline-flex`-Author-Regel der
+     Tasten das UA-`[hidden]`, und die Sekundärtasten blieben im Ruhezustand
+     sichtbar. */
+  .dock [hidden] { display: none; }
+
+  .dock-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--dock-btn-size, 36px);
+    height: var(--dock-btn-size, 36px);
+    border-radius: 50%;
+    border: 1px solid var(--dock-border, var(--color-border));
+    background: var(--dock-surface, var(--color-surface));
+    color: var(--dock-muted, var(--color-muted));
+    cursor: pointer;
+    box-shadow: var(--dock-shadow, var(--shadow-sm));
+    transition: color 0.2s, border-color 0.2s, background 0.2s;
+  }
+  .dock-btn .icon {
+    width: var(--dock-icon-size, 18px);
+    height: var(--dock-icon-size, 18px);
+  }
+  .dock-btn:hover {
+    color: var(--dock-hover, var(--color-primary));
+    border-color: var(--dock-hover, var(--color-primary));
+  }
+
+  /* Sekundärtasten (Weiter/Stopp) neben der Haupttaste. */
+  .dock-btn--sub {
+    width: var(--dock-btn-sub-size, 30px);
+    height: var(--dock-btn-sub-size, 30px);
+  }
+  .dock-btn--sub .icon {
+    width: 15px;
+    height: 15px;
+  }
+
+  /* Status-Pille neben den Tasten (Fortschritt, „hört zu", „pausiert"). */
+  .dock-status {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-6);
+    padding: var(--dock-status-pad, var(--space-3) var(--space-6));
+    border-radius: var(--dock-radius, var(--radius-md));
+    border: 1px solid var(--dock-border, var(--color-border));
+    background: var(--dock-surface, var(--color-surface));
+    box-shadow: var(--dock-shadow, var(--shadow-sm));
+    font-size: var(--dock-status-font, var(--font-size-xs));
+    line-height: 1;
+    color: var(--dock-muted, var(--color-muted));
+    white-space: nowrap;
+    user-select: none;
+  }
+
+  /* Punkt-Indikator vor dem Text. Ruhefarbe hier, Zustandsfarben + Puls beim
+     Konsumenten — sie sind das eigentlich Feature-Spezifische. */
+  .dock-status::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--dock-muted, var(--color-muted));
+    flex: none;
+  }
+
+  /* Die Puls-Animationen selbst stehen beim Konsumenten (jeder Dock pulsiert in
+     eigener Farbe und Frequenz), ihr Abschalten aber hier — sonst müsste jeder
+     neue Dock daran denken. `!important`, weil die Konsumenten-Regel
+     (`.stt-dock-btn.is-recording[aria-pressed="true"]`) spezifischer ist. */
+  @media (prefers-reduced-motion: reduce) {
+    .dock-btn { animation: none !important; }
+    .dock-status::before { animation: none !important; }
+  }
+
+}

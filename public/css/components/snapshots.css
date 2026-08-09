@@ -1,3 +1,4 @@
+@layer components {
 /* Manuskript-Meilensteine („Fassung 1/2/3") — snapshotsCard.
    Liste der Fassungen + Vergleich zweier Fassungen (Buch-Level-Diff).
    Tabelle nutzt die Standard-Klasse .entity-grid-table (entities/entity-grid.css);
@@ -54,7 +55,7 @@
 }
 .snapshots-drift--worth .snapshots-drift__head {
   color: var(--color-warn-text);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 .snapshots-drift__tags {
   display: flex;
@@ -167,7 +168,7 @@
   cursor: pointer;
 }
 .snapshots-entry__head:hover { background: var(--color-hover); }
-.snapshots-entry__name { font-weight: 600; }
+.snapshots-entry__name { font-weight: var(--fw-semibold); }
 .snapshots-entry__path {
   color: var(--color-muted);
   font-size: var(--font-size-sm);
@@ -188,4 +189,5 @@
   .snapshots-capture > .lt-field-wrap:has(> .snapshots-capture__desc) { flex: 0 0 auto; }
   .snapshots-compare__pickers { flex-direction: column; gap: var(--space-md); }
   .snapshots-summary__chars { margin-inline-start: 0; }
+}
 }

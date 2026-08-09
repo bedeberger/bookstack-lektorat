@@ -78,9 +78,9 @@ test('_claudeAcceptsEffort: Opus 4.5+ und Sonnet 4.6 akzeptieren, Sonnet 4.5/Hai
   }
 });
 
-// Per-Job-Override (ALS) für Kontextfenster/Output-Cap: getContextConfigFor('claude')
-// muss claudeContextWindow/claudeMaxTokensOut aus dem ALS-Store bevorzugen, andere
-// Provider unberührt lassen. So fährt die Komplettanalyse auf Opus mit eigenem Cap,
+// Per-Job-Override (ALS-Bag `aiJob`) für Kontextfenster/Output-Cap:
+// getContextConfigFor(p) muss contextWindow/maxTokensOut aus dem Bag bevorzugen —
+// aber NUR für den Provider, der im Bag steht; andere Provider bleiben unberührt. So fährt die Komplettanalyse auf Opus mit eigenem Cap,
 // ohne globale (Sonnet-)Calls zu beeinflussen.
 test('getContextConfigFor(claude): ALS-Override schlägt globalen Wert', () => {
   const { getContextConfigFor } = require('../../lib/ai');
@@ -89,7 +89,7 @@ test('getContextConfigFor(claude): ALS-Override schlägt globalen Wert', () => {
   const base = getContextConfigFor('claude');
   assert.ok(base.maxTokensOut > 0 && base.contextWindow > 0);
   // Mit Override: contextWindow/maxTokensOut werden übernommen, inputBudget folgt.
-  runWithContext({ claudeContextWindow: 1000000, claudeMaxTokensOut: 128000 }, () => {
+  runWithContext({ aiJob: { provider: 'claude', contextWindow: 1000000, maxTokensOut: 128000 } }, () => {
     const cfg = getContextConfigFor('claude');
     assert.equal(cfg.contextWindow, 1000000);
     assert.equal(cfg.maxTokensOut, 128000);
@@ -99,6 +99,26 @@ test('getContextConfigFor(claude): ALS-Override schlägt globalen Wert', () => {
     // Andere Provider ignorieren den Claude-Override.
     const oll = getContextConfigFor('ollama');
     assert.notEqual(oll.maxTokensOut, 128000);
+  });
+});
+
+// Derselbe Bag für openai-compat: die Komplettanalyse darf auch dort mit eigenem
+// Fenster/Output-Cap fahren (ein gehostetes Frontier-Modell hat dieselbe Trennung
+// zwischen Alltags- und Analyse-Konfiguration). Und der Bag ist provider-SKOPIERT —
+// ohne diese Grenze bekäme ein Call gegen einen anderen Provider fremde Parameter.
+test('getContextConfigFor(openai-compat): Job-Bag greift, aber nur beim eigenen Provider', () => {
+  const { getContextConfigFor } = require('../../lib/ai');
+  const { runWithContext } = require('../../lib/log-context');
+  const claudeBase = getContextConfigFor('claude');
+  runWithContext({ aiJob: { provider: 'openai-compat', contextWindow: 256000, maxTokensOut: 32000 } }, () => {
+    const cfg = getContextConfigFor('openai-compat');
+    assert.equal(cfg.contextWindow, 256000);
+    assert.equal(cfg.maxTokensOut, 32000);
+    assert.equal(cfg.inputBudgetTokens, 256000 - 32000 - cfg.safetyMargin);
+    // Claude sieht den fremden Bag nicht.
+    const cl = getContextConfigFor('claude');
+    assert.equal(cl.contextWindow, claudeBase.contextWindow);
+    assert.equal(cl.maxTokensOut, claudeBase.maxTokensOut);
   });
 });
 

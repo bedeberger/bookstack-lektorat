@@ -47,8 +47,8 @@ router.get('/targets', async (req, res) => {
   if (!_guard(req, res, bookId, 'viewer')) return;
 
   // Bestandsinhalte nachindizieren, falls noch nie geschehen. Ohne das zeigt der
-  // Picker in einem gewachsenen Buch keine Abbildung, weil `xref_anchors` nur am
-  // Seiten-Write waechst. Einmal pro Buch und Prozess-Leben (siehe
+  // Picker in einem gewachsenen Buch keine Abbildung und keine Tabelle, weil
+  // `xref_anchors` nur am Seiten-Write waechst. Einmal pro Buch und Prozess-Leben (siehe
   // lib/xref-index.js); der Nacht-Cron holt die uebrigen Buecher.
   try { await ensureBookXrefsIndexed(bookId); }
   catch (e) { logger.warn(`[xref] Nachindizierung fehlgeschlagen (book=${bookId}): ${e.message}`); }
@@ -60,8 +60,11 @@ router.get('/targets', async (req, res) => {
     parentId: c.parent_chapter_id,
   }));
 
-  const figures = listBookAnchors(bookId).map(a => ({
-    kind: 'figure',
+  // Ein Durchlauf, zwei Listen: `listBookAnchors` liefert beide Typen in
+  // Leserichtung, und die Aufteilung hier haelt die Antwort ruecklaufkompatibel
+  // (`figures` gab es schon).
+  const anchors = listBookAnchors(bookId).map(a => ({
+    kind: (a.kind === 'table') ? 'table' : 'figure',
     target: a.bid,
     title: a.caption || '',
     pageId: a.page_id,
@@ -69,7 +72,11 @@ router.get('/targets', async (req, res) => {
     chapterId: a.chapter_id,
   }));
 
-  res.json({ chapters, figures });
+  res.json({
+    chapters,
+    figures: anchors.filter(a => a.kind === 'figure'),
+    tables: anchors.filter(a => a.kind === 'table'),
+  });
 });
 
 /** GET /xrefs/backlinks?kind=chapter&target=42

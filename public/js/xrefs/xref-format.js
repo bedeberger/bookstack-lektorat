@@ -10,6 +10,7 @@
 const DE = {
   chapterWord: 'Kapitel',
   figureWord: 'Abb.',
+  tableWord: 'Tab.',
   pageWord: 'S.',
   quoteOpen: '„',
   quoteClose: '“',
@@ -20,6 +21,7 @@ const DE = {
 const EN = {
   chapterWord: 'Chapter',
   figureWord: 'Fig.',
+  tableWord: 'Tab.',
   pageWord: 'p.',
   quoteOpen: '“',
   quoteClose: '”',
@@ -35,6 +37,7 @@ export function xrefLabelsFor(lang) {
 function _word(kind, L) {
   if (kind === 'chapter') return L.chapterWord;
   if (kind === 'figure') return L.figureWord;
+  if (kind === 'table') return L.tableWord;
   return L.pageWord;
 }
 
@@ -66,11 +69,27 @@ export function formatXref({ kind, fmt = 'label', entry, lang = 'de' }) {
   return `${_word(kind, L)} ${num}`;
 }
 
-/** Praefix einer nummerierten Abbildungslegende: „Abb. 3.2: ".
+/** Praefix einer nummerierten Legende: „Abb. 3.2: " bzw. „Tab. 3.2: ".
  *  Ohne Nummer leer — dann bleibt die Legende so, wie der Autor sie geschrieben
- *  hat. */
-export function figureCaptionPrefix(number, lang = 'de') {
+ *  hat.
+ *
+ *  Abbildungen und Tabellen zaehlen GETRENNT (zwei Zaehler in xref-number.js) —
+ *  „Abb. 3.1" und „Tab. 3.1" koennen darum nebeneinander stehen. Das ist die
+ *  Konvention im Sach- und Fachbuch; ein gemeinsamer Zaehler machte aus der
+ *  ersten Tabelle eines Kapitels „Tab. 3.4", nur weil davor drei Abbildungen
+ *  stehen. */
+export function captionPrefix(kind, number, lang = 'de') {
   if (!number) return '';
   const L = xrefLabelsFor(lang);
-  return `${L.figureWord} ${String(number)}${L.titleSep}`;
+  return `${_word(kind, L)} ${String(number)}${L.titleSep}`;
+}
+
+/** Abbildungslegende — Kurzform von captionPrefix('figure', …). */
+export function figureCaptionPrefix(number, lang = 'de') {
+  return captionPrefix('figure', number, lang);
+}
+
+/** Tabellenbeschriftung — Kurzform von captionPrefix('table', …). */
+export function tableCaptionPrefix(number, lang = 'de') {
+  return captionPrefix('table', number, lang);
 }

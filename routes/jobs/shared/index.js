@@ -61,7 +61,7 @@ module.exports = {
 
   htmlToText: ai.htmlToText,
   htmlToTextForPrompt: ai.htmlToTextForPrompt,
-  cleanPageTextForClaude: ai.cleanPageTextForClaude,
+  cleanPageTextForAi: ai.cleanPageTextForAi,
 
   loadOrderedBookContents: loader.loadOrderedBookContents,
   loadPageContents: loader.loadPageContents,

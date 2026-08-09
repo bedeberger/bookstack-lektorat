@@ -60,10 +60,46 @@ test('Listen mit ordered/unordered + verschachtelte Inline-Styles', () => {
   assert.equal(blocks[0].items.length, 2);
 });
 
-test('Tabellen werden geskippt aber Inhalt als paragraph fallback', () => {
+test('Tabellen werden als table-Block gelesen, nicht als Fliesstext', () => {
   const blocks = parseHtmlToBlocks('<table><tr><td>Zelle</td></tr></table>');
   assert.equal(blocks.length, 1);
-  assert.equal(blocks[0].kind, 'paragraph');
+  assert.equal(blocks[0].kind, 'table');
+  assert.equal(blocks[0].rows[0][0][0].text, 'Zelle');
+  assert.equal(blocks[0].header, null, 'ohne <th> gibt es keine Kopfzeile');
+});
+
+test('Tabelle: Kopfzeile, Ausrichtung und Beschriftung', () => {
+  const [b] = parseHtmlToBlocks(
+    '<table><caption>Umsatz</caption>'
+    + '<thead><tr><th>Jahr</th><th data-align="right">Wert</th></tr></thead>'
+    + '<tbody><tr><td>2023</td><td data-align="right">1.2</td></tr></tbody></table>');
+  assert.equal(b.kind, 'table');
+  assert.deepEqual(b.align, ['left', 'right']);
+  assert.equal(b.header[0][0].text, 'Jahr');
+  assert.equal(b.caption[0].text, 'Umsatz');
+  assert.equal(b.rows.length, 1);
+});
+
+test('Tabelle: colspan verschiebt die Folgezellen nicht in die falsche Spalte', () => {
+  // Import-Markup (Word/ODT) kann verbundene Zellen tragen. Der Inhalt steht in
+  // der ersten Spalte des Verbunds, die restlichen bleiben leer — ohne das
+  // Ueberspringen stuende „Rest" unter der falschen Kopfzeile.
+  const [b] = parseHtmlToBlocks(
+    '<table><thead><tr><th>A</th><th>B</th><th>C</th></tr></thead>'
+    + '<tbody><tr><td colspan="2">Verbund</td><td>Rest</td></tr></tbody></table>');
+  assert.equal(b.align.length, 3);
+  assert.equal(b.rows[0][0][0].text, 'Verbund');
+  assert.deepEqual(b.rows[0][1], [], 'die uebersprungene Spalte bleibt leer');
+  assert.equal(b.rows[0][2][0].text, 'Rest');
+});
+
+test('Tabelle: weiche Umbrueche in der Zelle werden zu Leerzeichen', () => {
+  // Eine Zeile im Tabellensatz bricht nach der Spaltenbreite, nicht nach dem
+  // <br> des Autors.
+  const [b] = parseHtmlToBlocks('<table><tr><td>a<br>b</td></tr></table>');
+  const texts = b.rows[0][0].map(r => r.text);
+  assert.ok(!texts.includes('\n'), 'kein harter Umbruch in der Zelle');
+  assert.match(texts.join(''), /a\s?b/);
 });
 
 test('Links bekommen underline + link', () => {
@@ -157,14 +193,17 @@ test('figure ohne figcaption → nur Bild-Block, kein leerer Paragraph', () => {
   assert.deepEqual(blocks[0], { kind: 'image', src: '/bild.png', alt: '' });
 });
 
-test('reale Tabelle (thead/tbody, mehrere Zellen) → Fließtext-Fallback ohne Verlust', () => {
+test('reale Tabelle (thead/tbody, mehrere Zellen) behaelt Struktur UND Inhalt', () => {
   const blocks = parseHtmlToBlocks(
     '<table data-bid="1"><thead><tr><th>Name</th><th>Rolle</th></tr></thead>' +
     '<tbody><tr><td>Josef K.</td><td>Angeklagter</td></tr></tbody></table>'
   );
   assert.equal(blocks.length, 1);
-  assert.equal(blocks[0].kind, 'paragraph');
-  const text = blocks[0].runs.map(r => r.text).join('');
+  assert.equal(blocks[0].kind, 'table', 'kein Fliesstext-Fallback mehr');
+  const text = [
+    ...blocks[0].header.flat(),
+    ...blocks[0].rows.flat(2),
+  ].map(r => r.text).join(' ');
   for (const cell of ['Name', 'Rolle', 'Josef K.', 'Angeklagter']) {
     assert.ok(text.includes(cell), `Zellinhalt "${cell}" darf nicht verloren gehen`);
   }

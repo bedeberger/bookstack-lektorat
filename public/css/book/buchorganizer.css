@@ -42,8 +42,8 @@
 .organizer-chapter--depth-3 > .organizer-chapter-header {
   background: color-mix(in srgb, var(--card-accent) 8%, var(--color-hover-light));
 }
-.organizer-chapter--depth-2 .organizer-name--chapter { font-weight: 500; }
-.organizer-chapter--depth-3 .organizer-name--chapter { font-weight: 400; font-style: italic; }
+.organizer-chapter--depth-2 .organizer-name--chapter { font-weight: var(--fw-medium); }
+.organizer-chapter--depth-3 .organizer-name--chapter { font-weight: var(--fw-regular); font-style: italic; }
 
 .organizer-chapter-header {
   display: flex;
@@ -57,7 +57,7 @@
 }
 
 .organizer-chapter-label {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--color-muted);
   font-size: var(--font-size-sm);
   letter-spacing: 0.02em;
@@ -114,7 +114,7 @@
   background: var(--color-surface);
 }
 .organizer-name--chapter {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .organizer-pages {
@@ -365,9 +365,9 @@
 /* Konflikt-Diff-Modal */
 .blog-conflict-overlay {
   position: fixed; inset: 0;
-  background: rgba(0, 0, 0, 0.45);
+  background: var(--color-overlay);
   display: flex; align-items: center; justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-popover);
   padding: var(--space-xs);
 }
 .blog-conflict-modal {
@@ -460,12 +460,12 @@
 .badge--redaktion-schlussredigiert {
   background: color-mix(in srgb, var(--card-accent) 28%, transparent);
   color: var(--card-accent);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 .badge--redaktion-freigegeben {
   background: var(--color-ok-bg);
   color: var(--color-ok-text);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 /* Text nach dem Setzen der Stufe bearbeitet. Bewusst additiv statt als eigene
    Farbe: die Stufe bleibt ablesbar, der gestrichelte Rahmen sagt „gilt so nicht

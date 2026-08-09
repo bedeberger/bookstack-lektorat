@@ -34,28 +34,28 @@
        Nur sichtbar, wenn Admin TTS aktiviert hat ($store.tts.enabled aus
        /config) und die Seite Inhalt hat. -->
   <template x-if="$store.tts.enabled">
-    <div class="tts-dock" x-show="renderedPageHtml && _ttsHasReadableText()" x-cloak>
+    <div class="dock tts-dock" x-show="renderedPageHtml && _ttsHasReadableText()" x-cloak>
       <!-- Status links: „liest" mit Satz-Fortschritt bzw. „pausiert". -->
-      <span class="tts-status" aria-live="polite"
+      <span class="dock-status tts-status" aria-live="polite"
             x-show="$store.tts.playing"
             :class="$store.tts.paused ? 'is-paused' : 'is-reading'"
             x-text="$store.tts.paused ? t('tts.status.paused') : ($store.tts.loading && !$store.tts.index ? t('tts.status.loading') : t('tts.status.reading', { i: $store.tts.index, n: $store.tts.total }))"></span>
       <!-- Naechster Satz (nur waehrend laufender Wiedergabe). -->
-      <button type="button" class="tts-dock-btn tts-dock-btn--sub"
+      <button type="button" class="dock-btn dock-btn--sub tts-dock-btn tts-dock-btn--sub"
               x-show="$store.tts.playing && !$store.tts.paused"
               :data-tip="t('tts.skip')" :aria-label="t('tts.skip')"
               @click="skipTtsProof()">
         <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#chevron-last"/></svg>
       </button>
       <!-- Stoppen (nur wenn aktiv). -->
-      <button type="button" class="tts-dock-btn tts-dock-btn--sub"
+      <button type="button" class="dock-btn dock-btn--sub tts-dock-btn tts-dock-btn--sub"
               x-show="$store.tts.playing"
               :data-tip="t('tts.stop')" :aria-label="t('tts.stop')"
               @click="stopTtsProof()">
         <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#square"/></svg>
       </button>
       <!-- Haupttaste: starten (Kopfhoerer) / pausieren / fortsetzen. -->
-      <button type="button" class="tts-dock-btn"
+      <button type="button" class="dock-btn tts-dock-btn"
               :aria-pressed="$store.tts.playing && !$store.tts.paused"
               :class="{ 'is-reading': $store.tts.playing && !$store.tts.paused }"
               :data-tip="!$store.tts.playing ? t('tts.listen') : ($store.tts.paused ? t('tts.resume') : t('tts.pause'))"

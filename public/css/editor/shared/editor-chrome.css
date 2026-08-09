@@ -35,7 +35,7 @@
 /* Lokaler Draft-Write fehlgeschlagen (Speicher voll) — der Inhalt liegt nicht
    einmal in localStorage, echter Datenverlust-Risiko. Stärkstes Signal:
    Fehlerfarbe + fett + pulsierender Punkt. */
-.save-indicator--unsaved { color: var(--color-err-text); font-weight: 600; }
+.save-indicator--unsaved { color: var(--color-err-text); font-weight: var(--fw-semibold); }
 .save-indicator--saving .save-indicator__dot,
 .save-indicator--offline .save-indicator__dot,
 .save-indicator--unsaved .save-indicator__dot {

@@ -5,6 +5,7 @@
 
 const { db, getBookSettings } = require('../../../db/schema');
 const appSettings = require('../../../lib/app-settings');
+const { providerClass } = require('../../../lib/ai');
 const { updateJob, settledAll, jobAbortControllers } = require('../shared');
 const { _stelleQuote, _refToString } = require('./utils');
 const embed = require('../../../lib/embed');
@@ -63,7 +64,7 @@ async function _semanticExcerpt(bookId, model, query, signal) {
 
 // Filtert die Probleme des Fakten-Checks: verwirft nur explizit als unecht
 // eingestufte (bestaetigt=false); nicht lokalisierbare/fehlgeschlagene bleiben
-// konservativ erhalten. Nur Claude (lokale Provider: zu kleines Kontextfenster
+// konservativ erhalten. Nur Cloud-Klasse (lokale Provider: zu kleines Kontextfenster
 // für zuverlässige Verify-Urteile, Mutex serialisiert zudem jeden Call).
 async function verifyKontinuitaetProbleme(ctx, result, fromPct, toPct) {
   const { call, prompts, sys, jobId, tok, bookName, groups, groupOrder, log, bookIdInt } = ctx;
@@ -363,12 +364,14 @@ async function runAttributeContradictionCheck(ctx, fromPct, toPct) {
 // (Spitznamen, Teilnamen, Epitheta, Schreibvarianten). Bevor sie gedroppt werden, mappt ein
 // billiger Auflösungs-Call (Kandidaten + Katalognamen → Zuordnung oder «») sie – gefundene
 // Treffer werden als lowercase-Aliase in figNameToIdLower eingespeist, sodass der anschliessende
-// Remap sie auflöst statt Szenen-Figuren-Links / Event-Assignments zu verlieren. Nur Claude,
+// Remap sie auflöst statt Szenen-Figuren-Links / Event-Assignments zu verlieren. Nur
+// Cloud-Klasse (der Call urteilt über Namensvarianten und braucht ein faehiges Modell,
+// keine Anthropic-API-Faehigkeit — SSoT lib/ai/config.js#providerClass),
 // nur wenn es überhaupt unauflösbare Namen gibt. Non-fatal (AbortError propagiert). Mutiert
 // figNameToIdLower in place; gibt die Anzahl neu aufgelöster Namen zurück.
 async function resolveRemapNames(ctx, { chapterSzenen, chapterAssignments, figuren, figNameToId, figNameToIdLower }) {
   const { call, prompts, sys, jobId, tok, bookName, log, effectiveProvider } = ctx;
-  if (effectiveProvider !== 'claude') return 0;
+  if (providerClass(effectiveProvider) !== 'cloud') return 0;
   if (appSettings.get('ai.komplett.remap_rescue') === false) return 0;
 
   const isResolved = (name) => !name || !!(figNameToId[name] || figNameToIdLower[name.toLowerCase()]);
@@ -415,49 +418,67 @@ async function resolveRemapNames(ctx, { chapterSzenen, chapterAssignments, figur
   return added;
 }
 
-// ── Per-Job-Claude-Overrides für die Komplettanalyse-Familie ──────────────────
-// Nur ai.provider = claude: Modell, Kontextfenster, Output-Cap und Hard-Timeout dürfen
-// eigenständig vom globalen ai.claude.* abweichen (z.B. Opus 4.8 mit 128K Output + längerem
+// ── Per-Job-Overrides für die Komplettanalyse-Familie ─────────────────────────
+// Modell, Kontextfenster, Output-Cap und Hard-Timeout dürfen für die Analyse eigenständig
+// vom globalen `ai.<provider>.*` abweichen (z.B. Opus 4.8 mit 128K Output + längerem
 // Timeout für die gründlichere Extraktion, während global Sonnet 4.6 / 64K / 10min fürs
-// Lektorat läuft). Leer/0 = folgt global. Via ALS-Context an lib/ai.js gereicht → greift für
-// alle Claude-Calls dieses Jobs, ohne globale Calls zu beeinflussen.
+// Lektorat läuft). Leer/0 = folgt global. Als provider-skopierter Bag über den ALS-Context
+// an lib/ai gereicht (config.js#jobOverride) → greift für alle Calls dieses Jobs, ohne
+// globale Calls zu beeinflussen.
+//
+// GILT FÜR JEDEN PROVIDER, nicht nur Claude: ein gehostetes Frontier-Modell über
+// openai-compat hat dieselbe Trennung zwischen Alltags- und Analyse-Konfiguration, und
+// die Analyse fuhr dort sonst zwangsläufig mit dem Lektorat-Fenster. `effort` ist der
+// einzige claude-exklusive Teil (Anthropic-Parameter) — für andere Provider existiert
+// der Key nicht und der Wert bleibt leer.
+//
 // Per-Call-Timeout-Default für die Komplettanalyse, wenn ein eigenes Komplett-Profil
 // (Modell/Kontext/Output) gesetzt ist, aber kein expliziter timeout_ms.komplett: 30 Min.
-// Begründung: (a) die globalen 10 Min sind für Opus-Single-Pass-Calls über ein ganzes Buch
-// zu knapp; (b) 30 Min < 1h-Prompt-Cache-TTL — aufeinanderfolgende Calls (P1…P8, alle auf
-// demselben gecachten 1h-Buchtext-Block) stossen den Cache so stets vor Ablauf neu an.
+// Begründung: (a) die globalen 10 Min sind für Single-Pass-Calls über ein ganzes Buch
+// zu knapp; (b) 30 Min < 1h-Prompt-Cache-TTL — aufeinanderfolgende Claude-Calls (P1…P8,
+// alle auf demselben gecachten 1h-Buchtext-Block) stossen den Cache so stets vor Ablauf
+// neu an.
 const KOMPLETT_DEFAULT_TIMEOUT_MS = 1800000; // 30 min
 
-function _komplettClaudeOverrides(effectiveProvider) {
-  if (effectiveProvider !== 'claude') return null;
-  const model = String(appSettings.get('ai.claude.model.komplett') || '').trim();
-  const contextWindow = parseInt(appSettings.get('ai.claude.context_window.komplett'), 10) || 0;
-  const maxTokensOut = parseInt(appSettings.get('ai.claude.max_tokens_out.komplett'), 10) || 0;
-  const timeoutMs = parseInt(appSettings.get('ai.claude.timeout_ms.komplett'), 10) || 0;
-  const effort = String(appSettings.get('ai.claude.effort.komplett') || '').trim().toLowerCase();
-  const patch = {};
-  if (model) patch.claudeModel = model;
-  if (contextWindow > 0) patch.claudeContextWindow = contextWindow;
-  if (maxTokensOut > 0) patch.claudeMaxTokensOut = maxTokensOut;
+// Provider mit eigenem Komplett-Override-Satz. Ollama fehlt bewusst: dort ist das
+// Modell an das lokal geladene Gewicht gebunden, ein zweites Analyse-Modell danebenzu-
+// stellen hiesse VRAM-Tausch mitten im Job.
+const KOMPLETT_OVERRIDE_PROVIDERS = new Set(['claude', 'openai-compat']);
+
+function _komplettAiOverrides(effectiveProvider) {
+  const p = effectiveProvider;
+  if (!KOMPLETT_OVERRIDE_PROVIDERS.has(p)) return null;
+  const model = String(appSettings.get(`ai.${p}.model.komplett`) || '').trim();
+  const contextWindow = parseInt(appSettings.get(`ai.${p}.context_window.komplett`), 10) || 0;
+  const maxTokensOut = parseInt(appSettings.get(`ai.${p}.max_tokens_out.komplett`), 10) || 0;
+  const timeoutMs = parseInt(appSettings.get(`ai.${p}.timeout_ms.komplett`), 10) || 0;
+  const effort = p === 'claude'
+    ? String(appSettings.get('ai.claude.effort.komplett') || '').trim().toLowerCase()
+    : '';
+  const bag = { provider: p };
+  if (model) bag.model = model;
+  if (contextWindow > 0) bag.contextWindow = contextWindow;
+  if (maxTokensOut > 0) bag.maxTokensOut = maxTokensOut;
   // Effort greift für ALLE Claude-Calls des Jobs (P1–P8 + Kontinuität); ungültige Werte
   // mappt _resolveClaudeEffort still auf null. Auf Nicht-Effort-Modellen (Sonnet 4.5/Haiku)
   // klemmt _claudeOutputConfigParams selbst (kein 400).
-  if (effort) patch.claudeEffort = effort;
+  if (effort) bag.effort = effort;
   // Eigenes Komplett-Profil aktiv? Dann den Timeout-Default greifen lassen (nie unter den
   // expliziten globalen Wert senken). Ohne Profil bleibt es beim globalen Timeout.
   const hasKomplettProfile = !!(model || contextWindow > 0 || maxTokensOut > 0);
   if (timeoutMs > 0) {
-    patch.claudeTimeoutMs = timeoutMs;
+    bag.timeoutMs = timeoutMs;
   } else if (hasKomplettProfile) {
-    const globalTimeoutMs = parseInt(appSettings.get('ai.claude.timeout_ms'), 10) || 600000;
-    patch.claudeTimeoutMs = Math.max(KOMPLETT_DEFAULT_TIMEOUT_MS, globalTimeoutMs);
+    const globalTimeoutMs = parseInt(appSettings.get(`ai.${p}.timeout_ms`), 10) || 600000;
+    bag.timeoutMs = Math.max(KOMPLETT_DEFAULT_TIMEOUT_MS, globalTimeoutMs);
   }
-  return Object.keys(patch).length ? patch : null;
+  // Nur `provider` im Bag = nichts überschrieben → gar keinen Bag setzen.
+  return Object.keys(bag).length > 1 ? { aiJob: bag } : null;
 }
 
 module.exports = {
   _VERIFY_RADIUS, _verifyExcerpt, verifyKontinuitaetProbleme,
-  buildAnachronismusData, KOMPLETT_DEFAULT_TIMEOUT_MS, _komplettClaudeOverrides,
+  buildAnachronismusData, KOMPLETT_DEFAULT_TIMEOUT_MS, _komplettAiOverrides,
   buildAttributeContradictions, runAttributeContradictionCheck,
   resolveRemapNames,
 };

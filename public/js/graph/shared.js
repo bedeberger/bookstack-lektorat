@@ -1,4 +1,5 @@
 import { escHtml } from '../utils.js';
+import { createGraphTooltip, adaptNodeColor, graphTheme } from '../graph-kit.js';
 import {
   DEFAULT_FONT,
   TYP_COLOR,
@@ -21,8 +22,22 @@ export const sharedMethods = {
     return (Alpine.store('catalog').figuren || []).filter(f => !f.stale);
   },
 
+  // Aufgelöste Canvas-Farben. renderFigurGraph setzt sie vor dem Dispatch; der
+  // Fallback greift nur, wenn eine Methode ausserhalb des Render-Pfads zuerst
+  // zieht (Kapitel-Filter aus dem Hash-Router).
+  _theme() {
+    return (this._graphTheme ||= graphTheme(document.getElementById('figuren-graph')));
+  },
+
+  // Figurentyp-Farbe, für den aktuellen Grund nachgeführt (Dark-Mode: getönte
+  // Fläche statt Pastell, Border bleibt der Erkennungsanker).
   _figTypColor(typ) {
-    return TYP_COLOR[typ] || TYP_COLOR.andere;
+    return adaptNodeColor(TYP_COLOR[typ] || TYP_COLOR.andere, this._theme());
+  },
+
+  // Node-Font: im Dark-Mode trägt die abgemischte Fläche keinen dunklen Text mehr.
+  _nodeFont() {
+    return { ...DEFAULT_FONT, color: this._theme().text };
   },
 
   // Gemeinsame vis-Node-Basis. Familiengraph nutzt sie direkt; Figurengraph
@@ -33,7 +48,7 @@ export const sharedMethods = {
       id: f.id,
       label: nodeLabel(f),
       color: this._figTypColor(f.typ),
-      font: DEFAULT_FONT,
+      font: this._nodeFont(),
       shape: 'box',
       margin: 10,
       widthConstraint: { maximum: 160 },
@@ -51,41 +66,49 @@ export const sharedMethods = {
          : figuren.map(f => f.id)
     );
     const soziogrammModus = this.figurenGraphModus === 'soziogramm';
+    const theme = this._theme();
 
     this._figurenNodes.update(figuren.filter(f => existingIds.has(f.id)).map(f => {
       if (!ch || activeIds.has(f.id)) {
-        const schichtStyle = soziogrammModus
-          ? (SCHICHT_COLOR[f.sozialschicht] || SCHICHT_COLOR.andere)
-          : null;
-        const color = soziogrammModus
-          ? { background: schichtStyle.background, border: schichtStyle.border, highlight: schichtStyle.highlight }
-          : this._figTypColor(f.typ);
-        const font = soziogrammModus ? (schichtStyle.font || DEFAULT_FONT) : { ...DEFAULT_FONT, color: '#333' };
+        const color = soziogrammModus ? this._schichtNodeColor(f.sozialschicht) : this._figTypColor(f.typ);
+        const font = soziogrammModus ? this._schichtNodeFont(f.sozialschicht) : this._nodeFont();
         return { id: f.id, color, font };
       }
       return {
         id: f.id,
-        color: { background: '#efefef', border: '#ccc', highlight: { background: '#efefef', border: '#ccc' } },
-        font: { ...DEFAULT_FONT, color: '#bbb' },
+        color: { background: theme.dim.background, border: theme.dim.border,
+                 highlight: { background: theme.dim.background, border: theme.dim.border } },
+        font: { ...DEFAULT_FONT, color: theme.dim.font },
       };
     }));
 
     this._figurenEdges.update(this._figurenEdges.get().map(e => {
       if (!ch || activeIds.has(e.from) || activeIds.has(e.to)) {
         if (soziogrammModus) {
-          const cat   = BZ_SOZIO_CAT[e.typ] || 'sozial';
-          const color = BZ_SOZIO_COLOR[cat];
+          const color = theme.ink(BZ_SOZIO_COLOR[BZ_SOZIO_CAT[e.typ] || 'sozial']);
           return { id: e.id, color: { color, highlight: color } };
         }
         const s = BZ[e.typ] || BZ.andere;
-        return { id: e.id, color: { color: s.color, highlight: s.highlight } };
+        return { id: e.id, color: { color: theme.ink(s.color), highlight: theme.ink(s.highlight) } };
       }
-      return { id: e.id, color: { color: '#ddd', highlight: '#ddd' } };
+      return { id: e.id, color: { color: theme.dim.edge, highlight: theme.dim.edge } };
     }));
+  },
+
+  // Sozialschicht-Node (Soziogramm): Fläche/Border für den Grund nachgeführt.
+  // Eigene Font-Wahl der Schicht (weisser Text auf dem dunklen Unterwelt-Band)
+  // gewinnt vor der Theme-Textfarbe.
+  _schichtNodeColor(schicht) {
+    return adaptNodeColor(SCHICHT_COLOR[schicht] || SCHICHT_COLOR.andere, this._theme());
+  },
+  _schichtNodeFont(schicht) {
+    const style = SCHICHT_COLOR[schicht] || SCHICHT_COLOR.andere;
+    return style.font || this._nodeFont();
   },
 
   _buildEdges(soziogrammModus) {
     const figuren = this._graphFiguren();
+    const theme = this._theme();
     // id→Figur einmal indizieren (String-Keys: bz.figur_id und f.id sind beide der
     // TEXT-fig_id, die Normalisierung deckt Alt-Daten mit Zahl-IDs mit ab).
     const byId = new Map(figuren.map(f => [String(f.id), f]));
@@ -106,7 +129,7 @@ export const sharedMethods = {
 
         if (soziogrammModus) {
           const cat    = BZ_SOZIO_CAT[bz.typ] || 'sozial';
-          const color  = BZ_SOZIO_COLOR[cat];
+          const color  = theme.ink(BZ_SOZIO_COLOR[cat]);
           const macht  = bz.machtverhaltnis ?? 0;
           const width  = 1 + Math.abs(macht) * 1.5;
           let arrows = '';
@@ -131,7 +154,7 @@ export const sharedMethods = {
             label: '',
             typ: bz.typ,
             beschreibung: bz.beschreibung || '',
-            color: { color: s.color, highlight: s.highlight },
+            color: { color: theme.ink(s.color), highlight: theme.ink(s.highlight) },
             arrows: s.arrows,
             dashes: s.dashes,
           });
@@ -142,34 +165,13 @@ export const sharedMethods = {
   },
 
   // Tooltip: HTML aus escHtml()-Atomen — XSS-Escape-Invariante eingehalten.
+  // Positionierung/Klemmung liegt im geteilten Graph-Kit.
   _attachTooltip(container) {
     const tip = document.getElementById('figur-tooltip');
     if (!tip) return;
     // id→Figur einmal pro Render indizieren (Hover-Handler statt O(F)-find).
     const byId = new Map(this._graphFiguren().map(f => [f.id, f]));
-
-    const showTipAt = (html, clientX, clientY) => {
-      tip.innerHTML = html;
-      tip.style.left = '0px';
-      tip.style.top  = '0px';
-      tip.classList.add('visible');
-      const rect = container.getBoundingClientRect();
-      const tipW = tip.offsetWidth;
-      const tipH = tip.offsetHeight;
-      const cW   = container.offsetWidth;
-      const cH   = container.offsetHeight;
-      const cx   = clientX - rect.left;
-      const cy   = clientY - rect.top;
-      let left = cx + 14;
-      let top  = cy + 14;
-      if (left + tipW > cW) left = Math.max(0, cx - tipW - 14);
-      if (top  + tipH > cH) top  = Math.max(0, cy - tipH - 14);
-      if (left < 0) left = 0;
-      if (top  < 0) top  = 0;
-      tip.style.left = left + 'px';
-      tip.style.top  = top  + 'px';
-    };
-    const hideTip = () => tip.classList.remove('visible');
+    const { show: showTipAt, hide: hideTip } = createGraphTooltip(container, tip);
 
     this._figurenNetwork.on('hoverNode', ({ node, event }) => {
       const f = byId.get(node);
@@ -200,5 +202,7 @@ export const sharedMethods = {
       showTipAt(html, event.clientX, event.clientY);
     });
     this._figurenNetwork.on('blurEdge', hideTip);
+    // Beim Ziehen wegblenden — der Tooltip klebte sonst über der Zugbahn.
+    this._figurenNetwork.on('dragStart', hideTip);
   },
 };

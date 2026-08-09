@@ -1,3 +1,4 @@
+@layer components {
 /* Lade-Skelett für den Seiteninhalt (Notebook-Editor Read-Modus). Sitzt anstelle
    der `.page-content-view`, solange `pageContentLoading && !renderedPageHtml` —
    verhindert die blanke Fläche bei langsamem Netz / kaltem SW-Cache (ein langsamer
@@ -19,3 +20,4 @@
   animation: skeleton-shimmer 1.4s ease-in-out infinite;
 }
 .page-content-skeleton__line:nth-child(3n) { width: 62%; }
+}

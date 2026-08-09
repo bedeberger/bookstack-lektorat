@@ -16,7 +16,7 @@
         <p class="muted-msg muted-msg--sm" x-text="$app.t('profile.devices.intro')"></p>
 
         <!-- Plain-Token-Anzeige direkt nach Create (NUR einmal sichtbar) -->
-        <div x-show="deviceTokensJustCreated" x-cloak class="success-msg device-tokens-reveal">
+        <div x-show="deviceTokensJustCreated" x-cloak class="success-msg success-msg--banner device-tokens-reveal">
           <strong x-text="$app.t('profile.devices.justCreatedTitle')"></strong>
           <p class="muted-msg muted-msg--sm" x-text="$app.t('profile.devices.justCreatedHint')"></p>
           <div class="device-tokens-reveal-row">

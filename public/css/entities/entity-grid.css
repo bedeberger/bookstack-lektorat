@@ -1,3 +1,4 @@
+@layer components {
 /* Entity-Grid (Matrix-Ansicht für Entity-Karten: Szenen, Schauplätze).
    Sortierbare Tabelle aller gefilterten Einträge — Header via .sortable-th
    (public/css/components/sortable-table.css). Tabelle scrollt horizontal
@@ -22,7 +23,7 @@
 }
 
 .entity-grid-table th {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--color-muted);
   font-size: var(--font-size-xs);
   text-transform: uppercase;
@@ -37,7 +38,7 @@
 }
 
 .entity-grid-cell-title {
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   min-width: 12rem;
 }
 
@@ -50,4 +51,5 @@
 .entity-grid-cell-text {
   max-width: 24rem;
   color: var(--color-muted);
+}
 }

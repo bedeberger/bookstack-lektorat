@@ -68,6 +68,7 @@ Token-Referenz (Farben, Radien, Spacing, Schriftgrössen): [public/css/tokens.cs
 - [Modal-Wrapper](#modal-wrapper-generisches-pattern) — Status: noch nicht konsolidiert
 - [Overlay-Focus-Trap](#overlay-focus-trap-x-trap) — `x-trap` für Overlays ohne natives `<dialog>`
 - [Sofort-Tooltip (`data-tip`)](#sofort-tooltip-data-tip--default-variante) — inkl. [Tastenkürzel im Tooltip](#tastenkürzel-im-tooltip)
+- [Graph-Tooltip (vis-network)](#graph-tooltip-vis-network)
 - [Keyboard-Shortcut (`<kbd>`)](#keyboard-shortcut-anzeige-kbd)
 - [Loading-Overlay](#loading-overlay) — Status: kein generisches Pattern
 - [Empty-State mit CTA](#empty-state-mit-cta) — `.card-empty` + CTA-Button
@@ -131,9 +132,9 @@ Wiederkehrende Werte gehen über Tokens. Ad-hoc-Werte (`box-shadow: 0 4px 12px .
 | **Font-Family** | `--font-sans` (Inter), `--font-serif` (Source Serif 4) | UI immer `--font-sans`, Reading-Frame + Headings `--font-serif`. |
 | **Font-Weight** | `--fw-regular` (400), `--fw-medium` (500), `--fw-semibold` (600), `--fw-bold` (700) | `font-weight: 600` → `var(--fw-semibold)`. |
 | **Line-Height** | `--lh-tight` (1.2), `--lh-base` (1.45), `--lh-relaxed` (1.6) | Headings/UI tight, Standard base, Reading-Frame relaxed. |
-| **Border-Width** | `--border-thin` (0.5px), `--border` (1px), `--border-thick` (2px) | Trenner / Standard-Rand / Akzentband. |
+| **Border-Width** | `--border-thin` (0.5px), `--border-thick` (2px) | Nur die **Abweichungen** vom Standard sind tokenisiert: dezenter Trenner bzw. Akzentband. Der Regelfall 1px steht literal (`border: 1px solid var(--color-border)`) — die Farbe ist das Token, die Breite nicht. |
 | **Radius** | `--radius-sm` (0, hart — Badges/Tags/Pills), `--radius-md` (2px — Cards, Inputs, Buttons), `--radius-lg` (4px — Modal, Drawer, Tooltip, Confirm-Dialog) | Editorial-Eckig bleibt Leitmotiv (Listen-Elemente hart auf 0), grössere Flächen leicht weichgespült. Nicht zu ad-hoc Pixel-Radius greifen. |
-| **Text-Farben** | `--color-text`, `--color-muted`, `--color-subtle`, `--color-faint` | Vier Stufen vom prägnantesten zum dezentesten — Body / sekundär / tertiär / fast unsichtbar. Inverse für dauerhaft dunkle Flächen: `--color-text-inverse`, `--color-text-inverse-muted`. |
+| **Text-Farben** | `--color-text`, `--color-muted`, `--color-subtle`, `--color-faint` | Vier Stufen vom prägnantesten zum dezentesten — Body / sekundär / tertiär / fast unsichtbar. Inverse für dauerhaft dunkle Flächen: `--color-text-inverse`. |
 | **Z-Index** | `--z-base` (1), `--z-sticky` (100), `--z-header` (200), `--z-popover` (1000), `--z-toolbar` (1100), `--z-overlay` (2000), `--z-banner` (10000), `--z-modal` (9500), `--z-modal-front` (11000), `--z-toast` (12000), `--z-boss-screen` (13000) | Stapel-Reihenfolge — siehe Section „Z-Index-Stack" unten. |
 
 ---
@@ -531,7 +532,7 @@ Niemals `x-text` für Icon-Buttons mit zwei Zuständen — `x-text` setzt `textC
 - Seiten-Actions: `spell-check` (Lektorat/Prüfen), `pencil` (Bearbeiten), `maximize` (Fokus-Editor), `message-square` (Seiten-Chat), `lightbulb` (Ideen), `share-2` (Seite teilen)
 - Sidebar / Navigation: `rotate-cw` (Seiten neu laden), `list-tree` (Buch organisieren), `download` (Export), `book-open` (Seite öffnen)
 - Clients: `laptop-minimal` (macOS-App), `smartphone` (Android-App), `puzzle` (Chrome-Erweiterung) — je einmal pro Client und Oberfläche: im CTA-Button der Landing-Client-Sektion und im Zeilen-Kopf der Profil-Download-Zeile. Die Landing lädt dafür `css/components/icons.css` mit (pre-auth erlaubt über den `/css/`-Prefix, Sprite über `/icons.svg` in `PUBLIC_ASSETS`).
-- **Schliessen: immer `x`** (Lucide) — alle Karten-/Panel-/Overlay-Close-Buttons rendern das `x`-Sprite-Icon, nie ein `×`/`&#x2715;`-Glyph oder ein Text-„Schliessen". Die jeweilige Close-Klasse (`.btn-card-close`, `.edit-find-close`, `.figur-lookup-close`, `.synonym-picker-close`, `.entity-popover-close`, `.heatmap-detail-close`, `.revision-viewer__close`, `.shortcuts-close`) zentriert das Icon via `inline-flex`. Destruktives Entfernen (Chips, Session/Seite/Kapitel löschen) ist **kein** Schliessen — eigene Semantik.
+- **Schliessen: immer `x`** (Lucide) — alle Karten-/Panel-/Overlay-Close-Buttons rendern das `x`-Sprite-Icon, nie ein `×`/`&#x2715;`-Glyph oder ein Text-„Schliessen". Basis ist das Primitive **`.btn-close`** ([components/btn-close.css](public/css/components/btn-close.css)): es trägt den invarianten Kern (randlose Fläche, `inline-flex`-Zentrierung, Ruhefarbe, Hover), die Varianz läuft über `--close-size` / `--close-pad` / `--close-color`. Adoptiert: `.figur-lookup-close`, `.synonym-picker-close`. Noch mit eigener Vollkopie und **bei Berührung nachzuziehen**: `.btn-card-close`, `.edit-find-close`, `.book-editor-find-close`, `.entity-popover-close`, `.heatmap-detail-close`, `.job-toast-close`, `.revision-viewer__close`, `.shortcuts-close` — beim Umstellen den dort bestehenden `font-size`/`padding`-Wert als `--close-size`/`--close-pad` mitnehmen, nicht auf den Default vereinheitlichen. Destruktives Entfernen (Chips, Session/Seite/Kapitel löschen) ist **kein** Schliessen — eigene Semantik.
 
 Neuer Bedarf → Lucide-SVG von [lucide.dev](https://lucide.dev) als `<symbol>` in `public/icons.svg` ergänzen. Der Shell-Cache zieht über den Content-Hash automatisch nach (`npm run sw:manifest`, siehe CLAUDE.md „Shell-Cache: kein manueller Bump") — nichts hochzuzählen.
 
@@ -632,7 +633,7 @@ Neue Aktionen erweitern diese Tabelle und das Sprite (siehe [Icon-System](#icon-
 - `.icon-btn--ghost` — Ghost-Variante: `display: inline-flex` zentriert, 28×28 fix, transparent (Rahmen + Fläche), `font-size-base`. Hover/`.is-active`/`[aria-pressed="true"]` blenden `--color-surface`-Fläche + `--color-border`-Rahmen ein; `:disabled` → `opacity: 0.3`. Feature-Marker (`.plot-icon-btn` o.ä.) setzen darauf nur ihre Deltas (Grösse, Hover-Tint, Icon-Grösse).
 - `.icon-btn--reset` — Legacy-Override für mehrzeichige Glyphen; mit SVG-Icons nicht mehr nötig (kann beim nächsten Refactor entfernt werden).
 - `.icon-btn[aria-pressed="true"]` — aktiver Toggle (Fullscreen ein): `--color-history-active-bg` Hintergrund, `--color-primary` Border + Text. Greift automatisch — Konsument setzt nur `:aria-pressed`.
-- `.stt-mic-btn.is-recording[aria-pressed="true"]` — Recording-State des STT-Diktat-Mic-Buttons (Notebook-Toolbar): roter Akzent (`--color-danger`) + pulsierender `box-shadow` via `@keyframes sttRecPulse` (1.4s, `prefers-reduced-motion` aus). `.is-pending` = `opacity: 0.6` während getUserMedia läuft. Übersteuert den generischen `aria-pressed`-Highlight. CSS in [public/css/page/stt-dock.css](public/css/page/stt-dock.css). Verwendung nur Notebook-STT.
+- `.stt-dock-btn.is-recording[aria-pressed="true"]` — Recording-State der STT-Diktat-Taste (Notebook-Editor): roter Akzent aus den Fehler-Tokens (`--color-err-border` für Rand/Füllung, `--color-err-text` für die Schrift) + pulsierender `box-shadow` via `@keyframes sttRecPulse` (1.4s; das Abschalten bei `prefers-reduced-motion` kommt aus [components/floating-dock.css](public/css/components/floating-dock.css)). `.is-pending` = `opacity: 0.6` während getUserMedia läuft. Übersteuert den generischen `aria-pressed`-Highlight. Grundform der Taste: `.dock-btn`; CSS des Zustands in [public/css/page/stt-dock.css](public/css/page/stt-dock.css). Verwendung nur Notebook-STT.
 - `.tts-dock` / `.tts-dock-btn` / `.tts-status` — Proof-Listening-Vorlese-Dock (Notebook-Editor), schwebend unten **links** im Edit-Feld (Schwester zum `.stt-dock` unten rechts; gleiche sticky/floating-Mechanik, gespiegelte Ecke → nie kollidierend). `.tts-dock-btn` ist der runde Haupttaster (Kopfhörer→Pause→Play), `.tts-dock-btn--sub` die kleineren Skip/Stop-Taster, `.tts-status` die Fortschritts-Pille. `.tts-dock-btn.is-reading[aria-pressed="true"]` = akzentfarbener Puls via `@keyframes ttsReadPulse` (1.8s, `prefers-reduced-motion` aus). CSS in [public/css/page/tts-dock.css](public/css/page/tts-dock.css). Der gerade vorgelesene Satz wird via `::highlight(tts-sentence)` (CSS Custom Highlight, keine DOM-Mutation) akzentfarben markiert.
 - `.figuren-graph-toolbar` — Inline-Wrapper: `display: flex; justify-content: space-between; gap: --space-sm`, oberhalb/unterhalb der Canvas.
 - `.figuren-graph-toolbar-zoom` — Button-Cluster mit `gap: --space-xs`, `flex-shrink: 0`.
@@ -1286,19 +1287,42 @@ Kein neuer Marker ohne Eintrag hier.
 
 ### Mobile
 
-`@media (max-width: 600px)` Pflicht-Default. Standard-Set (CSS-Custom-Properties funktionieren in `@media` nicht — diese vier Werte ausschliesslich verwenden):
-- `480px` — Phone-Small (sehr enge Devices, harter Reflow)
-- `600px` — Phone-Large (Default-Mobile-Breakpoint)
-- `768px` — Tablet
-- `1024px` — Desktop-Compact
+`@media (max-width: 600px)` ist der Pflicht-Default. CSS-Custom-Properties funktionieren in `@media` nicht — die Werte stehen also als Zahlen im Code und driften ohne Disziplin sofort auseinander.
+
+**Kanonische Leiter — neue Regeln wählen ausschliesslich hieraus:**
+
+| Wert | Rolle | Nutzung |
+|---|---|---|
+| `480px` | Phone-Small (sehr enge Devices, harter Reflow) | 26 |
+| `600px` | Phone-Large — **Default-Mobile-Breakpoint** | 51 |
+| `768px` | Tablet | 10 |
+| `960px` | Desktop — hier schaltet [layout/twocolumn.css](public/css/layout/twocolumn.css) von einspaltig auf Sidebar+Main | 5 |
+
+**Dokumentierte Abweichungen** (bestehend, nicht ausbauen — neue Komponenten nehmen die Leiter oben):
+
+| Wert | Warum | Nutzung |
+|---|---|---|
+| `700px` | dichte Karten-Raster, die schon vor Tablet-Breite umbrechen müssen (Recherche-Dialog, Szenen, Figur-Werkstatt, Kapitel-Übersicht) | 22 |
+| `640px` | schmales Band für Leisten mit fixer Mindestbreite (Share-Reader-Vorlese-Dock + Leseoptionen, Revisions-Viewer, Folder-Import) | 21 |
+| `720px` | Tabellen, die eine Spalte früher als das Tablet-Raster fallen lassen | 7 |
+| `860px` | Satzbreite des Body (`max-width: 860px` in [layout/base.css](public/css/layout/base.css)) — die Dialoge spiegeln sie | 2 |
+| `1100px` / `1700px` | Kommentar-Schiene des Share-Readers: ab hier ist Platz für die Margin-Rail bzw. für eine zweite Spalte daneben | 6 |
+| `1280px` | breite Übersichts-Raster | 2 |
+| `800px` | Bucheditor-Stream | 1 |
+
+**Zwei Regeln zur Grenzziehung:**
+- **`min`/`max` am selben Wert überlappen.** `max-width: 600px` und `min-width: 600px` greifen bei exakt 600 px **beide**. Wer ein Paar bildet, nimmt `max-width: N` / `min-width: N+1` (so gelöst in [share/layout.css](public/css/share/layout.css) + [share/comments.css](public/css/share/comments.css)). Ausnahme ist die mobile-first-Leiter ohne Gegenstück (`body`-Padding in [layout/base.css](public/css/layout/base.css)) — dort gibt es kein Paar.
+- **`959.98px` neben `min-width: 960px` ist Absicht**, kein Tippfehler: bei fraktionaler Viewport-Breite (Browser-Zoom, 1.5×-DPI) würden ganzzahlige Grenzen beide oder keine greifen. Nicht „aufräumen".
+
+`1024px` gibt es nicht — der Wert stand hier lange als Soll, kam im Code aber nie vor; die Desktop-Grenze ist `960px`.
 
 ### Darkmode
 
-Toggle via `:root[data-theme="dark"]`. **Regel:** Farben/Backgrounds/Borders/Shadows nur über Tokens (`--color-text`, `--color-muted`, `--color-subtle`, `--color-faint`, `--surface-*`, `--border-*`, `--shadow-*`, `--card-accent-*`) — kein hartcoded `#hex`/`rgb()`. Tokens spiegeln Light/Dark automatisch in [tokens/colors.css](public/css/tokens/colors.css).
+Toggle via `:root[data-theme="dark"]`. **Regel:** Farben/Backgrounds/Borders/Shadows nur über Tokens (`--color-text`, `--color-muted`, `--color-subtle`, `--color-faint`, `--color-bg`, `--color-surface`, `--color-border`, `--shadow-*`, `--card-accent-*`) — kein hartcoded `#hex`/`rgb()`. Tokens spiegeln Light/Dark automatisch in [tokens/colors.css](public/css/tokens/colors.css).
 
 Pflicht-Check pro neuer Klasse:
-1. Im Dark-Theme öffnen — Kontrast lesbar? (`--color-text` auf `--surface-*` ≥ 4.5:1)
-2. Borders sichtbar? (`--border-strong` oder `--border-base`, nicht statisches `#ddd`)
+1. Im Dark-Theme öffnen — Kontrast lesbar? (`--color-text` auf `--color-surface` ≥ 4.5:1)
+2. Borders sichtbar? (`--color-border`, für Eingaben `--color-border-input`, nicht statisches `#ddd`)
 3. Akzentfarben aus `--card-accent-*` (Light-Hue als `-base`-SSoT, Dark im Token-Block per OKLCH abgeleitet)?
 4. Image/SVG-Assets: hellem Theme-Hintergrund nicht unsichtbar (z. B. dunkles SVG-Icon auf dunklem Surface → `currentColor` oder Theme-spezifischer Filter)?
 
@@ -2107,6 +2131,20 @@ Die Tabelle listet **nur Kürzel, die an einem Element hängen** — die vollst�
 
 ---
 
+## Graph-Tooltip (vis-network)
+
+**Use:** Hover-Detailkarte über einem Graph-Canvas — Figuren-Graph (Figur/Beziehung) und Motiv-Konstellation (Motiv/Thema). **Nicht** `data-tip`: dort hängt der Tooltip an einem DOM-Element, hier an einem Knoten im Canvas, den nur vis-network kennt.
+
+**Markup:** ein leeres `<div id="…-tooltip" class="graph-tooltip"></div>` im Graph-Wrapper. Der Wrapper braucht `position: relative` — er ist der Bezugsrahmen.
+
+**Klassen** [components/graph-tooltip.css](public/css/components/graph-tooltip.css): `.graph-tooltip` (versteckt), `.visible` (eingeblendet), plus die Inhaltszeilen `strong` (Titel), `em` (Untertitel, muted), `p` (Fliesstext). Karten-eigene Zusatzzeilen bleiben in der Karten-CSS (z.B. `.motiv-tip-stats`).
+
+**Verhalten:** `createGraphTooltip(container, tipEl)` aus [public/js/graph-kit.js](public/js/graph-kit.js) liefert `{ show(html, clientX, clientY), hide() }`. Die Klemmung an den Container-Rändern (inkl. Umklappen auf die andere Cursor-Seite) steckt in der reinen `clampTipPos` — **nicht pro Graph nachbauen**.
+
+**Pflicht:** `html` ist bereits escapt (`escHtml()`-Atome). Der Tooltip ist eine `innerHTML`-Sink wie jedes `x-html`.
+
+---
+
 ## Header-Actions
 
 **Use:** Rechts-ausgerichtete Button-Cluster im Karten-Header (z.B. „Aktualisieren"-Button, Token-Stats).
@@ -2545,6 +2583,21 @@ Geografische Karte mit Markern (aktuell: Orte-Karte View-Mode `map`, nur bei `bo
 
 Welche Datei besitzt welche Klassen. Bei neuer Klasse: erst hier prüfen, ob ein File thematisch passt — sonst neue Datei anlegen + in [public/index.html](public/index.html) **und** [tests/fixtures/focus-harness.html](tests/fixtures/focus-harness.html) einhängen (gleiche Reihenfolge!).
 
+### Zwei Regeln, die jede Datei betreffen
+
+**1. `@layer components` ist Pflicht.** [tokens.css](public/css/tokens.css) etabliert `@layer base, components, utilities` — **unlayerte Regeln schlagen jeden Layer**, unabhängig von Spezifität. Eine Datei ohne Layer gewinnt also still gegen jede layered Komponentenregel, und der Fehler fällt erst auf, wenn ein gezielter Override nicht greift. Neue Datei ⇒ Inhalt in `@layer components { … }` fassen (Datei-Kopfkommentar davor). Genau **drei** Ausnahmen, jede mit Grund:
+
+| Unlayered | Warum |
+|---|---|
+| [tokens/](public/css/tokens/)`*.css` | Custom-Properties sind global; sie konkurrieren nicht über die Kaskade. |
+| [share.css](public/css/share.css) + [share/](public/css/share/)`*.css` | Der Reader überschreibt bewusst die geteilten `components/`-Module (`manuscript-*`, `comment-rail`, `floating-dock`) und gewinnt über den Layer-Rang statt über Spezifitäts-Wettrüsten. |
+| [entities/orte-map.css](public/css/entities/orte-map.css) | `lazy-libs.js` hängt `vendor/leaflet-*/leaflet.css` **zur Laufzeit** an den `<head>` — unlayered und nach allem anderen. Läge unsere Datei in `components`, gewänne Leaflet gegen jeden unserer Overrides. |
+
+**2. Der Share-Reader lädt `tokens.css` nicht.** [share.html](public/share.html) verlinkt nur `share.css` + die geteilten `components/`-Module. Dort sind `--space-*`, `--font-size-*`, `--fw-*`, `--z-*`, `--color-*` **undefiniert**. Daraus folgt für alle Dateien im share-erreichbaren Satz (`share.css`, `share/*`, sowie `components/{icons,manuscript-stream,manuscript-content,comment-rail,floating-dock}.css`):
+- rohe `px`-, `z-index`- und `font-weight`-Werte sind dort **richtig**, nicht nachlässig — sie sind der einzige Weg;
+- geteilte Module, die von beiden Seiten benutzt werden, brauchen entweder einen Fallback (`var(--fw-semibold, 600)`) oder eine neutrale Variable, die der Reader auf sein `--share-*`-Pendant mappt (Muster: `--cr-*` in `comment-rail.css`, `--ms-*` in `manuscript-stream.css`, `--dock-*` in `floating-dock.css`);
+- ein neues geteiltes Modul gehört in **beide** Shells: [public/index.html](public/index.html) und [public/share.html](public/share.html) (plus [tests/fixtures/share-reader-harness.html](tests/fixtures/share-reader-harness.html)).
+
 Struktur: 8 thematische Subfolder unter [public/css/](public/css/) + Root-Solitäre. Cascade-Order = Lade-Order in [public/index.html](public/index.html).
 
 ### Root (Facade + Solitäre)
@@ -2565,6 +2618,8 @@ Struktur: 8 thematische Subfolder unter [public/css/](public/css/) + Root-Solit�
 | [share/layout.css](public/css/share/layout.css) | Reset, `body.share-page`, Skip-Link, Lese-Progress, Sticky-Header, Optionen-Menü (Meatball), Theme-Switcher, Main, Intro. |
 | [share/content.css](public/css/share/content.css) | Lese-Inhalt: `.share-content`-Typografie, Prosa-Absatzmodell, Szenentrenner, `.ms-*`-Stream-Blöcke, `.share-toc`, Editor-Mark-Neutralisierung. |
 | [share/comments.css](public/css/share/comments.css) | Leser-Kommentare: `.share-comments*`-Rail (Desktop-Seitenleiste + Mobile-Sektion), `.share-thread*`, `::highlight(share-anchor*)`, Selektions-Button + `.share-composer`-Overlay. |
+| [share/reading.css](public/css/share/reading.css) | Leseoptionen des Readers: Schriftgrad-/Satzbreiten-Regler (`.share-prefs*`, Segment-Tasten), angewandt über `--share-reader-font-scale` / `--share-reader-measure`. |
+| [share/tts.css](public/css/share/tts.css) | Vorlese-Dock des Readers: Verankerung (`fixed` unten links), Mapping der neutralen `--dock-*` aus [components/floating-dock.css](public/css/components/floating-dock.css) auf die `--share-*`-Tokens, Wiedergabe-/Fehler-Zustände, `::highlight(tts-sentence)`. |
 
 ### tokens/ (Custom-Properties)
 | File | Inhalt |
@@ -2609,11 +2664,17 @@ Struktur: 8 thematische Subfolder unter [public/css/](public/css/) + Root-Solit�
 | [components/user-chip.css](public/css/components/user-chip.css) | User-Avatar-Chip. |
 | [components/feature-tiles.css](public/css/components/feature-tiles.css) | Palette (Hero/Overlay/Panel/Item), Quick-Pills. |
 | [components/tooltip.css](public/css/components/tooltip.css) | `.tip-layer` / `.tip-bubble` / `.tip-arrow` für `[data-tip]`. |
+| [components/graph-tooltip.css](public/css/components/graph-tooltip.css) | `.graph-tooltip` (+ `.visible`, `strong`/`em`/`p`-Zeilen) — Hover-Detailkarte über einem vis-network-Canvas. Geteilt von Figuren-Graph (`#figur-tooltip`) und Motiv-Konstellation (`#motiv-tooltip`); positioniert wird in [public/js/graph-kit/tooltip.js](public/js/graph-kit/tooltip.js). Nicht `[data-tip]` — die Karte hängt an einem Canvas-Knoten, nicht an einem DOM-Element. Siehe „Graph-Tooltip (vis-network)". |
 | [components/sortable-table.css](public/css/components/sortable-table.css) | `.sortable-th` + `--asc`/`--desc`-Modifier für die `sortableTable`-Alpine-Komponente. |
 | [components/year-month-heatmap.css](public/css/components/year-month-heatmap.css) | `.ymheat-*` — geteiltes Jahr×Monat-Raster (Jahre als Zeilen, 12 Monate als Spalten), Zell-Level 0..4 aus `var(--ymheat-accent)`, `--has`-Eckmarker, `--current`-Innenring, `--active`-Auswahlring. Self-containing (`container-type`). Konsumenten: Rückblick-Karte + Buch-Übersicht. Siehe „Jahr×Monat-Heatmap". |
 | [components/toggle-switch.css](public/css/components/toggle-switch.css) | `.toggle-switch` (Track/Thumb/Label) für das `toggleSwitch`-Primitive — eckiger Boolean-Schalter, Ersatz für `.checkbox-row`. |
 | [components/file-drop.css](public/css/components/file-drop.css) | Generischer Baseline-Style (`cursor: pointer`) für das `fileDrop`-Primitive; Visuals + `is-drag`-Tönung beim Konsumenten. |
 | [components/folder-import.css](public/css/components/folder-import.css) | Folder-Import-Karte (Drop-Zone, Mode-Toggle, Progress, Result). |
+| [components/btn-close.css](public/css/components/btn-close.css) | `.btn-close` — Primitive der Schliessen-Taste (randlose Fläche, `inline-flex`-Zentrierung des `x`-Icons). Varianz über `--close-size`/`--close-pad`/`--close-color`. Siehe „Icon-Sprache" → Schliessen; acht Altbestände ziehen bei Berührung nach. |
+| [components/status-msg.css](public/css/components/status-msg.css) | `.success-msg` / `.error-msg` (+ `--banner`-Variante mit Fläche) — app-weite Status-Meldungen aus den Status-Tokens. **Eindeutiger Besitzer für zwei generische Klassennamen**, die vorher in `admin/admin-settings.css`, `chat.css` und `page/page-list.css` verteilt lagen; die Darstellung hing dadurch an der Ladereihenfolge unbeteiligter Dateien. Konsumenten: Admin-Einstellungen, API-/Geräte-Token, Chat- und Lektorat-Statusstrings. |
+| [components/floating-dock.css](public/css/components/floating-dock.css) | `.dock` / `.dock-btn` (+ `--sub`) / `.dock-status` — schwebender Werkzeug-Dock am Rand der Lesefläche (runde Icon-Taste + Status-Pille mit Punkt-Indikator). Geteilte SSoT für **drei** Konsumenten: `.stt-dock` (Diktat, sticky rechts), `.tts-dock` im Notebook (Vorlesen, sticky links) und `.tts-dock` im Share-Reader (fixed links). Neutrale `--dock-*`-Variablen mit Fallback auf die SPA-Tokens → die zwei SPA-Docks brauchen kein Mapping, der Reader mappt sie in `share/tts.css` auf `--share-*`. Verankerung, Zustandsfarben und Puls-Animationen bleiben beim Konsumenten. |
+| [components/color-picker.css](public/css/components/color-picker.css) | `.color-picker` / `__swatch` / `__popover` / `__opt` (+ `--on`, `--none`) — Farbwähler-Popover für Ordnungsfarben. Geteilt zwischen Motiv-Werkstatt (Themen) und Plot-Werkstatt (Akte, Handlungsstränge). Die Farbe liefert der Konsument per `--col-accent`; das Modul kennt keine Palette, nur die Form. |
+| [components/editor-dialog.css](public/css/components/editor-dialog.css) | `.editor-dialog` / `__inner` / `__head` / `__title` / `__actions` / `__spacer` — Schale der modalen Notebook-Editor-Dialoge (natives `<dialog>`, Focus-Trap + ESC vom Browser). Geteilt von Diagramm- und Tabellen-Dialog; Breite pro Dialog über `--dlg-width`/`--dlg-max-width`. Der Rumpf (das eigentliche Werkzeug) bleibt beim Konsumenten. |
 | [components/snapshots.css](public/css/components/snapshots.css) | Fassungen-Karte (`snapshotsCard`): Capture-Leiste + Drift-Hinweis (`.snapshots-drift` „lohnt sich eine neue Fassung?", operational-status-Achse, `--worth`-Modifier amber-getönt + `.snapshots-drift__head`/`__tags`) + Fassungs-Liste + Buch-Level-Diff zweier Fassungen. Tabelle reuse `.entity-grid-table`; Diff-Zellen reuse `revision-diff-*` aus `page/page-revision-viewer.css` — hier nur snapshot-spezifische Zell-Tweaks. |
 
 ### page/
@@ -2642,6 +2703,7 @@ Drei Editoren leben in eigenen Subfoldern (`book/`, `focus/`, `notebook/`); edit
 | [editor/focus/focus-content.css](public/css/editor/focus/focus-content.css) | Fokus-Modus, Inhalts-Blöcke der Schreibfläche: geplättete Formatierungen, Block-Margins, Checkbox-Zeilen, Bild-Marker. **Lädt nach focus-mode.css** (gleicher `@layer`, Quell-Reihenfolge entscheidet). |
 | [editor/notebook/edit-toolbar.css](public/css/editor/notebook/edit-toolbar.css) | `.edit-bubble-toolbar`, `.edit-slash-menu`. |
 | [editor/notebook/diagram-dialog.css](public/css/editor/notebook/diagram-dialog.css) | Diagramm-Dialog des Notebook-Editors (`.diagram-dialog*`, `.diagram-source-input`, `.diagram-preview-host`): natives `<dialog>`, Quelltext links / Live-Vorschau rechts. Enthält zusätzlich die Klick-Affordanz auf `pre.mermaid` im Edit-Modus. Die Block-Typografie des Diagramms selbst steht in [components/manuscript-content.css](public/css/components/manuscript-content.css). |
+| [editor/notebook/table-dialog.css](public/css/editor/notebook/table-dialog.css) | Tabellen-Dialog des Notebook-Editors (`.table-dialog*`, `.table-dialog-grid`, `.table-grid-input`, `.table-align-btn`): natives `<dialog>`, Gitter aus Zellenfeldern mit stickigen Zeilen-/Spaltenköpfen. Enthält zusätzlich die Klick-Affordanz auf `table` im Edit-Modus. Die Tabellen-Typografie im Manuskript selbst steht in [components/manuscript-content.css](public/css/components/manuscript-content.css) — sie gilt für alle drei Leseflächen. |
 | [editor/notebook/find-replace.css](public/css/editor/notebook/find-replace.css) | Notebook-Find/Replace (`.edit-find*`). |
 | [editor/notebook/findings.css](public/css/editor/notebook/findings.css) | `.finding` / `.stilbox`. |
 | [editor/notebook/lektorat.css](public/css/editor/notebook/lektorat.css) | `.lektorat-mark`, Findings-Flash, Hover-Sync. |

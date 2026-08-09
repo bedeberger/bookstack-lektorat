@@ -89,11 +89,12 @@ async function _selectPassagesSemantic(bookId, query, budgetChars, signal, userT
 }
 
 // Per-Job-Claude-Override für den Buch-Chat (klassisch + agentisch), analog zur
-// Komplettanalyse (_komplettClaudeOverrides in routes/jobs/komplett/job.js). Nur wirksam,
-// wenn in den App-Settings gesetzt und der effektive Provider Claude ist; leer/0 = folgt
-// dem globalen Wert. Erlaubt z.B. Opus für den agentischen Tool-Loop, während global
-// Sonnet 4.6 läuft. Kein eigener Timeout-Default (anders als komplett) – der Buch-Chat
-// macht pro Call nur eine Tool-Use-Runde, der globale 10-Min-Timeout reicht.
+// Komplettanalyse (_komplettAiOverrides in routes/jobs/komplett/job-shared.js). Anders als
+// dort bleibt er claude-only: der agentische Buch-Chat läuft ohnehin nur mit Tool-Use, also
+// nur auf der Anthropic-API. Leer/0 = folgt dem globalen Wert. Erlaubt z.B. Opus für den
+// Tool-Loop, während global Sonnet 4.6 läuft. Kein eigener Timeout-Default (anders als
+// komplett) – der Buch-Chat macht pro Call nur eine Tool-Use-Runde, der globale
+// 10-Min-Timeout reicht.
 function _bookChatClaudeOverrides(effectiveProvider) {
   if (effectiveProvider !== 'claude') return null;
   const model = String(appSettings.get('ai.claude.model.bookchat') || '').trim();
@@ -103,13 +104,13 @@ function _bookChatClaudeOverrides(effectiveProvider) {
   // effort (output_config) für Opus 4.5+/Sonnet 4.6: low|medium|high|xhigh|max. Leer = API-Default
   // (high). lib/ai.js klemmt Tier-Mismatch (max→Opus-only, xhigh→Opus-4.7+) automatisch auf high.
   const effort = String(appSettings.get('ai.claude.effort.bookchat') || '').trim();
-  const patch = {};
-  if (model) patch.claudeModel = model;
-  if (contextWindow > 0) patch.claudeContextWindow = contextWindow;
-  if (maxTokensOut > 0) patch.claudeMaxTokensOut = maxTokensOut;
-  if (timeoutMs > 0) patch.claudeTimeoutMs = timeoutMs;
-  if (effort) patch.claudeEffort = effort;
-  return Object.keys(patch).length ? patch : null;
+  const bag = { provider: 'claude' };
+  if (model) bag.model = model;
+  if (contextWindow > 0) bag.contextWindow = contextWindow;
+  if (maxTokensOut > 0) bag.maxTokensOut = maxTokensOut;
+  if (timeoutMs > 0) bag.timeoutMs = timeoutMs;
+  if (effort) bag.effort = effort;
+  return Object.keys(bag).length > 1 ? { aiJob: bag } : null;
 }
 
 // Override via ALS-Context binden (greift für alle Claude-Calls dieses Jobs, ohne globale
@@ -119,7 +120,7 @@ function _applyBookChatClaudeOverrides(effectiveProvider, logger) {
   const overrides = _bookChatClaudeOverrides(effectiveProvider);
   if (overrides) {
     setContext(overrides);
-    logger.info(`Buch-Chat-Claude-Override: ${JSON.stringify(overrides)} (global model=${appSettings.get('ai.claude.model')}).`);
+    logger.info(`Buch-Chat-Claude-Override: ${JSON.stringify(overrides.aiJob)} (global model=${appSettings.get('ai.claude.model')}).`);
   }
   return overrides;
 }
@@ -348,7 +349,7 @@ function _toolResultCapChars(maxIter, aiCfg) {
   return Math.max(4000, Math.floor(aiCfg.inputBudgetChars / (maxIter * 6)));
 }
 
-// Pfadwahl haengt am EFFEKTIVEN Provider (app_users.ai_provider_override vor
+// Pfadwahl haengt am EFFEKTIVEN Provider (KI-Profil aus app_users.ai_profile_id vor
 // globalem `ai.provider`), nicht am globalen Setting: Tool-Use gibt es nur bei
 // Claude. Ein auf openai-compat uebersteuerter User landete bei global=claude
 // sonst im agentischen Pfad, wo lib/ai/core.js «Tool-Use nicht unterstuetzt»

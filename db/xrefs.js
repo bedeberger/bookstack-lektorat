@@ -8,7 +8,8 @@
 // fortschreiben.
 //
 // WOFUER DIE TABELLEN DA SIND — und wofuer nicht:
-//   JA:   Ziel-Picker im Editor („welche Abbildungen gibt es im Buch?"),
+//   JA:   Ziel-Picker im Editor („welche Abbildungen und Tabellen gibt es im
+//         Buch?"),
 //         Rueckwaertsfrage („wer verweist auf dieses Kapitel?"), Aufspueren
 //         verwaister Verweise.
 //   NEIN: die Nummern beim Rendern. Die baut lib/xref-render.js aus dem HTML,
@@ -25,9 +26,16 @@ const _stmtInsAnchor = db.prepare(`
   VALUES (?, ?, ?, ?, ?)
 `);
 
+// Anker-Typen, die im HTML leben. Spiegel von ANCHOR_KINDS in
+// public/js/xrefs/xref-anchor.js — dieses Modul ist CJS und kann den
+// ESM-Vertrag nicht importieren. Gegated durch tests/unit/xref-index.test.js.
+const ANCHOR_KINDS = new Set(['figure', 'table']);
+
 /** Anker einer Seite komplett ersetzen.
  *  anchors: [{ kind, bid, ord, caption }] — Duplikate pro (kind,bid) sind
  *  Aufrufer-Fehler; der PK wuerde sie ablehnen, darum vorher entdoppelt.
+ *  Ein unbekannter `kind` faellt weg statt zu werfen: der Index ist eine
+ *  Ableitung, und ein Seiten-Write darf nicht an ihm scheitern.
  *  @returns {number} Anzahl geschriebener Anker. */
 const replacePageAnchors = db.transaction((pageId, anchors = []) => {
   const pid = parseInt(pageId);
@@ -37,7 +45,7 @@ const replacePageAnchors = db.transaction((pageId, anchors = []) => {
   for (const a of anchors) {
     const bid = String(a?.bid || '').trim().toLowerCase();
     const kind = String(a?.kind || '');
-    if (!bid || kind !== 'figure') continue;
+    if (!bid || !ANCHOR_KINDS.has(kind)) continue;
     const key = `${kind}:${bid}`;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -87,8 +95,11 @@ const _stmtInsChapterLink = db.prepare(`
    WHERE p.page_id = ? AND c.book_id = p.book_id
 `);
 
-// Abbildungs-Verweis mit Buch-Guard ueber den Anker: das Ziel muss als Anker
-// einer Seite DESSELBEN Buchs indiziert sein.
+// Anker-Verweis (Abbildung oder Tabelle) mit Buch-Guard ueber den Anker: das
+// Ziel muss als Anker DESSELBEN Typs auf einer Seite DESSELBEN Buchs indiziert
+// sein. Der Typ-Vergleich im EXISTS ist Absicht — ein `data-xref="table"`, das
+// auf das `data-bid` einer Abbildung zeigt, ist ein kaputter Verweis und soll
+// keine Zeile bekommen.
 //
 // Daraus folgt eine Reihenfolge-Abhaengigkeit — zeigt Seite A auf eine
 // Abbildung der noch nie gespeicherten Seite B, entsteht zunaechst keine Zeile.
@@ -96,21 +107,21 @@ const _stmtInsChapterLink = db.prepare(`
 // nicht die Aufloesung. Sobald B einmal gespeichert wurde, zieht der naechste
 // Write von A nach. Die Alternative (FK-loser Blind-Insert) wuerde Zeilen auf
 // Ziele erzeugen, die es nie gab.
-const _stmtInsFigureLink = db.prepare(`
+const _stmtInsAnchorLink = db.prepare(`
   INSERT INTO xref_links (page_id, kind, chapter_id, anchor_bid, count, first_offset)
-  SELECT p.page_id, 'figure', NULL, ?, ?, ?
+  SELECT p.page_id, ?, NULL, ?, ?, ?
     FROM pages p
    WHERE p.page_id = ?
      AND EXISTS (
        SELECT 1 FROM xref_anchors a
          JOIN pages tp ON tp.page_id = a.page_id
-        WHERE a.bid = ? AND tp.book_id = p.book_id
+        WHERE a.bid = ? AND a.kind = ? AND tp.book_id = p.book_id
      )
 `);
 
 /** Verweise einer Seite komplett ersetzen.
  *  links: [{ kind, target, count, firstOffset }] — `target` ist die chapter_id
- *  (kind='chapter') bzw. das data-bid (kind='figure').
+ *  (kind='chapter') bzw. das data-bid (kind='figure'|'table').
  *  @returns {number} Anzahl tatsaechlich indizierter Verweise (< links.length,
  *  wenn ein Ziel dem Buch nicht gehoert oder verschwunden ist). */
 const replacePageXrefs = db.transaction((pageId, links = []) => {
@@ -133,9 +144,9 @@ const replacePageXrefs = db.transaction((pageId, links = []) => {
       const cid = parseInt(target);
       if (!Number.isInteger(cid)) continue;
       written += _stmtInsChapterLink.run(count, off, cid, pid).changes;
-    } else if (kind === 'figure') {
+    } else if (ANCHOR_KINDS.has(kind)) {
       const bid = target.toLowerCase();
-      written += _stmtInsFigureLink.run(bid, count, off, pid, bid).changes;
+      written += _stmtInsAnchorLink.run(kind, bid, count, off, pid, bid, kind).changes;
     }
   }
   return written;
@@ -165,7 +176,7 @@ const _stmtBacklinksAnchor = db.prepare(`
   SELECT l.page_id, l.count, l.first_offset, p.page_name, p.chapter_id
     FROM xref_links l
     JOIN pages p ON p.page_id = l.page_id
-   WHERE l.kind = 'figure' AND l.anchor_bid = ?
+   WHERE l.kind = ? AND l.anchor_bid = ?
    ORDER BY p.position, l.first_offset
 `);
 
@@ -173,7 +184,7 @@ const _stmtBacklinksAnchor = db.prepare(`
  *  „auf dieses Kapitel wird an 3 Stellen verwiesen", bevor es geloescht wird. */
 function listXrefBacklinks(kind, target) {
   if (kind === 'chapter') return _stmtBacklinksChapter.all(parseInt(target));
-  if (kind === 'figure') return _stmtBacklinksAnchor.all(String(target).toLowerCase());
+  if (ANCHOR_KINDS.has(kind)) return _stmtBacklinksAnchor.all(kind, String(target).toLowerCase());
   return [];
 }
 

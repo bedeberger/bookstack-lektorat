@@ -124,7 +124,7 @@
   color: var(--color-text);
   font: inherit;
   font-size: var(--font-size-xs);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   letter-spacing: 0.02em;
   cursor: pointer;
   transition: background var(--transition-base), border-color var(--transition-base);
@@ -183,7 +183,7 @@
   background: var(--color-hover);
   color: var(--color-text);
   font-size: var(--font-size-xs);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   letter-spacing: 0.02em;
   text-transform: uppercase;
   flex-shrink: 0;
@@ -222,7 +222,7 @@
 }
 .avatar-menu-label {
   font-size: var(--font-size-micro);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--color-subtle);
   text-transform: uppercase;
   letter-spacing: 0.07em;
@@ -411,7 +411,7 @@
   align-items: center;
   justify-content: center;
   font-size: var(--font-size-sm);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--color-text);
 }
 .today-ring-donut--reached circle:nth-of-type(2) { stroke: var(--color-success); }
@@ -426,8 +426,8 @@
   min-width: 0;
 }
 .today-ring-hero-count { font-size: var(--font-size-sm); color: var(--color-muted); }
-.today-ring-hero-count strong { font-size: var(--font-size-lg); font-weight: 700; color: var(--color-text); }
-.today-ring-hero-streak { font-size: var(--font-size-sm); font-weight: 600; color: var(--color-accent); }
+.today-ring-hero-count strong { font-size: var(--font-size-lg); font-weight: var(--fw-bold); color: var(--color-text); }
+.today-ring-hero-streak { font-size: var(--font-size-sm); font-weight: var(--fw-semibold); color: var(--color-accent); }
 
 /* 7-Tage-Chart: Balken + Wochentagskürzel unter jedem Balken. */
 .today-ring-week-wrap { display: flex; flex-direction: column; gap: var(--space-xs); }
@@ -465,7 +465,7 @@
   text-transform: uppercase;
   color: var(--color-subtle);
 }
-.today-ring-week-day--today { font-weight: 700; color: var(--color-accent); }
+.today-ring-week-day--today { font-weight: var(--fw-bold); color: var(--color-accent); }
 /* Kartenbündiger Footer-Link: Trenner über die volle Popover-Breite (negative
    Ränder heben das Popover-Padding auf), Text links, Pfeil rechts (nudget bei
    Hover), accent-getönter Hover — gleiches Muster wie der Entity-Popover-Link. */
@@ -482,7 +482,7 @@
   background: none;
   font: inherit;
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--color-accent);
   cursor: pointer;
   transition: background var(--transition-base);

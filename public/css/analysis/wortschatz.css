@@ -60,7 +60,7 @@
   }
 
   .wortschatz-table th {
-    font-weight: 600;
+    font-weight: var(--fw-semibold);
     color: var(--color-muted);
     font-size: var(--font-size-xs);
     text-transform: uppercase;
@@ -78,15 +78,15 @@
 
   /* Das Wort bzw. die Wendung ist der Gegenstand der Zeile — kraeftiger als die
      Zahlen daneben. */
-  .wortschatz-term { font-weight: 600; color: var(--color-text); }
-  .wortschatz-phrase { font-weight: 500; color: var(--color-text); }
+  .wortschatz-term { font-weight: var(--fw-semibold); color: var(--color-text); }
+  .wortschatz-phrase { font-weight: var(--fw-medium); color: var(--color-text); }
 
   /* Keyness-Baender: positiv = in diesem Buch auffaellig haeufig, negativ =
      auffaellig gemieden. Drei Stufen, damit die Spalte auf einen Blick lesbar ist. */
   .wortschatz-keyness--high {
     border-color: var(--card-accent);
     color: var(--card-accent);
-    font-weight: 600;
+    font-weight: var(--fw-semibold);
   }
 
   .wortschatz-keyness--mid { color: var(--color-text); }
@@ -103,7 +103,7 @@
     margin-left: var(--space-xs);
     border-color: var(--card-accent);
     color: var(--card-accent);
-    font-weight: 500;
+    font-weight: var(--fw-medium);
     font-size: var(--font-size-xs);
     text-transform: none;
     letter-spacing: 0;
@@ -139,7 +139,7 @@
      Light und Dark tragen, die Sättigung kommt aus dem Karten-Akzent. */
   .wortschatz-cloud-word {
     font-family: Inter, system-ui, sans-serif;
-    font-weight: 600;
+    font-weight: var(--fw-semibold);
     cursor: pointer;
     fill: color-mix(in oklab, var(--card-accent) var(--cloud-weight, 60%), var(--color-muted));
     transition: fill var(--transition-base);

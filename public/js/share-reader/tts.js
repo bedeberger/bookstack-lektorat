@@ -56,17 +56,21 @@ export function setupTts({ token, article, t, locale, pause }) {
   let errorTimer = null;
 
   // ── Dock-DOM ───────────────────────────────────────────────────────────────
-  const dock = el('div', 'tts-dock');
+  // Neutrale .dock-*-Klassen tragen Form/Tasten/Pille (css/components/floating-dock.css,
+  // geteilt mit den beiden Notebook-Docks); die tts-*-Klassen daneben tragen
+  // Verankerung + Zustaende aus css/share/tts.css.
+  const dock = el('div', 'dock tts-dock');
   dock.setAttribute('role', 'group');
   dock.setAttribute('aria-label', t('tts_listen'));
 
-  const status = el('span', 'tts-status');
+  const status = el('span', 'dock-status tts-status');
   status.setAttribute('aria-live', 'polite');
   status.hidden = true;
 
-  const skipBtn = iconButton('tts-dock-btn tts-dock-btn--sub', 'chevron-last', t('tts_skip'));
-  const stopBtn = iconButton('tts-dock-btn tts-dock-btn--sub', 'square', t('tts_stop'));
-  const mainBtn = iconButton('tts-dock-btn', 'headphones', t('tts_listen'));
+  const subCls = 'dock-btn dock-btn--sub tts-dock-btn tts-dock-btn--sub';
+  const skipBtn = iconButton(subCls, 'chevron-last', t('tts_skip'));
+  const stopBtn = iconButton(subCls, 'square', t('tts_stop'));
+  const mainBtn = iconButton('dock-btn tts-dock-btn', 'headphones', t('tts_listen'));
   skipBtn.hidden = true;
   stopBtn.hidden = true;
 

@@ -1,0 +1,40 @@
+/* App-weite Status-Meldungen: `.success-msg` und `.error-msg`. Beide sind
+   generische Namen, die quer durch die App verwendet werden — als Banner in
+   Formularen (Admin-Einstellungen, API-Token, Geraete-Token) und als Inline-Text
+   in JS-erzeugten Status-Strings (Chat, Lektorat). Darum leben sie hier und
+   nicht in einer Feature-Datei: ein globaler Klassenname braucht einen
+   eindeutigen Besitzer, sonst haengt die Darstellung von der Ladereihenfolge
+   zweier unbeteiligter Dateien ab.
+
+   Farben aus den Status-Tokens (--color-ok-* / --color-err-*), nicht aus dem
+   Karten-Akzent: die Bedeutung ist „geklappt" bzw. „schiefgegangen", nicht
+   „gehoert zu dieser Karte".
+
+   Grundform ist der Inline-Text (nur Farbe + Groesse). Die Banner-Variante
+   `--banner` legt Flaeche darum — sie ist es, die in einem Formular ueber dem
+   Feld steht. */
+
+@layer components {
+
+  .success-msg {
+    color: var(--color-ok-text);
+    font-size: var(--font-size-base);
+  }
+
+  .error-msg {
+    color: var(--color-err-text);
+    font-size: var(--font-size-base);
+  }
+
+  /* Banner: getoente Flaeche mit Innenabstand, ueber dem Formular. */
+  .success-msg--banner,
+  .error-msg--banner {
+    padding: var(--space-md);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    margin-bottom: var(--space-lg);
+  }
+  .success-msg--banner { background: var(--color-ok-bg); }
+  .error-msg--banner { background: var(--color-err-bg); }
+
+}

@@ -55,7 +55,7 @@
 .heatmap-table thead th {
   background: var(--color-surface);
   color: var(--color-muted);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   text-align: right;
   position: sticky;
   top: 0;
@@ -82,7 +82,7 @@
 }
 .heatmap-table .heatmap-rowhead {
   text-align: left;
-  font-weight: 500;
+  font-weight: var(--fw-medium);
 }
 /* Erste Spalte bleibt beim horizontalen Scrollen sichtbar */
 .heatmap-table tbody th.heatmap-rowhead {
@@ -200,7 +200,7 @@
   margin-bottom: var(--space-sm);
 }
 .heatmap-detail-title {
-  font-weight: 500;
+  font-weight: var(--fw-medium);
 }
 .heatmap-detail-close {
   display: inline-flex;
@@ -309,7 +309,7 @@
   margin-bottom: var(--space-3);
 }
 .fehler-trend-title {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 .fehler-trend-sub {
   font-size: var(--font-size-xs, 11px);
@@ -340,7 +340,7 @@
 .stil-rhythm-title {
   margin: 0;
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 .stil-rhythm-sub {
   margin: var(--space-2xs) 0 0;
@@ -398,7 +398,7 @@
   font-size: var(--font-size-xs, 11px);
 }
 .stil-rhythm-swing {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   font-size: var(--font-size-sm);
 }
 /* Drei Stufen — bewusst ohne Gut/Schlecht-Wertung: ein Sachtext darf monoton

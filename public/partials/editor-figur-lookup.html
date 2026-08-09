@@ -11,7 +11,7 @@
         <div>
           <div class="figur-lookup-header">
             <span class="figur-lookup-name" x-text="figurLookupData.name"></span>
-            <button type="button" class="figur-lookup-close" @click="closeFigurLookup()" :data-tip="$app.t('common.close')" :aria-label="$app.t('common.close')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#x"/></svg></button>
+            <button type="button" class="btn-close figur-lookup-close" @click="closeFigurLookup()" :data-tip="$app.t('common.close')" :aria-label="$app.t('common.close')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#x"/></svg></button>
           </div>
           <div class="figur-lookup-body">
             <div x-show="figurLookupGeburt()" class="figur-lookup-row">

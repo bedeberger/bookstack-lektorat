@@ -46,7 +46,7 @@
   align-items: center;
   padding: 2px var(--space-sm);
   font-size: var(--font-size-xs);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   border-radius: var(--radius-sm);
   color: var(--color-accent);
   background: color-mix(in srgb, var(--color-accent) 12%, var(--color-bg));
@@ -78,7 +78,7 @@
   gap: var(--space-xs) var(--space-sm);
   margin-top: var(--space-sm);
 }
-.mystats-week-delta .overview-trend-pct { font-size: var(--font-size-sm); font-weight: 600; }
+.mystats-week-delta .overview-trend-pct { font-size: var(--font-size-sm); font-weight: var(--fw-semibold); }
 .mystats-week-delta-label { font-size: var(--font-size-sm); color: var(--color-text); }
 .mystats-week-delta-prev { font-size: var(--font-size-xs); color: var(--color-muted); }
 
@@ -164,7 +164,7 @@
   margin-left: var(--space-xs);
   padding: 0 var(--space-2xs);
   font-size: var(--font-size-xs);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--color-muted);
   background: var(--color-tag-bg);
   border-radius: var(--radius-sm);
@@ -202,7 +202,7 @@
 }
 .mystats-goal-done {
   font-size: var(--font-size-lg);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--color-text);
 }
 .mystats-goal-target { font-size: var(--font-size-sm); color: var(--color-muted); margin-left: var(--space-2xs); }
@@ -211,7 +211,7 @@
   align-items: center;
   gap: var(--space-2xs);
   font-size: var(--font-size-xs);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--color-accent);
 }
 .mystats-goal-reached .icon { width: 0.9em; height: 0.9em; }
@@ -234,7 +234,7 @@
 }
 .mystats-goals-table th {
   text-align: left;
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--color-muted);
   padding: var(--space-2xs) var(--space-sm);
   border-bottom: 1px solid var(--color-border);
@@ -247,7 +247,7 @@
 .mystats-goals-table tbody tr:last-child td { border-bottom: none; }
 .mystats-goals-num { text-align: right; white-space: nowrap; }
 .mystats-goals-table th.mystats-goals-num { text-align: right; }
-.mystats-goals-book { font-weight: 500; color: var(--color-text); }
+.mystats-goals-book { font-weight: var(--fw-medium); color: var(--color-text); }
 /* „Fertig"-Markierung: eckiges Badge neben dem Buchnamen (success-getintet). */
 .mystats-goals-finished {
   display: inline-block;
@@ -255,7 +255,7 @@
   padding: var(--pad-badge);
   border-radius: var(--radius-sm);
   font-size: var(--font-size-xs);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   line-height: 1;
   vertical-align: middle;
   color: var(--color-success);
@@ -278,7 +278,7 @@
   padding: var(--pad-badge);
   border-radius: var(--radius-sm);
   font-size: var(--font-size-xs);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   line-height: 1;
   vertical-align: middle;
   color: var(--color-muted);
@@ -316,12 +316,12 @@
 .progress-bar--overdue { background: var(--color-schwach); }
 
 /* Status-Klartext pro Buch. */
-.mystats-goals-status { font-weight: 500; }
+.mystats-goals-status { font-weight: var(--fw-medium); }
 .mystats-goals-status--reached { color: var(--color-success); }
 .mystats-goals-status--overdue { color: var(--color-schwach); }
 .mystats-goals-status--due,
 .mystats-goals-status--open { color: var(--color-text); }
-.mystats-goals-status--none { color: var(--color-muted); font-weight: 400; }
+.mystats-goals-status--none { color: var(--color-muted); font-weight: var(--fw-regular); }
 
 /* Fertigstellungs-Prognose (Tempo der letzten ~30 Tage) als Status-Sub-Zeile. */
 .mystats-goals-forecast {

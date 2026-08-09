@@ -19,7 +19,7 @@
   flex-direction: column;
 }
 .revision-viewer::backdrop {
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--color-overlay);
 }
 
 /* Hintergrund-Scroll sperren, solange der Viewer offen ist — nur der
@@ -52,14 +52,14 @@ html:has(.revision-viewer[open]) {
 .revision-viewer__title {
   margin: 0;
   font-size: var(--font-size-md);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--color-text);
   display: inline-flex;
   align-items: baseline;
   gap: 0.5rem;
 }
 .revision-viewer__date {
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   font-size: var(--font-size-sm, 0.875rem);
   color: var(--color-muted);
 }
@@ -90,7 +90,7 @@ html:has(.revision-viewer[open]) {
   border-bottom: 0;
   padding: 0.45rem 0.9rem;
   font: inherit;
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--color-muted);
   cursor: pointer;
   border-top-left-radius: var(--radius-sm);
@@ -147,7 +147,7 @@ html:has(.revision-viewer[open]) {
   background: var(--color-surface);
   color: var(--color-text);
   font: inherit;
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   cursor: pointer;
 }
 .revision-viewer__btn:hover:not(:disabled) { background: var(--color-hover); }
@@ -182,7 +182,7 @@ html:has(.revision-viewer[open]) {
   column-gap: 0.6rem;
   margin-bottom: 0.5rem;
   font-size: var(--font-size-sm, 0.875rem);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--color-muted);
 }
 .revision-diff-header span {
@@ -244,7 +244,7 @@ html:has(.revision-viewer[open]) {
 .revision-diff-body .diff-cell--h4,
 .revision-diff-body .diff-cell--h5,
 .revision-diff-body .diff-cell--h6 {
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   margin: 0;
 }
 .revision-diff-body .diff-cell--h1 { font-size: var(--font-size-xl); }
@@ -273,12 +273,12 @@ html:has(.revision-viewer[open]) {
 .revision-diff-body .diff-add,
 .revision-diff-body ins.diff-add {
   text-decoration: none;
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 .revision-diff-body .diff-del,
 .revision-diff-body del.diff-del {
   text-decoration: line-through;
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 .revision-diff-body .diff-eq { color: inherit; opacity: 0.85; }
 

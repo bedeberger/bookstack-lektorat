@@ -33,7 +33,7 @@
 .palette-hero-icon {
   font-size: var(--font-size-base);
   color: var(--color-accent);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 .palette-hero-text {
   flex: 1;
@@ -51,7 +51,7 @@
 .palette-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--color-overlay);
   backdrop-filter: blur(2px);
   z-index: var(--z-overlay);
   display: flex;
@@ -96,7 +96,7 @@
 .palette-section-label {
   padding: var(--space-6) 16px 4px;
   font-size: var(--font-size-micro);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--color-muted);
@@ -123,11 +123,11 @@
 }
 .palette-item-label {
   font-size: var(--font-size-sm);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
 }
 .palette-item-badge {
   font-size: var(--font-size-mini);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   padding: 1px var(--space-2xs);
   border-radius: var(--radius-sm);
   background: var(--color-accent-soft);
@@ -175,7 +175,7 @@
 .palette-mark {
   background: transparent;
   color: var(--color-accent);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   padding: 0;
 }
 .palette-toast {

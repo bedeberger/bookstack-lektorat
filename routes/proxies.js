@@ -2,7 +2,8 @@ const crypto = require('crypto');
 const express = require('express');
 const logger = require('../logger');
 const avatarCache = require('../lib/avatar-cache');
-const { MAX_TOKENS_OUT, CHARS_PER_TOKEN, resolveProvider } = require('../lib/ai');
+const { MAX_TOKENS_OUT, CHARS_PER_TOKEN, resolveProvider, providerClass } = require('../lib/ai');
+const { aiSetting } = require('../lib/ai/profile');
 const { getBookLocale } = require('../db/schema');
 const appUsers = require('../db/app-users');
 const { getPromptConfig } = require('../lib/prompts-loader');
@@ -65,14 +66,23 @@ router.get('/config', (req, res) => {
   const effectiveProvider = sessionUser
     ? resolveProvider({ userEmail: sessionUser.email })
     : (appSettings.get('ai.provider') || 'claude');
+  // Klasse des effektiven Providers ('cloud' | 'local'). Gate fuer alles, was ein
+  // faehiges Modell braucht, aber keine Anthropic-API-Faehigkeit — im Gegensatz zu
+  // `effectiveProvider === 'claude'`, das fuer Web-Suche & Co zustaendig bleibt.
+  const effectiveClass = providerClass(effectiveProvider, sessionUser ? { userEmail: sessionUser.email } : { userEmail: null });
+  // Modellnamen fuer die Anzeige (Avatar-Menue): ueber das Profil-Overlay, sonst
+  // zeigte die App jedem User das global eingestellte Modell — auch dem, der per
+  // Profil auf einem ganz anderen laeuft.
+  const _pOpts = sessionUser ? { userEmail: sessionUser.email } : { userEmail: null };
   res.json({
     claudeMaxTokens: MAX_TOKENS_OUT,
-    claudeModel: appSettings.get('ai.claude.model') || 'claude-sonnet-4-6',
+    claudeModel: aiSetting('claude', 'model', _pOpts) || 'claude-sonnet-4-6',
     apiProvider: appSettings.get('ai.provider') || 'claude',
     effectiveProvider,
+    effectiveProviderClass: effectiveClass,
     charsPerToken: CHARS_PER_TOKEN,
-    ollamaModel: appSettings.get('ai.ollama.model') || 'llama3.2',
-    openaiCompatModel: appSettings.get('ai.openai-compat.model') || 'llama3.2',
+    ollamaModel: aiSetting('ollama', 'model', _pOpts) || 'llama3.2',
+    openaiCompatModel: aiSetting('openai-compat', 'model', _pOpts) || 'llama3.2',
     user,
     userSettings,
     devMode: process.env.LOCAL_DEV_MODE === 'true',
@@ -163,11 +173,12 @@ router.get('/config', (req, res) => {
     },
     // Komplettanalyse-Zusatzphasen «Kontinuität» + «Erzählprofil»: die
     // qualitätskritischen Stufen (Single-Pass, Verify-Filter, Attribut-Check)
-    // gibt es nur bei Claude → für Nicht-Claude-User Karten ausgeblendet und die
-    // Phasen im Job übersprungen. Gating am effektiven (per-User) Provider.
+    // brauchen ein faehiges Modell → fuer die lokale Klasse Karten ausgeblendet und
+    // die Phasen im Job uebersprungen. Gating an der KLASSE des effektiven
+    // (per-User) Providers — dieselbe Entscheidung wie in job-komplett.js.
     komplett: {
-      continuity:      effectiveProvider === 'claude',
-      narrativeProfile: effectiveProvider === 'claude',
+      continuity:      effectiveClass === 'cloud',
+      narrativeProfile: effectiveClass === 'cloud',
       // Weltfakten-Realitätscheck: Claude-only (web_search-Server-Tool) UND per Instanz
       // freigeschaltet (Web-Suche kostet). Das Buch-Opt-in weltfakten_real_pruefen gated
       // zusätzlich pro Buch (Frontend prüft es am Buch, nicht hier).

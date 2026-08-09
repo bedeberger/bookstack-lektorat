@@ -37,7 +37,7 @@
   padding: 0 var(--space-6);
   background: var(--color-surface);
   font-size: var(--font-size-micro);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--color-muted);
@@ -81,7 +81,7 @@
 
 .gz-datum {
   font-size: var(--font-size-xs);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--color-muted);
   letter-spacing: 0.03em;
 }
@@ -96,7 +96,7 @@
 
 .gz-extern-badge {
   font-size: var(--font-size-micro);
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   padding: var(--space-1) 6px;
   background: var(--color-err-bg);
   color: var(--color-err-text);
@@ -115,7 +115,7 @@
 }
 
 .gz-item--extern .gz-ereignis {
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   color: var(--color-err-text);
 }
 
@@ -144,7 +144,7 @@
 .gz-kapitel-link {
   font-size: var(--font-size-xs);
   padding: var(--space-2xs) 7px;
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   background: var(--color-text);
   color: var(--color-surface);
   white-space: nowrap;
@@ -177,7 +177,7 @@
 .gz-figur-badge {
   --fig-hue: var(--palette-gray);
   font-size: var(--font-size-xs);
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   padding: var(--space-2xs) 6px;
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--fig-hue) var(--figpal-bg-mix), var(--color-surface));
@@ -263,7 +263,7 @@
 .gz-chronology-year {
   flex: none;
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   font-variant-numeric: tabular-nums;
   color: var(--card-accent, var(--color-text));
 }
@@ -277,7 +277,7 @@
 
 .gz-chronology-total-value {
   font-size: var(--font-size-mini);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   font-variant-numeric: tabular-nums;
   color: var(--card-accent, var(--color-text));
 }
@@ -337,7 +337,7 @@
   left: 0;
   transform: translateX(-50%);
   font-size: var(--font-size-micro);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--color-muted);
   white-space: nowrap;
 }
@@ -393,7 +393,7 @@
   align-items: center;
   justify-content: center;
   font-size: var(--font-size-micro);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   line-height: 1;
   white-space: nowrap;        /* "+N" nie umbrechen */
   color: var(--color-muted);

@@ -1,7 +1,9 @@
 import { DEFAULT_FONT, TIER_COLOR } from './constants.js';
+import { computeSwimlaneLayout, importanceBorderWidth, ROW_H } from './layout.js';
+import { parseColor } from '../graph-kit.js';
 
 // Figurengraph: Kapitel-Swimlane (deterministisch).
-// Layout-Idee:
+// Layout-Idee (Berechnung in [layout.js](layout.js), hier nur das Zeichnen):
 //   X = narrative Kapitel-Achse (Kapitel 1 links, letztes Kapitel rechts);
 //       jede Figur landet auf dem gewichteten Mittel ihrer Kapitel-Indizes.
 //   Y = Figurentyp-Tier (Hauptfigur oben → Andere unten); innerhalb des Tiers
@@ -14,93 +16,18 @@ export const figurengraphMethods = {
     const figuren = this._graphFiguren();
     const chapterOrder = this.figurenKapitelListe();
     const N = chapterOrder.length;
-    const chapIdx = {};
-    chapterOrder.forEach((c, i) => { chapIdx[c] = i; });
+    const theme = this._theme();
 
-    // Spaltenbreite skaliert mit Container-Breite / Kapitelzahl. Bei vielen Kapiteln
-    // (z.B. 37 Spalten in 900 px Container) würde 440 px/Spalte eine 16k-Canvas erzeugen,
-    // in die fit() winzige Nodes hineinzoomt. Floor 160 hält Presence-Bar lesbar.
-    const containerW      = container.offsetWidth || 900;
-    const COL_W           = Math.max(160, Math.min(440, containerW / Math.max(N, 4)));
-    const ROW_H           = 50;   // Vertikaler Abstand zwischen zwei Stapelzeilen innerhalb eines Tiers
-    const TIER_BASE_GAP   = 80;   // Zusatz-Luft zwischen zwei Tiers
-    const MIN_DX          = 130;  // Minimaler horizontaler Abstand zwischen zwei Figuren derselben Zeile
-    const TIER_ORDER      = ['hauptfigur', 'antagonist', 'mentor', 'nebenfigur', 'randfigur', 'andere'];
-    const tierOf = f => TIER_ORDER.includes(f.typ) ? f.typ : 'andere';
-
-    // Pro Figur: gewichteter x-Index, Ersterscheinung, Tier, Wichtigkeit
-    const weight = k => Math.pow(k.haeufigkeit || 1, 1.5);
-    const info = {};
-    for (const f of figuren) {
-      const kaps = (f.kapitel || []).filter(k => chapIdx[k.name] !== undefined);
-      let xIdx = N > 1 ? (N - 1) / 2 : 0;
-      let firstCh = Number.POSITIVE_INFINITY;
-      if (kaps.length) {
-        const total = kaps.reduce((s, k) => s + weight(k), 0);
-        let sum = 0;
-        for (const k of kaps) {
-          sum += chapIdx[k.name] * (weight(k) / total);
-          if (chapIdx[k.name] < firstCh) firstCh = chapIdx[k.name];
-        }
-        xIdx = sum;
-      }
-      const importance = (f.kapitel || []).reduce((s, k) => s + (k.haeufigkeit || 0), 0);
-      info[f.id] = { xIdx, firstCh, tier: tierOf(f), importance };
-    }
-
-    // Tier-Buckets in fester Reihenfolge; nur belegte Tiers werden gerendert.
-    const byTier = {};
-    for (const t of TIER_ORDER) byTier[t] = [];
-    for (const f of figuren) byTier[info[f.id].tier].push(f);
-    const tiersUsed = TIER_ORDER.filter(t => byTier[t].length > 0);
-
-    // Layout pro Tier: Figuren sitzen an ihrem tatsächlichen narrativen Schwerpunkt
-    // (xIdx * COL_W). Greedy-Stapelung: jede Figur kommt in die oberste Zeile, in
-    // der sie zur zuletzt platzierten Figur dieser Zeile mindestens MIN_DX Abstand
-    // hat. So gibt es kein Binning mehr → keine Clumps an Kapitelrändern.
-    const sortFigs = arr => arr.slice().sort((a, b) => {
-      const ax = info[a.id].xIdx, bx = info[b.id].xIdx;
-      if (ax !== bx) return ax - bx;
-      const af = info[a.id].firstCh, bf = info[b.id].firstCh;
-      if (af !== bf) return af - bf;
-      return (a.name || '').localeCompare(b.name || '');
-    });
-    const layoutPerTier = {};
-    for (const t of tiersUsed) {
-      const rowLastX = []; // row → x der zuletzt platzierten Figur
-      const items = [];
-      for (const f of sortFigs(byTier[t])) {
-        const x = info[f.id].xIdx * COL_W;
-        let row = 0;
-        while (row < rowLastX.length && x - rowLastX[row] < MIN_DX) row++;
-        rowLastX[row] = x;
-        items.push({ f, x, row });
-      }
-      layoutPerTier[t] = { items, maxRows: Math.max(1, rowLastX.length) };
-    }
-
-    // Y-Koordinaten kumulativ: jedes Tier nimmt so viel Platz, wie es Stapelzeilen
-    // gibt. Damit ragen Nebenfiguren-Stapel nicht ins nächste Tier.
-    const TIER_Y = {};
-    let yCursor = 0;
-    for (const t of tiersUsed) {
-      TIER_Y[t] = yCursor;
-      yCursor += (layoutPerTier[t].maxRows - 1) * ROW_H + TIER_BASE_GAP;
-    }
-
-    const nodePositions = [];
-    for (const t of tiersUsed) {
-      for (const { f, x, row } of layoutPerTier[t].items) {
-        nodePositions.push({ f, x, y: TIER_Y[t] + row * ROW_H });
-      }
-    }
+    const { COL_W, info, tiersUsed, layoutPerTier, tierY: TIER_Y, nodePositions, lastTierY } =
+      computeSwimlaneLayout(figuren, chapterOrder, container.offsetWidth);
 
     // Startpositionen deterministisch; Physics bleibt aus, damit Nodes ohne
     // Rückzug dort bleiben, wohin der Nutzer sie zieht.
-    this._figurenNodes = new vis.DataSet(nodePositions.map(({ f, x, y }) => {
-      const borderWidth = Math.min(4, 1 + Math.round(Math.log2(Math.max(1, info[f.id].importance))));
-      return { ...this._baseNode(f), borderWidth, x, y };
-    }));
+    this._figurenNodes = new vis.DataSet(nodePositions.map(({ f, x, y }) => ({
+      ...this._baseNode(f),
+      borderWidth: importanceBorderWidth(info[f.id].importance),
+      x, y,
+    })));
     const nodes = this._figurenNodes;
 
     const { edgeList } = this._buildEdges(/* soziogrammModus */ false);
@@ -116,10 +43,6 @@ export const figurengraphMethods = {
     const network = this._figurenNetwork;
 
     // Vertikale Ausdehnung für Kapitel-Spalten (genug Luft über/unter den Tier-Bändern)
-    const lastTier   = tiersUsed[tiersUsed.length - 1];
-    const lastTierY  = lastTier
-      ? TIER_Y[lastTier] + (layoutPerTier[lastTier].maxRows - 1) * ROW_H
-      : 0;
     const PAD_Y      = 200;
     const Y_TOP      = -PAD_Y;
     const Y_BOT      = lastTierY + PAD_Y;
@@ -130,9 +53,9 @@ export const figurengraphMethods = {
         ctx.save();
         for (let i = 0; i < N; i++) {
           const cx = i * COL_W;
-          ctx.fillStyle = (i % 2 === 0) ? 'rgba(0,0,0,0.028)' : 'rgba(0,0,0,0)';
+          ctx.fillStyle = (i % 2 === 0) ? theme.stripe : 'rgba(0,0,0,0)';
           ctx.fillRect(cx - COL_W / 2, Y_TOP, COL_W, Y_BOT - Y_TOP);
-          ctx.strokeStyle = 'rgba(0,0,0,0.06)';
+          ctx.strokeStyle = theme.gridLine;
           ctx.lineWidth   = 0.5;
           ctx.beginPath();
           ctx.moveTo(cx - COL_W / 2, Y_TOP);
@@ -168,7 +91,7 @@ export const figurengraphMethods = {
         ctx.font = `600 ${headerFs * dpr}px ${DEFAULT_FONT.face}`;
         ctx.textAlign    = 'center';
         ctx.textBaseline = 'top';
-        ctx.fillStyle    = '#555';
+        ctx.fillStyle    = theme.headerText;
         for (let i = 0; i < N; i++) {
           if (i % step !== 0 && i !== N - 1) continue;
           const dom = network.canvasToDOM({ x: i * COL_W, y: Y_TOP });
@@ -195,12 +118,12 @@ export const figurengraphMethods = {
         const label = window.__app.t('figuren.type.' + t);
         const tw    = ctx.measureText(label).width;
         const px = 6 * dpr, py = dom.y * dpr - padY, pw = tw + 12 * dpr, pr = 4 * dpr;
-        ctx.fillStyle = 'rgba(255,255,255,0.88)';
+        ctx.fillStyle = theme.pillBg;
         ctx.beginPath();
         if (ctx.roundRect) ctx.roundRect(px, py, pw, pillH, pr);
         else ctx.rect(px, py, pw, pillH);
         ctx.fill();
-        ctx.fillStyle = TIER_COLOR[t] || '#555';
+        ctx.fillStyle = theme.ink(TIER_COLOR[t] || theme.muted);
         ctx.fillText(label, 12 * dpr, dom.y * dpr);
       }
       ctx.restore();
@@ -214,13 +137,13 @@ export const figurengraphMethods = {
       // Konstante Presence-Daten je Figur einmal vorberechnen — afterDrawing feuert
       // bei jedem Pan/Zoom/Redraw; nur die Bounding-Box ist pro Frame variabel (Drag),
       // kapsByName + RGB-Parse sind es nicht.
-      const hexToRgb = col => col && col.startsWith('#')
-        ? [parseInt(col.slice(1, 3), 16), parseInt(col.slice(3, 5), 16), parseInt(col.slice(5, 7), 16)]
-        : [45, 106, 159];
       const presenceData = figuren.map(f => {
         const kapsByName = {};
         for (const k of (f.kapitel || [])) kapsByName[k.name] = k.haeufigkeit || 1;
-        return { id: f.id, kapsByName, rgb: hexToRgb(TIER_COLOR[info[f.id].tier]) };
+        // Tier-Farbe für den aktuellen Grund lesbar gemacht, dann als RGB-Tripel —
+        // die Segment-Alpha wird pro Kapitel darübergelegt.
+        const rgb = parseColor(theme.ink(TIER_COLOR[info[f.id].tier])) || [45, 106, 159];
+        return { id: f.id, kapsByName, rgb };
       });
       network.on('afterDrawing', ctx => {
         ctx.save();
@@ -233,7 +156,7 @@ export const figurengraphMethods = {
           const barH    = 4;
           const segW    = barW / N;
           // Hintergrund
-          ctx.fillStyle = 'rgba(0,0,0,0.07)';
+          ctx.fillStyle = theme.trackBg;
           ctx.fillRect(barLeft, barY, barW, barH);
           // Gefüllte Segmente pro Kapitel mit Auftritt
           for (let i = 0; i < N; i++) {

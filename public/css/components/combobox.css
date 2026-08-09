@@ -102,7 +102,7 @@
 }
 .combobox-option:hover,
 .combobox-option--hl { background: var(--color-hover); }
-.combobox-option--selected { font-weight: 400; color: var(--color-accent); }
+.combobox-option--selected { font-weight: var(--fw-regular); color: var(--color-accent); }
 .combobox-option--selected.combobox-option--hl,
 .combobox-option--selected:hover { background: var(--color-accent-hover); }
 .combobox-empty {
@@ -127,7 +127,7 @@
   background: var(--color-bg);
   border-bottom: var(--border-thin) solid var(--color-border);
   font-size: var(--size-compact-font-size);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   text-transform: uppercase;
   letter-spacing: .05em;
   color: var(--color-muted);

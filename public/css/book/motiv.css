@@ -1,3 +1,4 @@
+@layer components {
 /* Motiv-Werkstatt (Themen & Motive als Konstellation).
    Akzent: var(--card-accent) (Mapping in card-accents.css → --card-accent-motiv).
    Layout: Graph links, Seitenpanel rechts; unter 960px gestapelt. */
@@ -43,7 +44,7 @@
 .motiv-layer-btn.is-active {
   background: var(--card-accent);
   border-color: var(--card-accent);
-  color: #fff;
+  color: var(--color-on-accent-fill);
 }
 
 .motiv-progress { padding: var(--space-2xs) 0 var(--space-xs); }
@@ -64,7 +65,7 @@
   background: var(--color-card-bg);
 }
 .motiv-sugg-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.motiv-sugg-name { font-size: var(--font-size-sm); font-weight: 600; color: var(--color-text); }
+.motiv-sugg-name { font-size: var(--font-size-sm); font-weight: var(--fw-semibold); color: var(--color-text); }
 .motiv-sugg-desc { font-size: var(--font-size-xs); color: var(--color-muted); }
 .motiv-sugg-triggers { font-size: var(--font-size-micro); color: var(--color-muted); font-style: italic; }
 .motiv-sugg-actions { display: flex; align-items: center; gap: var(--space-2xs); flex-shrink: 0; }
@@ -80,26 +81,9 @@
   position: relative;
 }
 
-/* Hover-Detail-Tooltip über dem Konstellations-Graph (positioniert in graph.js),
-   Muster wie .figur-tooltip im Figuren-Graph. */
-.motiv-tooltip {
-  display: none;
-  position: absolute;
-  z-index: var(--z-popover);
-  pointer-events: none;
-  background: var(--color-surface);
-  border: 0.5px solid var(--color-border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
-  padding: var(--space-sm) 10px;
-  font-size: var(--font-size-sm);
-  max-width: 240px;
-  line-height: 1.4;
-}
-.motiv-tooltip.visible { display: block; }
-.motiv-tooltip strong { display: block; margin-bottom: var(--space-2xs); }
-.motiv-tooltip em { color: var(--color-muted); font-style: normal; font-size: var(--font-size-xs); }
-.motiv-tooltip p { margin: var(--space-xs) 0 0; color: var(--color-text); white-space: pre-wrap; }
+/* Der Hover-Tooltip selbst ist die geteilte Komponente `.graph-tooltip`
+   ([components/graph-tooltip.css](../components/graph-tooltip.css)); hier nur
+   die motiv-eigenen Inhalts-Zeilen darin. */
 .motiv-tip-stats { margin-top: var(--space-xs); color: var(--color-muted); font-size: var(--font-size-xs); }
 .motiv-tip-ghost { color: var(--card-accent, var(--color-muted)); }
 .motiv-graph-container {
@@ -176,55 +160,8 @@
 .motiv-drag-grip .icon { width: 14px; height: 14px; }
 .motiv-drag-grip:active { cursor: grabbing; }
 
-/* ── Thema-Farbe (Swatch + Palette-Popover), Muster wie die Plot-Werkstatt ── */
-.motiv-color-swatch-wrap { position: relative; flex: 0 0 auto; display: flex; }
-.motiv-color-swatch {
-  width: 14px; height: 14px;
-  padding: 0;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--col-accent);
-  cursor: pointer;
-}
-.motiv-color-swatch:hover { background: var(--col-accent); border-color: var(--color-text); }
-.motiv-color-popover {
-  position: absolute;
-  top: calc(100% + var(--space-2xs));
-  left: 0;
-  z-index: var(--z-popover);
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2xs);
-  width: 132px;
-  padding: var(--space-xs);
-  background: var(--color-card-bg);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-md);
-}
-.motiv-color-opt {
-  width: 18px; height: 18px;
-  padding: 0;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--col-accent);
-  cursor: pointer;
-}
-/* button:hover (gleiche @layer) würde den Swatch-Hintergrund überschreiben — re-asserten. */
-.motiv-color-opt:hover { background: var(--col-accent); transform: scale(1.1); }
-.motiv-color-opt--on { outline: 2px solid var(--color-text); outline-offset: 1px; }
-.motiv-color-opt--none, .motiv-color-opt--none:hover {
-  background: var(--color-card-bg);
-  position: relative;
-  overflow: hidden;
-  transform: none;
-}
-.motiv-color-opt--none::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(to top right, transparent 44%, var(--color-err-border) 44%, var(--color-err-border) 56%, transparent 56%);
-}
+/* Thema-Farbe: Swatch + Palette-Popover via .color-picker*
+   (components/color-picker.css), geteilt mit der Plot-Werkstatt. */
 
 /* Themen-Combobox in der KI-Vorschlagskarte (Motiv-Vorschlag → Thema zuordnen). */
 .motiv-sugg-theme { min-width: 9rem; }
@@ -247,7 +184,7 @@
   color: var(--color-text);
   font-family: inherit;
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 .motiv-name-input:hover { border-color: var(--color-border); }
 .motiv-name-input:focus { border-color: var(--card-accent); background: var(--color-bg); outline: none; }
@@ -289,7 +226,7 @@
    Enter/Space); der globale `.internal-link:hover`-Underline ist hier unerwünscht. */
 .motiv-occ-row:hover { border-color: var(--card-accent); text-decoration: none; }
 .motiv-occ-row:focus-visible { text-decoration: none; }
-.motiv-occ-loc { font-size: var(--font-size-xs); font-weight: 600; color: var(--color-text); }
+.motiv-occ-loc { font-size: var(--font-size-xs); font-weight: var(--fw-semibold); color: var(--color-text); }
 .motiv-occ-snip {
   font-size: var(--font-size-xs);
   color: var(--color-muted);
@@ -299,7 +236,7 @@
 
 .motiv-occ-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2xs); }
 /* Konfidenz-% eines semantischen Treffers (Cosinus); wörtliche Treffer haben keine. */
-.motiv-occ-conf { background: var(--color-tag-bg); color: var(--card-accent); font-weight: 600; }
+.motiv-occ-conf { background: var(--color-tag-bg); color: var(--card-accent); font-weight: var(--fw-semibold); }
 
 /* ── Soll-Verknüpfungen + Beziehungen ─────────────────────────────────── */
 .motiv-link-group { display: flex; flex-direction: column; gap: 2px; margin-bottom: var(--space-2xs); }
@@ -426,4 +363,5 @@
 ::highlight(motiv-hit) {
   background-color: rgba(124, 58, 237, 0.32);
   color: inherit;
+}
 }

@@ -38,15 +38,15 @@
        aktiviert hat ($store.stt.enabled aus /config). Sprache loest der
        Proxy aus der Buch-Locale auf. -->
   <template x-if="$store.stt.enabled">
-    <div class="stt-dock" x-cloak>
+    <div class="dock stt-dock" x-cloak>
       <!-- Live-Status links vom Mic: zwei ruhige Zustaende ohne Sub-Sekunden-
            Flackern — „Hört zu" (Aufnahme laeuft) bzw. „Transkribiert"
            (Segment-Upload, mit Mindest-Standzeit ueber $store.stt.busy). -->
-      <span class="stt-status" aria-live="polite"
+      <span class="dock-status stt-status" aria-live="polite"
             x-show="$store.stt.recording || $store.stt.busy"
             :class="$store.stt.busy ? 'is-transcribing' : 'is-listening'"
             x-text="$store.stt.busy ? t('stt.status.transcribing') : t('stt.status.hearing')"></span>
-      <button type="button" class="stt-dock-btn"
+      <button type="button" class="dock-btn stt-dock-btn"
               :aria-pressed="$store.stt.recording"
               :class="{ 'is-recording': $store.stt.recording, 'is-pending': $store.stt.pending }"
               :disabled="$store.stt.pending"

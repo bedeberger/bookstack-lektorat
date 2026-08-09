@@ -1,7 +1,6 @@
 'use strict';
 const {
   db, saveZeitstrahlEvents, updateFigurenEvents, saveContinuityCheck,
-  backfillAppearancesFromScenesEvents,
 } = require('../../../db/schema');
 const { _modelName } = require('../shared');
 const { _refToString, _stelleQuote } = require('./utils');
@@ -251,15 +250,9 @@ function saveSzenenAndEvents(bookIdInt, email, szenen, assignments, locIdToDbId,
     saveZeitstrahlEvents(bookIdInt, email, []);
     updateFigurenEvents(bookIdInt, assignments, email, idMaps);
   }
-  // figure_appearances aus den eben gespeicherten Szenen/Events vervollständigen:
-  // Kapitel, die die KI im selbstgemeldeten Figuren-`kapitel`-Feld ausgelassen hat,
-  // aber über Szenen/Lebensereignisse belegt sind (Single-Pass-Recall-Lücke).
-  try {
-    const addedApps = backfillAppearancesFromScenesEvents(bookIdInt, email);
-    if (addedApps > 0) log.info(`${addedApps} Kapitel-Auftritte aus Szenen/Events nachgetragen (figure_appearances).`);
-  } catch (e) {
-    log.warn(`Kapitel-Auftritts-Backfill fehlgeschlagen: ${e.message}`);
-  }
+  // `figure_appearances` baut der Job selbst neu auf, gleich nach diesem Aufruf
+  // (rebuildFigureAppearances) — dort liegt die konsolidierte Figuren-Liste, die als
+  // dritte Quelle dazugehört. Hier wird der Index absichtlich nicht angefasst.
   // figure_scenes neu indexieren — Full-Replace pro Buch (kind/book
   // droppen, dann Re-Upsert aller aktuellen Rows).
   searchIndex.removeKindForBook('scene', bookIdInt);

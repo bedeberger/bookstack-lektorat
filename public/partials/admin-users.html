@@ -81,7 +81,7 @@
               @click="sortBy('email')" x-text="$app.t('admin.users.email')"></th>
           <th class="sortable-th" :class="sortClass('global_role')" :aria-sort="ariaSort('global_role')"
               @click="sortBy('global_role')" x-text="$app.t('admin.users.role')"></th>
-          <th x-text="$app.t('admin.users.aiProvider')"></th>
+          <th x-text="$app.t('admin.users.aiProfile')"></th>
           <th class="sortable-th" :class="sortClass('status')" :aria-sort="ariaSort('status')"
               @click="sortBy('status')" x-text="$app.t('admin.users.status')"></th>
           <th class="sortable-th" :class="sortClass('last_seen_at')" :aria-sort="ariaSort('last_seen_at')"
@@ -105,14 +105,12 @@
                    @combobox-change="if ($event.detail && $event.detail !== u.global_role) adminUsersUpdate(u, { global_role: $event.detail })"></div>
             </td>
             <td>
-              <div x-data="combobox($app.t('admin.users.aiProvider'))"
-                   x-effect="value = u.ai_provider_override || ''; options = [
-                     { value: '',        label: $app.t('admin.users.aiProvider.global', { provider: adminUsersGlobalProvider }) },
-                     { value: 'claude',        label: 'claude' },
-                     { value: 'ollama',        label: 'ollama' },
-                     { value: 'openai-compat', label: 'openai-compat' },
+              <div x-data="combobox($app.t('admin.users.aiProfile'))"
+                   x-effect="value = u.ai_profile_id ? String(u.ai_profile_id) : ''; options = [
+                     { value: '', label: $app.t('admin.users.aiProfile.global', { provider: adminUsersGlobalProvider }) },
+                     ...adminUsersProfiles.map(p => ({ value: String(p.id), label: p.name + ' · ' + p.provider })),
                    ]"
-                   @combobox-change="if ($event.detail !== (u.ai_provider_override || '')) adminUsersUpdate(u, { ai_provider_override: $event.detail || null })"></div>
+                   @combobox-change="if ($event.detail !== (u.ai_profile_id ? String(u.ai_profile_id) : '')) adminUsersUpdate(u, { ai_profile_id: $event.detail ? Number($event.detail) : null })"></div>
             </td>
             <td>
               <span class="badge" :class="'badge--status-' + u.status" x-text="$app.t('admin.users.status.' + u.status)"></span>

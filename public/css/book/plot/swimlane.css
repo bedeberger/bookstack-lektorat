@@ -14,7 +14,7 @@
     gap: var(--space-xs);
     margin-bottom: var(--space-sm);
   }
-  .plot-thread-bar-label { font-size: var(--font-size-xs); font-weight: 600; color: var(--color-muted); }
+  .plot-thread-bar-label { font-size: var(--font-size-xs); font-weight: var(--fw-semibold); color: var(--color-muted); }
   .plot-thread-bar-hint { font-size: var(--font-size-micro); color: var(--color-muted); }
   .plot-thread-chip {
     --col-accent: var(--card-accent);
@@ -79,7 +79,7 @@
      oben, damit der eigene Block optisch vom geteilten Raster getrennt ist. */
   .plot-swim-row--ownhead { margin-top: var(--space-md); }
   .plot-swim-corner--thread {
-    font-weight: 600;
+    font-weight: var(--fw-semibold);
     font-size: var(--font-size-sm);
     color: var(--color-text);
   }
@@ -161,10 +161,10 @@
   .plot-swim-lane:has(.plot-swim-lane-edit) { z-index: var(--z-popover); }
   .plot-swim-lane-view { display: flex; flex-wrap: nowrap; align-items: flex-start; gap: var(--space-2xs); width: 100%; }
   .plot-swim-lane-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; overflow-wrap: break-word; }
-  .plot-swim-lane-view > .plot-color-swatch-wrap,
+  .plot-swim-lane-view > .color-picker,
   .plot-swim-lane-view > .plot-icon-btn { flex: 0 0 auto; align-self: flex-start; }
-  .plot-swim-lane-name { font-weight: 600; font-size: var(--font-size-sm); color: var(--color-text); cursor: text; }
-  .plot-swim-lane-name--muted { font-weight: 400; font-style: italic; color: var(--color-muted); cursor: default; }
+  .plot-swim-lane-name { font-weight: var(--fw-semibold); font-size: var(--font-size-sm); color: var(--color-text); cursor: text; }
+  .plot-swim-lane-name--muted { font-weight: var(--fw-regular); font-style: italic; color: var(--color-muted); cursor: default; }
   .plot-swim-lane-figure { font-size: var(--font-size-micro); color: var(--color-muted); cursor: pointer; }
   .plot-swim-lane-figure:hover { color: var(--color-text); }
   .plot-swim-lane-chapter { font-size: var(--font-size-micro); color: var(--color-muted); cursor: pointer; }
@@ -172,7 +172,7 @@
   .plot-swim-lane-edit { display: flex; flex-direction: column; gap: var(--space-xs); width: 100%; }
   .plot-thread-name-input {
     width: 100%;
-    font-weight: 600;
+    font-weight: var(--fw-semibold);
     font-size: var(--font-size-sm);
     padding: var(--space-2xs) var(--space-xs);
     border: 1px solid var(--card-accent);
@@ -232,7 +232,7 @@
   /* „Eigene Akte"-Marker im Lane-Label + aktiver Fork-Toggle. */
   .plot-swim-lane-ownacts {
     font-size: var(--font-size-micro);
-    font-weight: 600;
+    font-weight: var(--fw-semibold);
     color: var(--col-accent);
   }
   .plot-icon-btn--on { color: var(--col-accent); }

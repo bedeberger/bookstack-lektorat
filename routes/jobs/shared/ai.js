@@ -1,13 +1,13 @@
 'use strict';
 const {
   callAI, parseJSON, CHARS_PER_TOKEN, getContextConfigFor, resolveProvider,
-  providerClass, normalizeTier, _resolveClaudeModel,
+  providerClass, effectiveProviderClass, normalizeTier, _resolveClaudeModel,
   estimatePromptTokens, assertPromptFitsContext,
 } = require('../../../lib/ai');
 const { costUsd } = require('../../../lib/pricing');
 const logger = require('../../../logger');
 const appSettings = require('../../../lib/app-settings');
-const { stripDiagramBlocks } = require('../../../lib/html-text');
+const { stripDiagramBlocks, summarizeTableBlocks } = require('../../../lib/html-text');
 const { jobAbortControllers } = require('./state');
 const { updateJob, i18nError, fmtTok } = require('./jobs');
 
@@ -54,9 +54,12 @@ async function retryOnTransientAi(fn, { tries = 2, log = null, label = '' } = {}
 // — der Erst-Call schreibt den Prompt-Cache, Folge-Calls greifen den Cache-Hit
 // und sind ~10× günstiger + viel kürzer (kleinerer TPM-Burst).
 async function settledAll(thunks, opts = {}) {
-  // Klassen-SSoT: lib/ai/config.js#providerClass — openai-compat mit Admin-Schalter
-  // `ai.openai-compat.cloud` laeuft hier parallel (gedeckelt via max_parallel-Semaphore).
-  const isLocal = providerClass(appSettings.get('ai.provider') || 'claude') === 'local';
+  // Klassen-SSoT: lib/ai/config.js#effectiveProviderClass — openai-compat mit
+  // Cloud-Schalter laeuft hier parallel (gedeckelt via max_parallel-Semaphore).
+  // Am EFFEKTIVEN Provider dieses Users (KI-Profil vor globalem ai.provider), nicht
+  // an der Instanz-Einstellung: sonst faehrt ein Claude-User seriell, weil global
+  // Ollama eingestellt ist — und ein Ollama-User parallel in den VRAM-Ueberlauf.
+  const isLocal = effectiveProviderClass() === 'local';
   if (isLocal) {
     const results = [];
     for (const fn of thunks) {
@@ -122,7 +125,7 @@ const HTML_NAMED_ENTITIES = {
 // sehen (Cache-Read in P8 trifft den 1h-Block aus P1).
 // Greift Reste, die htmlToText nicht entfernt: unbekannte HTML-Entities,
 // Zero-Width-Zeichen, weiche Trennstriche, Mehrfach-Leerzeichen.
-const _CLAUDE_ENTITY_MAP = {
+const _PROMPT_ENTITY_MAP = {
   nbsp: ' ', ensp: ' ', emsp: ' ', thinsp: ' ',
   mdash: '—', ndash: '–', hellip: '…', bull: '•', middot: '·',
   lsquo: '‘', rsquo: '’', ldquo: '“', rdquo: '”',
@@ -150,8 +153,8 @@ function _decodeEntities(str, map) {
   });
 }
 
-function cleanPageTextForClaude(text) {
-  return _decodeEntities(text || '', _CLAUDE_ENTITY_MAP)
+function cleanPageTextForAi(text) {
+  return _decodeEntities(text || '', _PROMPT_ENTITY_MAP)
     .replace(/[​-‍﻿]/g, '')
     .replace(/­/g, '')
     .replace(/ /g, ' ')
@@ -176,7 +179,7 @@ function cleanPageTextForClaude(text) {
 //     verschiedenen Texten.
 // Ausschnitt-Regex ist die SSoT aus lib/html-text.js — keine Kopie hier.
 function htmlToText(html) {
-  return _decodeEntities(stripDiagramBlocks(html).replace(/<[^>]+>/g, ' '), HTML_NAMED_ENTITIES)
+  return _decodeEntities(summarizeTableBlocks(stripDiagramBlocks(html)).replace(/<[^>]+>/g, ' '), HTML_NAMED_ENTITIES)
     .replace(/\s+/g, ' ').trim();
 }
 
@@ -191,7 +194,7 @@ function htmlToText(html) {
 // zu Space — nur Blockgrenzen tragen einen Umbruch. Entspricht damit der Sicht
 // des Lektorat-Prompts, der die Seite als Prosa mit Absätzen liest.
 function htmlToTextForPrompt(html) {
-  return _decodeEntities(stripDiagramBlocks(html)
+  return _decodeEntities(summarizeTableBlocks(stripDiagramBlocks(html))
     .replace(/<\/(p|div|li|h[1-6]|blockquote|pre|ul|ol|figure|figcaption|table|tr|section|article)\s*>/gi, '\n\n')
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<hr\s*\/?>/gi, '\n\n')
@@ -418,8 +421,8 @@ async function aiCall(jobId, tok, prompt, system, fromPct, toPct, expectedChars 
 module.exports = {
   settledAll,
   retryOnTransientAi, _isTransientAiError,
-  HTML_NAMED_ENTITIES, _CLAUDE_ENTITY_MAP,
-  cleanPageTextForClaude, htmlToText, htmlToTextForPrompt,
+  HTML_NAMED_ENTITIES, _PROMPT_ENTITY_MAP,
+  cleanPageTextForAi, htmlToText, htmlToTextForPrompt,
   PROGRESS_THROTTLE_MS,
   aiCall,
   toSystemBlocks,

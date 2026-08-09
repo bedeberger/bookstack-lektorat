@@ -1,3 +1,4 @@
+@layer components {
 /* AdminUsageCard.
    Akzentfarbe per --card-accent (Mapping siehe public/css/card-accents.css). */
 
@@ -115,7 +116,7 @@
 }
 
 .admin-usage-table th {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--color-muted);
   font-size: var(--font-size-xs);
   text-transform: uppercase;
@@ -179,7 +180,7 @@
 
 .admin-usage-kpi-value {
   font-size: var(--font-size-lg);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .admin-usage-charts {
@@ -231,4 +232,5 @@
   .admin-usage-totals { gap: var(--space-md); }
   .admin-usage-actions { flex-wrap: wrap; }
   .admin-usage-actions button { width: 100%; }
+}
 }

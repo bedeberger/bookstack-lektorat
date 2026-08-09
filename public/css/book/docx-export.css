@@ -1,6 +1,8 @@
+@layer components {
 /* Custom-Word-Export-Karte. Gemeinsame Grammatik (Profil-Leiste, Anlege-Zeile,
    Scope-Picker, Tabs, Chips, Progress, Mobile) kommt aus export-shared.css.
    Hier nur Word-Spezifika. */
 
 /* Schmales Zahlenfeld (Schriftgröße). */
 .docx-num { max-width: 6rem; }
+}

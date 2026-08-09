@@ -143,33 +143,36 @@ test('struktur ist ausserhalb des journalistischen Ressorts unsichtbar', () => {
   }
 });
 
-// requiresClaude: Kontinuität + Erzählprofil sind Claude-only (die Qualitätsstufen
-// gibt es nur bei Claude). Für Nicht-Claude ausgeblendet.
-test('requiresClaude-Karten sind kontinuitaet + erzaehlprofil', () => {
-  const gated = FEATURES.filter(f => f.requiresClaude).map(f => f.key).sort();
+// requiresCloudModel: Kontinuität + Erzählprofil brauchen die Provider-KLASSE `cloud`
+// (Single-Pass, Verify-Filter, Attribut-Check). Für die lokale Klasse ausgeblendet —
+// ein gehostetes Frontier-Modell über openai-compat gehört dazu, Claude ist nicht die
+// Bedingung. Muss deckungsgleich bleiben mit `/config` komplett.continuity/
+// narrativeProfile und den Route-Guards in routes/jobs/komplett/index.js.
+test('requiresCloudModel-Karten sind kontinuitaet + erzaehlprofil', () => {
+  const gated = FEATURES.filter(f => f.requiresCloudModel).map(f => f.key).sort();
   assert.deepEqual(gated, ['erzaehlprofil', 'kontinuitaet']);
 });
 
-test('featuresVisibleFor blendet requiresClaude-Karten aus, wenn effektiver Provider nicht Claude', () => {
-  const withClaude = new Set(featuresVisibleFor(FEATURES, 'editor', null, true).map(f => f.key));
-  const noClaude = new Set(featuresVisibleFor(FEATURES, 'editor', null, false).map(f => f.key));
+test('featuresVisibleFor blendet requiresCloudModel-Karten aus, wenn die Klasse nicht cloud ist', () => {
+  const withCloud = new Set(featuresVisibleFor(FEATURES, 'editor', null, true).map(f => f.key));
+  const noCloud = new Set(featuresVisibleFor(FEATURES, 'editor', null, false).map(f => f.key));
   for (const k of ['kontinuitaet', 'erzaehlprofil']) {
-    assert.ok(withClaude.has(k), `${k} bei Claude sichtbar`);
-    assert.ok(!noClaude.has(k), `${k} bei Nicht-Claude ausgeblendet`);
+    assert.ok(withCloud.has(k), `${k} bei Cloud-Klasse sichtbar`);
+    assert.ok(!noCloud.has(k), `${k} bei lokaler Klasse ausgeblendet`);
   }
 });
 
-test('featuresVisibleFor: claudeEffective default true (Rückwärtskompatibilität)', () => {
+test('featuresVisibleFor: cloudModelEffective default true (Rückwärtskompatibilität)', () => {
   const visible = new Set(featuresVisibleFor(FEATURES, 'editor').map(f => f.key));
   assert.ok(visible.has('kontinuitaet') && visible.has('erzaehlprofil'));
 });
 
-test('isFeatureAvailable + unavailabilityReasonKey gaten requiresClaude', () => {
+test('isFeatureAvailable + unavailabilityReasonKey gaten requiresCloudModel', () => {
   const feat = featureByKey('kontinuitaet');
   const base = { selectedBookId: 1, pages: [{}], bookRole: 'editor' };
-  assert.equal(isFeatureAvailable(feat, { ...base, claudeEffective: true }), true);
-  assert.equal(isFeatureAvailable(feat, { ...base, claudeEffective: false }), false);
-  assert.equal(unavailabilityReasonKey(feat, { ...base, claudeEffective: false }), 'palette.disabled.needClaude');
+  assert.equal(isFeatureAvailable(feat, { ...base, cloudModelEffective: true }), true);
+  assert.equal(isFeatureAvailable(feat, { ...base, cloudModelEffective: false }), false);
+  assert.equal(unavailabilityReasonKey(feat, { ...base, cloudModelEffective: false }), 'palette.disabled.needCloudModel');
 });
 
 test('featuresVisibleFor(editor) ohne passenden Buchtyp blendet requiresBuchtyp-Karten aus', () => {

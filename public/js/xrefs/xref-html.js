@@ -7,6 +7,7 @@
 // Persistiertes Markup:
 //   <span class="xref" data-xref="chapter" data-xref-id="42">Kapitel 3</span>
 //   <span class="xref" data-xref="figure"  data-xref-id="a1b2c3d4e5f6a7b8">Abb. 3.2</span>
+//   <span class="xref" data-xref="table"   data-xref-id="b2c3d4e5f6a7b8c9">Tab. 3.2</span>
 //
 // `data-xref` + `data-xref-id` sind die WAHRHEIT, der Text ist ein CACHE der
 // zuletzt bekannten Nummer. Das ist derselbe Vertrag wie beim Quellen-Chip
@@ -42,7 +43,7 @@ export const XREF_ATTR_FMT = 'data-xref-fmt';
  *  Zwei-Pass-Render (Pass 1 lernt, auf welcher Druckseite das Ziel landet), aber
  *  KEINE Migration und keine Markup-Aenderung. Wer ihn nachruestet, ergaenzt den
  *  Resolver — nicht das Format. */
-export const XREF_KINDS = ['chapter', 'figure', 'page'];
+export const XREF_KINDS = ['chapter', 'figure', 'table', 'page'];
 
 /** Anzeigeformen eines Verweises:
  *    label  — „Kapitel 3" / „Abb. 3.2"   (Default)
@@ -58,11 +59,14 @@ export const XREF_FORMATS = ['label', 'number', 'title'];
 export const XREF_SEL = `span.${XREF_CLASS}[${XREF_ATTR_ID}]`;
 
 /** Ziel-ID normalisieren. Kapitel/Seite zeigen auf eine positive Ganzzahl
- *  (chapter_id/page_id), Abbildungen auf ein `data-bid` (8-Byte-Hex aus
- *  lib/html-clean.js#ensureBlockIds). Alles andere ist kein gueltiger Zeiger. */
+ *  (chapter_id/page_id), Abbildungen und Tabellen auf ein `data-bid` (8-Byte-Hex
+ *  aus lib/html-clean.js#ensureBlockIds). Alles andere ist kein gueltiger
+ *  Zeiger. */
+const _BID_KINDS = new Set(['figure', 'table']);
+
 function _targetId(kind, raw) {
   const v = String(raw ?? '').trim();
-  if (kind === 'figure') return /^[0-9a-f]{8,32}$/i.test(v) ? v.toLowerCase() : null;
+  if (_BID_KINDS.has(kind)) return /^[0-9a-f]{8,32}$/i.test(v) ? v.toLowerCase() : null;
   if (!/^\d+$/.test(v)) return null;
   const n = parseInt(v, 10);
   return Number.isInteger(n) && n > 0 ? String(n) : null;

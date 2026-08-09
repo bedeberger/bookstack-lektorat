@@ -30,7 +30,7 @@
 
   .folder-import-label {
     font-size: var(--font-size-sm);
-    font-weight: 700;
+    font-weight: var(--fw-bold);
     color: var(--color-text);
     padding-top: var(--space-xs);
   }
@@ -115,10 +115,10 @@
   }
 
   .folder-import-error {
-    color: var(--color-danger, #b04040);
+    color: var(--color-err-text);
     font-size: var(--font-size-sm);
     padding: var(--space-sm) var(--space-md);
-    background: color-mix(in srgb, var(--color-danger, #b04040) 8%, transparent);
+    background: var(--color-err-bg);
     border-radius: var(--radius-md);
   }
 
@@ -212,7 +212,7 @@
   }
 
   .folder-import-log-line.is-warn span {
-    color: var(--color-warn-text, #c66);
+    color: var(--color-warn-text);
   }
 
   @media (max-width: 640px) {

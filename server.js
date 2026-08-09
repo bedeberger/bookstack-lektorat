@@ -558,6 +558,7 @@ app.use('/book-editor', require('./routes/book-editor'));
 app.use('/admin/users', require('./routes/admin-users'));
 app.use('/admin/books', require('./routes/admin-books'));
 app.use('/admin/settings', require('./routes/admin-settings'));
+app.use('/admin/ai-profiles',            require('./routes/admin-ai-profiles'));
 app.use('/admin/usage', require('./routes/admin-usage'));
 app.use('/admin/logs', require('./routes/admin-logs'));
 app.use('/admin/parse-fails', require('./routes/admin-parse-fails'));

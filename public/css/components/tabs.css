@@ -37,7 +37,7 @@
     align-items: center;
     padding: var(--space-sm) 14px;
     font-size: var(--font-size-sm);
-    font-weight: 500;
+    font-weight: var(--fw-medium);
     background: transparent;
     color: var(--color-muted);
     border: none;
@@ -82,7 +82,7 @@
   .tabs-btn--active,
   .tabs-btn[aria-selected="true"] {
     color: var(--color-primary);
-    font-weight: 600;
+    font-weight: var(--fw-semibold);
   }
   .tabs-btn--active::after,
   .tabs-btn[aria-selected="true"]::after {
@@ -117,7 +117,7 @@
     margin-left: var(--space-6);
     padding: 0 6px;
     font-size: var(--font-size-xs);
-    font-weight: 600;
+    font-weight: var(--fw-semibold);
     line-height: 1.4;
     background: var(--color-border);
     color: var(--color-text);

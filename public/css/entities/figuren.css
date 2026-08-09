@@ -111,6 +111,13 @@
 
 /* === Figuren: Detail-Gruppen (Steckbrief / Charakter / Im Buch) === */
 .figur-group {
+  /* Marginalien-Schiene: JEDER Akzent-Balken der Gruppe (Gruppen-Tick,
+     Sektions-Tick, Zitat-Bar) haengt mit seiner LINKEN Kante hier, der zugehoerige
+     Text bleibt buendig mit dem uebrigen Fliesstext. Balken sind darum gleich
+     breit — Hierarchie kommt ueber Hoehe und Farbe, nicht ueber die Breite
+     (unterschiedliche Breiten bei gleicher rechter Kante = versetzte Schiene). */
+  --figur-rail-w: 3px;
+  --figur-rail: calc(var(--figur-rail-w) + var(--space-xs));
   margin-top: var(--space-lg);
   padding-top: var(--space-md);
   border-top: 0.5px solid var(--color-border);
@@ -126,17 +133,17 @@
   gap: var(--space-xs);
   /* Akzent-Tick in den linken Rand hängen: der Titeltext startet bündig mit dem
      Fliesstext (Detail-Rows, Werte) auf einer gemeinsamen Kante, der Tick liegt
-     als Marginalie im Padding. -(Tick-Breite + gap). */
-  margin: 0 0 var(--space-md) calc(-3px - var(--space-xs));
+     als Marginalie auf der Schiene. */
+  margin: 0 0 var(--space-md) calc(-1 * var(--figur-rail));
   font-size: var(--font-size-sm);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--color-text);
 }
 .figur-group-title::before {
   content: "";
-  width: 3px;
+  width: var(--figur-rail-w);
   height: 0.9em;
   flex-shrink: 0;
   border-radius: var(--radius-sm);
@@ -186,9 +193,9 @@
   gap: var(--space-xs);
   margin-top: var(--space-lg);
   margin-bottom: var(--space-sm);
-  /* Tick hängt in den linken Rand (analog .figur-group-title), damit der
-     Titeltext bündig mit dem Fliesstext startet. -(Tick-Breite + gap). */
-  margin-left: calc(-2px - var(--space-xs));
+  /* Tick hängt auf derselben Schiene wie der Gruppen-Tick (--figur-rail), damit
+     der Titeltext bündig mit dem Fliesstext startet. */
+  margin-left: calc(-1 * var(--figur-rail));
 }
 /* Erste Untersektion direkt unter einem Gruppentitel braucht keinen grossen Abstand */
 .figur-group > *:first-child .bewertung-section-title:not(.bewertung-section-title--inline),
@@ -197,7 +204,7 @@
 }
 .figur-detail .bewertung-section-title:not(.bewertung-section-title--inline)::before {
   content: "";
-  width: 2px;
+  width: var(--figur-rail-w);
   height: 0.72em;
   flex-shrink: 0;
   border-radius: var(--radius-sm);
@@ -206,6 +213,9 @@
 
 /* === Figuren: Schlüsselzitate === */
 .figur-zitate-list {
+  /* .bullet-list-Einzug aufheben — die Zitat-Bar sitzt als Marginalie auf der
+     Schiene, nicht im Textfluss (analog .figur-eigenschaften-list). */
+  padding-left: 0;
   margin-bottom: var(--space-sm);
   display: flex;
   flex-direction: column;
@@ -216,8 +226,9 @@
   color: var(--color-text);
   font-size: var(--font-size-sm);
   line-height: 1.55;
-  padding: var(--space-2xs) 0 var(--space-2xs) var(--space-md);
-  border-left: 2px solid color-mix(in srgb, var(--card-accent) 35%, var(--color-border));
+  margin-left: calc(-1 * var(--figur-rail));
+  padding: var(--space-2xs) 0 var(--space-2xs) var(--space-xs);
+  border-left: var(--figur-rail-w) solid color-mix(in srgb, var(--card-accent) 35%, var(--color-border));
 }
 /* Akzent-Bar ersetzt den Bullet-Strich aus .bullet-list */
 .figur-zitate-list .figur-zitat::before { content: none; }
@@ -240,24 +251,8 @@
 /* === Figuren: Graph-Bereich === */
 .figur-graph-section { margin-top: var(--space-14); position: relative; }
 
-.figur-tooltip {
-  display: none;
-  position: absolute;
-  z-index: var(--z-popover);
-  pointer-events: none;
-  background: var(--color-surface);
-  border: 0.5px solid var(--color-border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
-  padding: var(--space-sm) 10px;
-  font-size: var(--font-size-sm);
-  max-width: 240px;
-  line-height: 1.4;
-}
-.figur-tooltip.visible { display: block; }
-.figur-tooltip strong { display: block; margin-bottom: var(--space-2xs); }
-.figur-tooltip em { color: var(--color-muted); font-style: normal; font-size: var(--font-size-xs); }
-.figur-tooltip p { margin: var(--space-xs) 0 0; color: var(--color-text); white-space: pre-wrap; }
+/* Der Hover-Tooltip über dem Graph ist die geteilte Komponente `.graph-tooltip`
+   ([components/graph-tooltip.css](../components/graph-tooltip.css)). */
 
 /* === Figuren: Listen-Bereich === */
 /* Verhindert Scroll-Anchoring im Listen-Bereich: wenn figur-detail aufklappt,
@@ -310,7 +305,7 @@
   background: var(--color-primary);
   color: var(--color-surface);
   border-color: var(--color-primary);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 .figuren-graph-filter-btn--active:hover {
   background: var(--color-primary);
@@ -364,7 +359,7 @@
 
 .figur-bz-name {
   font-size: var(--font-size-sm);
-  font-weight: 400;
+  font-weight: var(--fw-regular);
 }
 
 .internal-link {

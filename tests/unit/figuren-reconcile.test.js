@@ -16,7 +16,7 @@ delete process.env.ADMIN_EMAIL;
 
 require('../../db/migrations');
 const { db } = require('../../db/connection');
-const { saveFigurenToDb } = require('../../db/figures');
+const { saveFigurenToDb, rebuildFigureAppearances } = require('../../db/figures');
 
 test.after(() => {
   try { db.close(); } catch {}
@@ -43,16 +43,25 @@ function _dbId(figId) {
     .get(BOOK, figId, USER)?.id;
 }
 
+// Ein Komplettanalyse-Lauf, wie ihn job-komplett.js fährt: Figuren reconcilen, danach
+// den abgeleiteten Auftritts-Index neu aufbauen. saveFigurenToDb schreibt
+// `figure_appearances` bewusst nicht mehr selbst — die Kapitel-Auftritte sind hier
+// relevant, weil planFigurenMatch sie als Indizien-Signal fürs Rename-Matching liest.
+function _komplettLauf(figuren) {
+  saveFigurenToDb(BOOK, figuren, USER, idMaps, { reconcile: true, onMissing: 'stale' });
+  rebuildFigureAppearances(BOOK, USER, figuren, idMaps);
+}
+
 test('Reconcile: figures.id bleibt stabil + plot_beat_figures überlebt', () => {
   _seed();
 
   // --- Lauf 1: zwei Figuren ---
-  saveFigurenToDb(BOOK, [
+  _komplettLauf([
     { id: 'fig_1', name: 'Paul Schmidt', typ: 'hauptfigur', beruf: 'Arzt', geschlecht: 'm',
       kapitel: [{ name: 'Kapitel 1', haeufigkeit: 3 }], eigenschaften: ['mutig'], beziehungen: [] },
     { id: 'fig_2', name: 'Marta Klein', typ: 'nebenfigur', beruf: 'Lehrerin', geschlecht: 'w',
       kapitel: [{ name: 'Kapitel 1', haeufigkeit: 1 }], beziehungen: [] },
-  ], USER, idMaps, { reconcile: true, onMissing: 'stale' });
+  ]);
 
   const paulId = _dbId('fig_1');
   const martaId = _dbId('fig_2');
@@ -68,14 +77,14 @@ test('Reconcile: figures.id bleibt stabil + plot_beat_figures überlebt', () => 
   // --- Lauf 2: Paul bleibt (gleicher Name), Marta verschwindet,
   //     "Hans Weber" ist Marta umbenannt (gleicher Beruf+Kapitel+Geschlecht → Rename-Match),
   //     "Lena Neu" ist echt neu. ---
-  saveFigurenToDb(BOOK, [
+  _komplettLauf([
     { id: 'fig_1', name: 'Paul Schmidt', typ: 'hauptfigur', beruf: 'Arzt', geschlecht: 'm',
       kapitel: [{ name: 'Kapitel 1', haeufigkeit: 5 }], beziehungen: [] },
     { id: 'fig_2', name: 'Hans Weber', typ: 'nebenfigur', beruf: 'Lehrerin', geschlecht: 'w',
       kapitel: [{ name: 'Kapitel 1', haeufigkeit: 2 }], beziehungen: [] },
     { id: 'fig_3', name: 'Lena Neu', typ: 'randfigur', beruf: 'Bäckerin', geschlecht: 'w',
       kapitel: [{ name: 'Kapitel 1', haeufigkeit: 1 }], beziehungen: [] },
-  ], USER, idMaps, { reconcile: true, onMissing: 'stale' });
+  ]);
 
   // Paul: gleiche DB-id (Name-Match Stufe 1).
   assert.equal(_dbId('fig_1'), paulId, 'Paul behält figures.id über Re-Analyse');
@@ -101,10 +110,10 @@ test('Reconcile: figures.id bleibt stabil + plot_beat_figures überlebt', () => 
 
 test('Reconcile: echte verschwundene Figur wird stale, nicht gelöscht', () => {
   // Lauf 3: nur noch Paul. Hans + Lena verschwinden ohne Nachfolger.
-  saveFigurenToDb(BOOK, [
+  _komplettLauf([
     { id: 'fig_1', name: 'Paul Schmidt', typ: 'hauptfigur', beruf: 'Arzt', geschlecht: 'm',
       kapitel: [{ name: 'Kapitel 1', haeufigkeit: 5 }], beziehungen: [] },
-  ], USER, idMaps, { reconcile: true, onMissing: 'stale' });
+  ]);
 
   const total = db.prepare('SELECT COUNT(*) AS c FROM figures WHERE book_id = ?').get(BOOK).c;
   assert.equal(total, 3, 'verschwundene Figuren bleiben erhalten (Paul + 2 stale)');
@@ -124,12 +133,12 @@ test('Reconcile: stale-Figur wird revived, wenn sie wieder auftaucht', () => {
   assert.ok(lenaIdBefore, 'Lena existiert (stale) aus Lauf 3');
 
   // Lauf 4: Lena taucht wieder auf (gleicher Name).
-  saveFigurenToDb(BOOK, [
+  _komplettLauf([
     { id: 'fig_1', name: 'Paul Schmidt', typ: 'hauptfigur', beruf: 'Arzt', geschlecht: 'm',
       kapitel: [{ name: 'Kapitel 1', haeufigkeit: 5 }], beziehungen: [] },
     { id: 'fig_2', name: 'Lena Neu', typ: 'randfigur', beruf: 'Bäckerin', geschlecht: 'w',
       kapitel: [{ name: 'Kapitel 1', haeufigkeit: 1 }], beziehungen: [] },
-  ], USER, idMaps, { reconcile: true, onMissing: 'stale' });
+  ]);
 
   const lenaAfter = db.prepare("SELECT id, fig_id, stale FROM figures WHERE book_id = ? AND name = 'Lena Neu'").get(BOOK);
   assert.equal(lenaAfter.id, lenaIdBefore, 'Lena behält ihre id (revive statt Neuanlage)');
@@ -162,7 +171,8 @@ test('Manual-Edit (matchBy figId): id-stabil, behaltene Figur behält Referenz, 
   assert.equal(
     db.prepare('SELECT COUNT(*) AS c FROM plot_beat_figures WHERE beat_id = ? AND figure_id = ?').get(beatId, lenaId).c,
     1, 'Plot-Referenz auf Lena überlebt den Manual-Save');
-  // Kapitel-Appearance bleibt erhalten (idMaps=null → kein Clear).
+  // Kapitel-Appearance bleibt erhalten: der Manual-Save fasst den abgeleiteten
+  // Auftritts-Index gar nicht an (den baut nur rebuildFigureAppearances).
   assert.equal(
     db.prepare('SELECT COUNT(*) AS c FROM figure_appearances WHERE figure_id = ?').get(paulId).c,
     1, 'figure_appearances bleiben beim Manual-Save erhalten');

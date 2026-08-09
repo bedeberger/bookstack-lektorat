@@ -5,6 +5,7 @@
 import { motivMethods } from '../book/motiv.js';
 import { setupCardLifecycle } from './card-lifecycle.js';
 import { attachFullscreenSync } from '../fullscreen.js';
+import { observeThemeChange } from '../graph-kit.js';
 
 export function registerMotivCard() {
   if (typeof window === 'undefined' || !window.Alpine) return;
@@ -102,6 +103,9 @@ export function registerMotivCard() {
     _motivNodes: null,
     _motivEdges: null,
     _motivHash: '',
+    // Aufgelöste Canvas-Farben (Hell/Dunkel), pro Render in renderMotivGraph gesetzt.
+    _graphTheme: null,
+    _themeObserver: null,
     _scanPollTimer: null,
     _brainstormPollTimer: null,
     _embedPollTimer: null,
@@ -149,6 +153,12 @@ export function registerMotivCard() {
         if (this.selectedMotifId) this._persistSectionExpanded('relations', this.selectedMotifId, v);
       });
 
+      // Theme-Wechsel (Hell/Dunkel) → Konstellation neu zeichnen. Die Farben
+      // stecken im gezeichneten Canvas-Bild, ein CSS-Wechsel erreicht sie nicht.
+      this._themeObserver = observeThemeChange(() => {
+        if (window.__app.showMotivCard && this.motivView === 'graph') this.renderMotivGraph();
+      });
+
       // Native Fullscreen-API: Status spiegeln (Toggle-Button + Esc-Exit) und den
       // vis-network-Graph auf die neue Containergrösse neu zeichnen.
       attachFullscreenSync({
@@ -174,6 +184,8 @@ export function registerMotivCard() {
       if (this._layoutSaveTimer) { clearTimeout(this._layoutSaveTimer); this._layoutSaveTimer = null; this._saveLayout(); }
       this._detachGraphMenuListeners();
       this._destroyThemeSortable();
+      this._themeObserver?.disconnect();
+      this._themeObserver = null;
       this._destroyGraph();
       this._lifecycle?.destroy();
     },

@@ -13,7 +13,7 @@
   color: var(--color-on-primary);
   padding: 0.5rem 0.875rem;
   border-radius: var(--radius-sm);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   text-decoration: none;
   transition: top var(--transition-slow);
 }
@@ -111,7 +111,7 @@ body {
 h1 {
   font-family: var(--font-serif);
   font-size: var(--font-size-2xl);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   letter-spacing: -0.015em;
   margin-bottom: 0.25rem;
 }
@@ -141,7 +141,7 @@ kbd {
   gap: 0.6rem;
   cursor: pointer;
   font-family: var(--font-serif);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   font-size: var(--font-size-3xl);
   letter-spacing: -0.022em;
   font-feature-settings: "kern", "liga", "dlig", "calt", "onum", "ss01";

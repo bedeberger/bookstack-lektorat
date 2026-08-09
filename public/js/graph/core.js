@@ -1,9 +1,7 @@
-import { escHtml } from '../utils.js';
-import { loadVis } from '../lazy-libs.js';
+import { ensureVis, graphPlaceholder, graphTheme } from '../graph-kit.js';
 import { toggleWrapFullscreen } from '../fullscreen.js';
 
 // Entry-Points: Mode-Switch, Fullscreen, Render-Dispatcher.
-// innerHTML mit escHtml() — Escape-Invariante eingehalten.
 export const coreMethods = {
   setFigurenGraphModus(mode) {
     if (mode === this.figurenGraphModus) return;
@@ -45,19 +43,12 @@ export const coreMethods = {
     if (!container) return;
     const figuren = this._graphFiguren();
 
-    // .Network statt nur window.vis prüfen: erst wenn das vis-network-Bundle
-    // wirklich geladen ist, lässt sich `new vis.Network` aufrufen.
-    if (!window.vis?.Network) {
-      const ph = document.createElement('span');
-      ph.className = 'muted-msg muted-msg--block';
-      ph.textContent = window.__app.t('graph.empty.visLoading');
-      container.replaceChildren(ph);
-      try { await loadVis(); }
-      catch (e) {
-        ph.textContent = e.message;
-        return;
-      }
-    }
+    if (!await ensureVis(container)) return;
+
+    // Canvas löst keine CSS-Custom-Properties auf → Chrome-Farben (Spalten, Header,
+    // Pills, Dim-Zustand) einmal pro Render aus dem DOM auflösen. Die Overlays und
+    // der Kapitel-Filter lesen dieselbe Auflösung über this._graphTheme.
+    this._graphTheme = graphTheme(container);
 
     // Render-Signatur deckt ALLE layout-/edge-relevanten Felder ab: typ (Tier),
     // sozialschicht (Soziogramm-Band), Kapitel (X-Achse + Presence) und Beziehungen
@@ -69,7 +60,10 @@ export const coreMethods = {
       const bz  = (f.beziehungen || []).map(b => b.figur_id + b.typ + (b.machtverhaltnis ?? '')).join(',');
       return [f.id, f.typ || '', f.sozialschicht || '', kap, bz].join('::');
     }).join('|');
-    const hash = sig + '|' + this.figurenGraphModus + '|' + Alpine.store('shell').uiLocale;
+    // Theme im Key: die Canvas-Farben hängen am aufgelösten Hell/Dunkel-Stand,
+    // ohne diesen Anteil bliebe nach einem Theme-Wechsel das alte Bild stehen.
+    const hash = [sig, this.figurenGraphModus, Alpine.store('shell').uiLocale,
+      this._graphTheme.dark ? 'dark' : 'light'].join('|');
     if (this._figurenNetwork && this._figurenHash === hash) return;
     this._figurenHash = hash;
 
@@ -78,7 +72,7 @@ export const coreMethods = {
       this._figurenNetwork = null;
     }
     if (!figuren.length) {
-      container.innerHTML = `<span class="muted-msg muted-msg--block">${escHtml(window.__app.t('graph.empty.figuren'))}</span>`;
+      graphPlaceholder(container, window.__app.t('graph.empty.figuren'));
       return;
     }
     if (this.figurenGraphModus === 'soziogramm')      this._renderSoziogramm(container);

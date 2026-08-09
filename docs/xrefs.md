@@ -12,7 +12,7 @@ SSoT [public/js/xrefs/xref-html.js](../public/js/xrefs/xref-html.js) — erzeuge
 <span class="xref" data-xref="chapter" data-xref-id="42">Kapitel 3</span>
 ```
 
-Ziel-Typen: `chapter` (→ `chapters.chapter_id`), `figure` (→ `data-bid` aus `ensureBlockIds`, **kein eigenes Anker-Attribut**) und reserviert `page` (braucht Zwei-Pass-Render, weil die Seitenzahl erst nach dem Umbruch feststeht).
+Ziel-Typen: `chapter` (→ `chapters.chapter_id`), `figure` und `table` (beide → `data-bid` aus `ensureBlockIds`, **kein eigenes Anker-Attribut**; Beschriftung aus `<figcaption>` bzw. `<caption>`) und reserviert `page` (braucht Zwei-Pass-Render, weil die Seitenzahl erst nach dem Umbruch feststeht).
 
 ## Nummern folgen der gerenderten Einheit
 
@@ -45,12 +45,14 @@ Beide Tabellen bedienen nur die Oberfläche (Ziel-Picker `GET /xrefs/targets`, R
 - **`contenteditable` nie in der Persistenz.**
 - **TTS liest Querverweise bewusst MIT** — „siehe Kapitel 3" ist Teil des Satzes, anders als ein Klammerbeleg.
 
-Nummerierte Abbildungslegenden („Abb. 3.2: …") sind ein Render-Artefakt, gated über `book_settings.figure_numbering` (buchweit, nicht pro Exportprofil — wie der Zitierstil).
+Nummerierte Abbildungslegenden („Abb. 3.2: …") und Tabellenbeschriftungen („Tab. 3.2: …") sind ein Render-Artefakt, gated über `book_settings.figure_numbering` bzw. `table_numbering` (buchweit, nicht pro Exportprofil — wie der Zitierstil).
+
+**Abbildungen und Tabellen zählen GETRENNT** — zwei Zähler in [xref-number.js](../public/js/xrefs/xref-number.js), zwei Schalter. „Abb. 3.1" und „Tab. 3.1" stehen im Fachbuch nebeneinander; ein gemeinsamer Zähler machte aus der ersten Tabelle eines Kapitels „Tab. 3.4", nur weil davor drei Abbildungen stehen. Auch die Rückfallebene auf buchweite Zählung fällt pro Typ. Der Buch-Guard in [db/xrefs.js](../db/xrefs.js) prüft **Typ und Buch**: ein `data-xref="table"` auf das `data-bid` einer Abbildung bekommt keine Zeile. Details zum Tabellen-Feature: [docs/tabellen.md](tabellen.md).
 
 ## Routen und Oberfläche
 
 ```
-GET /xrefs/targets?book_id=    Ziel-Picker (Kapitel + Abbildungen)
+GET /xrefs/targets?book_id=    Ziel-Picker (Kapitel + Abbildungen + Tabellen)
 GET /xrefs/backlinks?…         wer verweist auf dieses Ziel
 ```
 

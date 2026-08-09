@@ -55,7 +55,7 @@
   height: 16px;
   margin-left: var(--space-xs);
   font-size: var(--font-size-micro);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   background: hsl(var(--avatar-hue, 220) 60% 88%);
   color: hsl(var(--avatar-hue, 220) 60% 28%);
   border: 1px solid hsl(var(--avatar-hue, 220) 60% 50%);
@@ -166,10 +166,6 @@
   text-align: center;
 }
 
-.error-msg {
-  color: var(--color-err-text);
-  font-size: var(--font-size-base);
-}
 
 /* === Spinner === */
 .spinner {

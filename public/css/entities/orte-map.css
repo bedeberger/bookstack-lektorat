@@ -1,6 +1,14 @@
 /* Orte-Karte → View-Mode 'map' (Geo-Karte via Leaflet). Nur aktiv bei
    book_settings.orte_real. Leaflet-eigenes CSS kommt aus vendor/leaflet-*.
-   Akzent über var(--card-accent) (Mapping in card-accents.css). */
+   Akzent über var(--card-accent) (Mapping in card-accents.css).
+
+   BEWUSST UNLAYERED — die einzige Feature-Datei ohne `@layer components`.
+   lazy-libs.js haengt vendor/leaflet-1.9.4/leaflet.css zur Laufzeit an den
+   <head>, also NACH allen Shell-Stylesheets und ohne Layer. Unlayerte Regeln
+   schlagen jeden Layer: laege diese Datei in `components`, gewaennen Leaflets
+   eigene Regeln gegen unsere Overrides (.leaflet-popup-*, Zoom-Controls) und
+   die Karte fiele auf den Vendor-Look zurueck. Beim Aendern hier also nicht
+   „der Konsistenz halber" einen Layer ergaenzen. */
 
 .ort-map-view {
   display: flex;
@@ -164,7 +172,7 @@
 
 .ort-map-locate-name {
   flex: 1;
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .ort-map-located {

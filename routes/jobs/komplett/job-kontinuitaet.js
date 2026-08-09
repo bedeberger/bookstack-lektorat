@@ -12,16 +12,17 @@ const { narrativeLabels } = require('../narrative-labels');
 const {
   makeJobLogger, updateJob, completeJob, failJob, i18nError, contentHttpError,
   aiCall, getPrompts, getBookPrompts,
-  loadOrderedBookContents, loadPageContents, groupByChapter, buildSinglePassBookText, cleanPageTextForClaude,
+  loadOrderedBookContents, loadPageContents, groupByChapter, buildSinglePassBookText, cleanPageTextForAi,
   chunkLimitsFor, BATCH_SIZE, jobAbortControllers,
   tps, retryOnTransientAi,
 } = require('../shared');
 const appSettings = require('../../../lib/app-settings');
+const { providerClass } = require('../../../lib/ai');
 const { setContext } = require('../../../lib/log-context');
 const { makePhaseTimer } = require('./utils');
 const { saveKontinuitaetResult } = require('./remap');
 const { komplettMaxTokens } = require('./phases');
-const { buildAnachronismusData, verifyKontinuitaetProbleme, _komplettClaudeOverrides } = require('./job-shared');
+const { buildAnachronismusData, verifyKontinuitaetProbleme, _komplettAiOverrides } = require('./job-shared');
 
 async function runKontinuitaetJob(jobId, bookId, bookName, userEmail, userToken, provider = undefined) {
   const bookIdInt = parseInt(bookId);
@@ -31,10 +32,10 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail, userToken,
   // Effektiven Provider binden (siehe runKomplettAnalyseJob) – sonst kappt aiCall das
   // Output-Ceiling fälschlich auf den Claude-Default, wenn der Job ohne expliziten Provider läuft.
   const effectiveProvider = provider || appSettings.get('ai.provider') || 'claude';
-  const overrides = _komplettClaudeOverrides(effectiveProvider);
+  const overrides = _komplettAiOverrides(effectiveProvider);
   if (overrides) {
     setContext(overrides);
-    log.info(`Kontinuität-Claude-Override: ${JSON.stringify(overrides)} (global model=${appSettings.get('ai.claude.model')}).`);
+    log.info(`Kontinuität-Override (${effectiveProvider}): ${JSON.stringify(overrides.aiJob)} (global model=${appSettings.get(`ai.${effectiveProvider}.model`)}).`);
   }
   const call = (jobId_, tok_, prompt_, system_, fromPct, toPct, expectedChars, outputRatio, maxTokens, schema) =>
     aiCall(jobId_, tok_, prompt_, system_, fromPct, toPct, expectedChars, outputRatio, maxTokens, effectiveProvider, schema);
@@ -82,12 +83,12 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail, userToken,
       });
     }, userToken, jobAbortControllers.get(jobId)?.signal);
 
-    // Buchtext-Preprocessing claude-only (siehe runKomplettAnalyseJob).
-    if (effectiveProvider === 'claude') {
+    // Buchtext-Preprocessing nur Cloud-Klasse (siehe runKomplettAnalyseJob).
+    if (providerClass(effectiveProvider) === 'cloud') {
       let savedChars = 0;
       for (const p of pageContents) {
         const before = p.text.length;
-        p.text = cleanPageTextForClaude(p.text);
+        p.text = cleanPageTextForAi(p.text);
         savedChars += before - p.text.length;
       }
       if (savedChars > 0) log.info(`Buchtext-Preprocessing ${savedChars} Zeichen entfernt.`);
@@ -182,7 +183,9 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail, userToken,
         sys.SYSTEM_KONTINUITAET_BLOCKS, 88, 95, komplettMaxTokens(effectiveProvider), 0.2, null, prompts.SCHEMA_KONTINUITAET_PROBLEME,
       ), { log, label: 'Kontinuität Check (Multi-Pass)' });
       // Fakten-basierte Befunde gegen den Originaltext verifizieren (False-Positive-Filter).
-      if (effectiveProvider === 'claude') {
+      // Klassen-, nicht Namensfrage: der Verify-Pass braucht ein faehiges Modell, keine
+      // Anthropic-API-Faehigkeit (SSoT lib/ai/config.js#providerClass).
+      if (providerClass(effectiveProvider) === 'cloud') {
         result = await verifyKontinuitaetProbleme(
           { call, prompts, sys, jobId, tok, bookName, groups, groupOrder, log, bookIdInt }, result, 95, 97);
       }

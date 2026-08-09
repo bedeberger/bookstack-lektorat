@@ -1,0 +1,202 @@
+@layer components {
+/* === Tabellen-Dialog (Notebook-Editor) ===
+   Ein Gitter aus Zellenfeldern plus Beschriftung und Spaltenausrichtung. Natives
+   <dialog> — Focus-Trap, inerter Hintergrund und ESC kommen vom Browser (siehe
+   DESIGN.md „Modal-Shell"). Markup: public/partials/editor-table-dialog.html,
+   Methoden: public/js/editor/notebook/toolbar/table.js
+
+   Schale (Panel, Backdrop, Kopf, Aktionsleiste) kommt aus
+   components/editor-dialog.css — hier nur die Breite und der Rumpf.
+
+   Die Darstellung der Tabelle IM MANUSKRIPT steht weder hier noch dort, sondern
+   in components/manuscript-content.css — sie gilt für alle drei Leseflächen. */
+.table-dialog {
+  --dlg-width: min(1100px, 96vw);
+  --dlg-max-width: 96vw;
+}
+
+.table-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-10);
+  padding: var(--space-md);
+  min-height: 0;
+}
+
+/* --- Beschriftung. Eigene Zeile über dem Gitter, weil sie zur ganzen Tabelle
+       gehört und nicht zu einer Spalte. --- */
+.table-dialog-caption-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.table-dialog-caption-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+.table-caption-input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* --- Warnung bei verlustbehaftetem Quell-Markup (verbundene Zellen,
+       Blockinhalt). Sie steht VOR dem Speichern, weil der Dialog diese Fälle
+       nicht darstellen kann und das Übernehmen sie planiert. --- */
+.table-dialog-warn {
+  margin: 0;
+  padding: var(--space-6) var(--space-10);
+  border-radius: var(--radius-sm);
+  background: var(--color-warn-bg);
+  color: var(--color-warn-text);
+  font-size: var(--font-size-sm);
+}
+
+/* --- Das Gitter. Scrollt in beide Richtungen im eigenen Container: eine
+       Tabelle mit vielen Spalten darf den Dialog nicht breiter machen. --- */
+.table-dialog-grid-wrap {
+  overflow: auto;
+  min-height: 0;
+  max-height: 56vh;
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+.table-dialog-grid {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+}
+.table-dialog-grid :is(th, td) {
+  border-right: 0.5px solid var(--color-border);
+  border-bottom: 0.5px solid var(--color-border);
+  padding: 0;
+  vertical-align: middle;
+}
+.table-dialog-grid tr > :last-child {
+  border-right: 0;
+}
+.table-dialog-grid tr:last-child > * {
+  border-bottom: 0;
+}
+
+/* Zeilen-/Spaltenköpfe des GITTERS (Nummer, Ausrichtungsknöpfe) — nicht die
+   Kopfzeile der Tabelle selbst. Sticky, damit sie beim Scrollen stehen
+   bleiben. */
+.table-grid-corner,
+.table-grid-colhead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--color-bg);
+}
+.table-grid-rowhead {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--color-bg);
+  padding: 0 var(--space-6);
+  font-size: var(--font-size-xs);
+  font-weight: var(--fw-medium);
+  color: var(--color-muted);
+  white-space: nowrap;
+  text-align: left;
+}
+.table-grid-corner {
+  z-index: 3;
+  width: 2.5rem;
+}
+.table-grid-colctl {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  padding: var(--space-6);
+}
+.table-grid-aligns {
+  display: flex;
+  gap: 2px;
+}
+.table-align-btn {
+  min-width: 1.6rem;
+  padding: 2px 4px;
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-muted);
+  font-size: var(--font-size-xs);
+  line-height: 1.2;
+  cursor: pointer;
+}
+.table-align-btn.is-active {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: var(--color-accent-soft);
+}
+.table-grid-del {
+  flex: none;
+}
+
+/* Zellenfelder. Randlos, damit das Gitter die Zellgrenzen zeigt und nicht jedes
+   Feld seinen eigenen Rahmen. */
+.table-grid-input {
+  width: 100%;
+  min-width: 7rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  padding: var(--space-6) 10px;
+  font: inherit;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.table-grid-input:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+.table-grid-input--head {
+  font-weight: var(--fw-bold);
+}
+.table-grid-input.is-align-center { text-align: center; }
+.table-grid-input.is-align-right  { text-align: right; }
+.table-grid-headrow > .table-grid-rowhead {
+  font-style: italic;
+}
+
+.table-dialog-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+.table-dialog-hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-muted);
+}
+
+
+/* Tabelle im Edit-Modus: sie ist atomar (contenteditable="false"), also muss
+   sichtbar sein, dass ein Klick etwas tut — sonst wirkt sie wie eingefroren.
+   Gleiche Andeutung wie beim Diagramm-Block. */
+.page-content-view--editing table {
+  cursor: pointer;
+}
+.page-content-view--editing table:hover {
+  outline: 1px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Schmal: Gitter darf weiter scrollen, aber die Zellen werden enger. */
+@media (max-width: 860px) {
+  .table-dialog-grid-wrap {
+    max-height: 48vh;
+  }
+  .table-grid-input {
+    min-width: 5.5rem;
+  }
+  .table-dialog-caption-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-6);
+  }
+}
+}

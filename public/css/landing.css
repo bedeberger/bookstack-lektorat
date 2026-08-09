@@ -75,7 +75,7 @@ html, body {
 .public-features-title {
   margin: 0;
   font-size: var(--font-size-sm);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--color-muted);
@@ -227,7 +227,7 @@ html, body {
 }
 
 .public-form label span {
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--color-text);
 }
 

@@ -1,3 +1,4 @@
+@layer components {
 /* Recherche-Chat der Recherche-Karte (Claude-only, mit Web-Suche): Spalten-
    Layout neben dem Board + das Panel selbst. Board/Liste: board.css. */
 
@@ -50,7 +51,7 @@
   justify-content: space-between;
   gap: var(--space-sm);
 }
-.research-chat-title { font-weight: 600; }
+.research-chat-title { font-weight: var(--fw-semibold); }
 .research-chat-head-actions { display: flex; gap: var(--space-2xs); }
 /* Mitwachsende, aber gedeckelte Chat-Höhe — das Board bleibt darunter sichtbar. */
 .research-chat-messages { max-height: 22rem; }
@@ -67,7 +68,7 @@
 }
 .research-chat-proposals-head {
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--color-muted);
 }
 .research-chat-proposal {
@@ -92,7 +93,7 @@
   flex: 1;
   min-width: 0;
 }
-.research-chat-proposal-title { font-weight: 600; }
+.research-chat-proposal-title { font-weight: var(--fw-semibold); }
 .research-chat-proposal-snippet {
   font-size: var(--font-size-sm);
   color: var(--color-muted);
@@ -139,7 +140,7 @@
 }
 .research-chat-sources-head {
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--color-muted);
 }
 .research-chat-source {
@@ -157,4 +158,5 @@
 /* ── Mobile ─────────────────────────────────────────────────────────────── */
 @media (max-width: 640px) {
   .research-chat-proposal { flex-wrap: wrap; }
+}
 }

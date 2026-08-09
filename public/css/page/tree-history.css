@@ -42,8 +42,8 @@
 .tree-chapter--depth-2:has(+ .tree-chapter--depth-3) {
   margin-bottom: var(--space-2xs);
 }
-.tree-chapter--depth-2 > .tree-chapter-header { font-size: var(--font-size-sm); font-weight: 500; }
-.tree-chapter--depth-3 > .tree-chapter-header { font-size: var(--font-size-sm); font-weight: 400; font-style: italic; }
+.tree-chapter--depth-2 > .tree-chapter-header { font-size: var(--font-size-sm); font-weight: var(--fw-medium); }
+.tree-chapter--depth-3 > .tree-chapter-header { font-size: var(--font-size-sm); font-weight: var(--fw-regular); font-style: italic; }
 
 .tree-chapter-header {
   display: grid;
@@ -55,7 +55,7 @@
   border: 0.5px solid transparent;
   border-radius: var(--radius-md);
   cursor: pointer;
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   font-size: var(--font-size-base);
   color: var(--color-text);
   user-select: none;
@@ -75,7 +75,7 @@
   margin-top: var(--space-2xs);
 }
 .tree-chapter-header:hover { background: var(--color-hover); }
-.tree-chapter-header--empty { opacity: var(--opacity-hint); font-weight: 400; font-style: italic; }
+.tree-chapter-header--empty { opacity: var(--opacity-hint); font-weight: var(--fw-regular); font-style: italic; }
 .tree-chapter-header--empty:hover { opacity: 1; }
 .tree-chapter-header--active,
 .tree-chapter-header--active:hover {
@@ -128,7 +128,7 @@
 
 /* === History === */
 .history-heading {
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   font-size: var(--font-size-xs);
   color: var(--color-muted);
   text-transform: uppercase;
@@ -237,7 +237,7 @@
   border-radius: 0;
   border: 1px solid transparent;
   cursor: pointer;
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   transition: opacity var(--transition-slow);
 }
 .btn-toggle-saved:hover { opacity: var(--opacity-strong); }
@@ -294,7 +294,7 @@
   color: var(--color-err-text);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   opacity: 0.55;
   transition: opacity var(--transition-slow);
   display: inline-block;

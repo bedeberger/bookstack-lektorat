@@ -60,7 +60,7 @@ export async function _toggleCardGeneric(entry) {
   if (entry.requiresBook && !this.$store.nav.selectedBookId) return;
   // Claude-only-Karten (Kontinuität/Erzählprofil) für Nicht-Claude gar nicht öffnen —
   // deckt Deep-Links (#kontinuitaet) + Palette-Klicks ab, falls sie durchrutschen.
-  if (entry.requiresClaude && (this.$store.config?.effectiveProvider || 'claude') !== 'claude') return;
+  if (entry.requiresCloudModel && (this.$store.config?.effectiveProviderClass || 'cloud') !== 'cloud') return;
   // Buchtyp-Ausschluss (z.B. Figuren/Plot/Buchsatz in einem journalistischen
   // Ressort) auch hier pruefen, nicht nur in der Palette — sonst oeffnet ein
   // Deep-Link (#plot) eine Karte, die es fuer dieses Buch nicht geben soll.

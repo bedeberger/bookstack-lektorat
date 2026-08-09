@@ -11,7 +11,8 @@ export function registerAdminUsersCard() {
     adminUsersList: [],
     adminUsersLoading: false,
     adminUsersError: '',
-    adminUsersGlobalProvider: 'claude',  // fuer Provider-Combobox-Label "Global: …"
+    adminUsersGlobalProvider: 'claude',  // fuer Profil-Combobox-Label "Global: …"
+    adminUsersProfiles: [],              // zuweisbare KI-Profile (/admin/ai-profiles)
     adminUsersInviteEmail: '',
     adminUsersInviteRole: 'user',
     adminUsersInviting: false,

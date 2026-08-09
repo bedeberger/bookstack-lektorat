@@ -1,0 +1,70 @@
+/* Modale Dialog-Schale des Notebook-Editors: natives <dialog> mit Kopfzeile,
+   scrollendem Rumpf und Aktionsleiste am Fuss. Focus-Trap, inerter Hintergrund
+   und ESC kommen vom Browser (siehe DESIGN.md „Modal-Shell") — deshalb kein
+   x-trap und kein eigener Backdrop-Klick-Handler.
+
+   Geteilte SSoT der Editor-Dialoge:
+     .diagram-dialog (editor/notebook/diagram-dialog.css) — Quelltext + Vorschau
+     .table-dialog   (editor/notebook/table-dialog.css)   — Zellenraster
+
+   Hier steht die Schale; der RUMPF (das eigentliche Werkzeug) bleibt beim
+   Konsumenten — er ist der Grund, warum es zwei Dialoge gibt.
+
+   Breite pro Dialog über --dlg-width / --dlg-max-width.
+
+   Markup:
+     <dialog class="editor-dialog diagram-dialog">
+       <div class="editor-dialog__inner">
+         <div class="editor-dialog__head"><span class="editor-dialog__title">…
+         …Rumpf des Konsumenten…
+         <div class="editor-dialog__actions">…<span class="editor-dialog__spacer">… */
+
+@layer components {
+
+  .editor-dialog {
+    border: 0.5px solid var(--color-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    background: var(--color-surface);
+    color: var(--color-text);
+    padding: 0;
+    width: var(--dlg-width, min(1040px, 94vw));
+    max-width: var(--dlg-max-width, 94vw);
+    max-height: 90vh;
+    /* Zentrierung. Pflicht, nicht Kosmetik: der globale Reset (layout/base.css,
+       `* { margin: 0 }`) schlaegt die UA-Regel `dialog { margin: auto }` und
+       setzt das Panel sonst in die linke obere Ecke des Viewports. */
+    margin: auto;
+  }
+
+  .editor-dialog::backdrop { background: var(--color-overlay); }
+
+  .editor-dialog__inner {
+    display: flex;
+    flex-direction: column;
+    max-height: 90vh;
+  }
+
+  .editor-dialog__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    padding: var(--space-10) var(--space-md);
+    border-bottom: 0.5px solid var(--color-border);
+  }
+
+  .editor-dialog__title { font-weight: var(--fw-semibold); }
+
+  .editor-dialog__actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-10) var(--space-md);
+    border-top: 0.5px solid var(--color-border);
+  }
+
+  /* Schiebt die nachfolgenden Tasten an den rechten Rand der Aktionsleiste. */
+  .editor-dialog__spacer { flex: 1 1 auto; }
+
+}

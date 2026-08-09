@@ -20,7 +20,7 @@
   background: var(--color-dev-banner-bg);
   color: var(--color-dev-banner-text);
   font-size: var(--font-size-sm);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   border-radius: var(--radius-sm);
   letter-spacing: 0.03em;
 }
@@ -40,7 +40,7 @@
   color: var(--color-err-text);
   border-bottom: 2px solid var(--color-err-border);
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   box-shadow: var(--shadow-sm);
 }
 .session-banner-text { flex: 0 1 auto; }
@@ -53,7 +53,7 @@
   border-radius: var(--radius-sm);
   text-decoration: none;
   font: inherit;
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   cursor: pointer;
 }
 .session-banner-btn:hover { background: var(--color-session-banner-btn-hover); }
@@ -66,7 +66,7 @@
 :root:has(.focus-editor.is-active) .session-banner--offline {
   padding: 0.15rem 0.6rem;
   font-size: var(--font-size-xs);
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   background: transparent;
   color: var(--color-muted);
   border-bottom: none;

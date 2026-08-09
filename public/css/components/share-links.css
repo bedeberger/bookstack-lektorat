@@ -1,3 +1,4 @@
+@layer components {
 /* Owner-Karte "Geteilte Links" — Liste der vom User erstellten Share-Tokens.
    Akzent über --card-accent (Mapping in card-accents.css, Hue in tokens/colors.css). */
 
@@ -16,7 +17,7 @@
 .share-create__title {
   margin: 0 0 var(--space-xs);
   font-size: 14px;
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--color-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -62,7 +63,7 @@
 .share-list__title {
   margin: 0 0 var(--space-md);
   font-size: 14px;
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--color-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -95,7 +96,7 @@
   gap: var(--space-sm);
 }
 .share-row__target {
-  font-weight: 500;
+  font-weight: var(--fw-medium);
 }
 .share-row__kind {
   font-size: 12px;
@@ -140,10 +141,10 @@
   display: inline-block;
   padding: var(--space-1) var(--space-6);
   background: var(--card-accent);
-  color: #fff;
+  color: var(--color-on-accent-fill);
   border-radius: var(--radius-sm);
   font-size: 11px;
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .share-row__url {
@@ -285,4 +286,5 @@
   .share-row__head { flex-direction: column; align-items: flex-start; }
   .share-row__url { flex-direction: column; align-items: stretch; }
   .share-depth-row__label { flex-basis: 32%; }
+}
 }

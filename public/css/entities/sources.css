@@ -1,3 +1,4 @@
+@layer components {
 /* Quellenverzeichnis — kuratierte Quellen + Fund-Index („n× zitiert").
    Akzentfarbe via var(--card-accent) (Mapping in card-accents.css).
    Die Vorschau-Zeile `.sources-preview` wird auch im Quellen-Tab der
@@ -63,7 +64,7 @@
   flex-direction: column;
   gap: var(--space-6);
 }
-.sources-title { font-weight: 600; }
+.sources-title { font-weight: var(--fw-semibold); }
 .sources-container {
   font-size: var(--font-size-mini);
   color: var(--color-muted);
@@ -128,7 +129,7 @@
   margin-bottom: var(--space-sm);
 }
 .sources-form-title {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   font-size: var(--font-size-sm);
 }
 
@@ -173,7 +174,7 @@
 .sources-citations-head .icon { width: 1em; height: 1em; }
 .sources-citations-title {
   flex: 1;
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   font-size: var(--font-size-sm);
 }
 
@@ -230,7 +231,7 @@
 }
 .sources-picker-head .icon { width: 1em; height: 1em; }
 .sources-picker-title {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   font-size: var(--font-size-sm);
 }
 .sources-picker-search { flex: 1; min-width: 8rem; }
@@ -265,7 +266,7 @@
   font-size: var(--font-size-mini);
   color: var(--color-muted);
 }
-.sources-picker-entry-title { font-weight: 600; }
+.sources-picker-entry-title { font-weight: var(--fw-semibold); }
 .sources-picker-meta {
   display: flex;
   align-items: center;
@@ -294,7 +295,7 @@
 }
 .sources-quote-stat-value {
   font-size: var(--font-size-lg);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   font-variant-numeric: tabular-nums;
   color: var(--card-accent, var(--color-accent));
 }
@@ -328,7 +329,7 @@
 }
 .sources-detect-head .icon { width: 1em; height: 1em; }
 .sources-detect-title {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   font-size: var(--font-size-sm);
   flex: 1;
 }
@@ -387,7 +388,7 @@
   gap: var(--space-xs);
   flex-wrap: wrap;
 }
-.sources-detect-entry-title { font-weight: 600; }
+.sources-detect-entry-title { font-weight: var(--fw-semibold); }
 .sources-detect-byline,
 .sources-detect-container {
   font-size: var(--font-size-mini);
@@ -518,7 +519,7 @@
 .sources-lib-search-head .collapsible-toggle {
   display: inline-flex; align-items: center; gap: var(--space-2xs);
   background: none; border: none; padding: 0; color: var(--color-text);
-  font-size: var(--font-size-sm); font-weight: 600; cursor: pointer;
+  font-size: var(--font-size-sm); font-weight: var(--fw-semibold); cursor: pointer;
 }
 .sources-lib-search-body { margin-top: var(--space-3); }
 .sources-lib-hits { list-style: none; padding: 0; margin: var(--space-3) 0 0; display: flex; flex-direction: column; gap: var(--space-3); }
@@ -528,10 +529,10 @@
 }
 .sources-lib-hit-title {
   display: inline-flex; align-items: center; gap: var(--space-2xs);
-  font-weight: 600; color: var(--color-text);
+  font-weight: var(--fw-semibold); color: var(--color-text);
 }
 .sources-lib-hit-citekey {
-  color: var(--color-muted); font-size: var(--font-size-xs); font-weight: 400;
+  color: var(--color-muted); font-size: var(--font-size-xs); font-weight: var(--fw-regular);
   font-variant-numeric: tabular-nums;
 }
 .sources-lib-hit-snippet {
@@ -543,4 +544,5 @@
 
 @media (max-width: 960px) {
   .sources-lib-search { padding: var(--space-3); }
+}
 }

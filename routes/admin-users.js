@@ -14,6 +14,7 @@ const appSettings = require('../lib/app-settings');
 
 const express = require('express');
 const appUsers = require('../db/app-users');
+const aiProfiles = require('../db/ai-profiles');
 const mailer = require('../lib/mailer');
 const { buildInviteUrl } = require('../lib/invite-url');
 const { requireAdmin } = require('../lib/admin-mw');
@@ -24,6 +25,21 @@ const logger = require('../logger');
 // der Admin ungeduldig wird. Klick-Tracking gibt dem Admin sonst keinen
 // Grund mehr fuer schnelle Wiederholung.
 const REMINDER_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+// Faehrt dieses Profil effektiv gegen eine erreichbare Konfiguration? Ein NULL-Feld
+// im Profil bedeutet „globaler Wert" — die Pruefung muss darum beide Ebenen ansehen,
+// nicht nur die Profil-Spalte. Rueckgabe: der fehlende Provider (Detail fuer die
+// Fehlerantwort) oder null, wenn alles da ist.
+function _profileConfigGap(prof) {
+  const eff = (key) => {
+    const v = prof[key];
+    return (v === null || v === undefined || v === '') ? appSettings.get(`ai.${prof.provider}.${key}`) : v;
+  };
+  if (prof.provider === 'claude') {
+    return (prof.has_api_key || appSettings.get('ai.claude.api_key')) ? null : 'claude';
+  }
+  return eff('host') ? null : prof.provider;
+}
 
 const router = express.Router();
 router.use(requireAdmin);
@@ -138,7 +154,7 @@ router.put('/:email', express.json(), (req, res) => {
   const user = appUsers.getUser(target);
   if (!user) return res.status(404).json({ error_code: 'USER_NOT_FOUND' });
 
-  const { global_role, status, can_invite_users, monthly_budget_usd, budget_mode, ai_provider_override } = req.body || {};
+  const { global_role, status, can_invite_users, monthly_budget_usd, budget_mode, ai_profile_id } = req.body || {};
   const ip = _clientIp(req);
   const userAgent = req.headers['user-agent'] || null;
   const actor = req.session.user.email;
@@ -182,28 +198,27 @@ router.put('/:email', express.json(), (req, res) => {
       return res.status(400).json({ error_code: 'BUDGET_INVALID', detail: e.message });
     }
   }
-  // AI-Provider-Override. NULL/'' = follows global ai.provider.
-  // Validierung: Provider muss konfiguriert sein. Ollama/OpenAI-kompatibel brauchen host.
-  if (ai_provider_override !== undefined) {
-    const next = (ai_provider_override === null || ai_provider_override === '') ? null : String(ai_provider_override).toLowerCase();
-    if (next !== null && !['claude','ollama','openai-compat'].includes(next)) {
-      return res.status(400).json({ error_code: 'AI_PROVIDER_INVALID' });
+  // KI-Profil-Zuweisung. NULL/'' = User folgt dem globalen ai.provider samt globaler
+  // Parameter. Validiert wird die Erreichbarkeit der Konfiguration, die dieses Profil
+  // effektiv faehrt: ein Profil ohne eigenen Host/Key faellt auf die globalen Werte
+  // zurueck — fehlen die auch, waere die Zuweisung eine Zusage, die kein Call einloest.
+  if (ai_profile_id !== undefined) {
+    const next = (ai_profile_id === null || ai_profile_id === '') ? null : parseInt(ai_profile_id, 10);
+    if (next !== null && !Number.isInteger(next)) {
+      return res.status(400).json({ error_code: 'AI_PROFILE_INVALID' });
     }
-    if (next === 'ollama' && !appSettings.get('ai.ollama.host')) {
-      return res.status(400).json({ error_code: 'AI_PROVIDER_NOT_CONFIGURED', detail: 'ollama' });
+    if (next !== null) {
+      const prof = aiProfiles.getProfile(next);
+      if (!prof) return res.status(404).json({ error_code: 'AI_PROFILE_NOT_FOUND' });
+      const missing = _profileConfigGap(prof);
+      if (missing) return res.status(400).json({ error_code: 'AI_PROVIDER_NOT_CONFIGURED', detail: missing });
     }
-    if (next === 'openai-compat' && !appSettings.get('ai.openai-compat.host')) {
-      return res.status(400).json({ error_code: 'AI_PROVIDER_NOT_CONFIGURED', detail: 'openai-compat' });
-    }
-    if (next === 'claude' && !appSettings.get('ai.claude.api_key')) {
-      return res.status(400).json({ error_code: 'AI_PROVIDER_NOT_CONFIGURED', detail: 'claude' });
-    }
-    if (next !== (user.ai_provider_override || null)) {
-      try { appUsers.setAiProviderOverride(target, next); }
-      catch (e) { return res.status(400).json({ error_code: 'AI_PROVIDER_INVALID', detail: e.message }); }
-      appUsers.recordAuditEvent(target, 'ai-provider-changed', {
+    if (next !== (user.ai_profile_id || null)) {
+      try { appUsers.setAiProfile(target, next); }
+      catch (e) { return res.status(400).json({ error_code: 'AI_PROFILE_INVALID', detail: e.message }); }
+      appUsers.recordAuditEvent(target, 'ai-profile-changed', {
         ip, userAgent,
-        meta: { from: user.ai_provider_override || null, to: next, by: actor },
+        meta: { from: user.ai_profile_id || null, to: next, by: actor },
       });
     }
   }

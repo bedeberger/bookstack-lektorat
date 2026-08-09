@@ -1,3 +1,4 @@
+@layer components {
 /* Fassungs-Reader: eine Fassung (book_snapshots) nur-lesend im Vollbild-Overlay,
    im Look des Bucheditors (Manuskript-Stream — die .book-editor-*-Klassen kommen
    aus editor/book/book-editor.css und werden hier read-only wiederverwendet).
@@ -28,7 +29,7 @@ body.snapshot-reader-open { overflow: hidden; overscroll-behavior: contain; }
 .snapshot-reader__backdrop {
   position: fixed;
   inset: 0;
-  background: rgb(0 0 0 / 45%);
+  background: var(--color-overlay);
   backdrop-filter: blur(2px);
 }
 
@@ -60,7 +61,7 @@ body.snapshot-reader-open { overflow: hidden; overscroll-behavior: contain; }
 }
 
 .snapshot-reader__titles { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.snapshot-reader__title { font-weight: 600; }
+.snapshot-reader__title { font-weight: var(--fw-semibold); }
 .snapshot-reader__date { color: var(--color-muted); font-size: 0.85em; }
 
 .snapshot-reader__export {
@@ -72,7 +73,7 @@ body.snapshot-reader-open { overflow: hidden; overscroll-behavior: contain; }
   padding: var(--space-md) var(--space-lg);
   border-bottom: var(--border-thin);
 }
-.snapshot-reader__export-label { font-weight: 600; margin-right: var(--space-xs); }
+.snapshot-reader__export-label { font-weight: var(--fw-semibold); margin-right: var(--space-xs); }
 .snapshot-reader__pdf { display: flex; align-items: center; gap: var(--space-sm); }
 
 .snapshot-reader__status { flex: none; padding: 0 var(--space-lg) var(--space-sm); font-size: 0.9em; }
@@ -175,4 +176,5 @@ body.snapshot-reader-open { overflow: hidden; overscroll-behavior: contain; }
   }
   .snapshot-reader__header { border-radius: 0; }
   .snapshot-reader__body { padding: var(--space-sm) var(--space-xs) var(--space-xl); }
+}
 }

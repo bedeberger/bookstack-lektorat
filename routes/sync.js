@@ -10,7 +10,7 @@ const { computePageIndex, writePageIndex, writeFigureMentionsForPageAllUsers, lo
 const { invalidateBookPageCache } = require('./jobs/chat');
 const { localIsoDate } = require('../lib/local-date');
 const searchIndex = require('../lib/search');
-const { htmlToPlainText } = require('../lib/html-text');
+const { htmlToPlainText, stripTableBlocks } = require('../lib/html-text');
 
 const router = express.Router();
 // Sync ist Write-Pfad (Pages-Upsert, Stats-Recompute) → editor+.
@@ -243,11 +243,17 @@ async function syncBook(bookId, ctx) {
       const text = htmlToText(pd.html || '');
       const { words, chars, tok, wordList, sentences } = computeStats(pd.html || '');
       const preview = text.trim().slice(0, PREVIEW_CHARS);
-      return { page_id: p.id, book_id: bookId, tok, words, chars, updated_at: p.updated_at || null, cached_at: now, wordList, sentences, preview, fullText: text };
+      // Zwei Textformen mit Absicht: `text` ist der Umfang (Tabellenzellen sind
+      // geschriebener Inhalt und zaehlen in page_stats + Volltextindex),
+      // `styleText` ist der Prosatext fuer die satzbasierten Stil-Metriken —
+      // dort ist „1.2 Mio" kein Satz und verzerrt Satzlaenge, Satzanfaenge und
+      // Flesch/LIX. Begruendung in lib/html-text.js#stripTableBlocks.
+      const styleText = htmlToText(stripTableBlocks(pd.html || ''));
+      return { page_id: p.id, book_id: bookId, tok, words, chars, updated_at: p.updated_at || null, cached_at: now, wordList, sentences, preview, fullText: text, styleText };
     }));
     for (const r of results) {
       if (r.status === 'fulfilled') {
-        const { wordList, sentences, preview, fullText, ...statsItem } = r.value;
+        const { wordList, sentences, preview, fullText, styleText, ...statsItem } = r.value;
         statsItems.push(statsItem);
         previewItems.push({ page_id: r.value.page_id, preview_text: preview || null });
         totalWords += r.value.words;
@@ -256,7 +262,9 @@ async function syncBook(bookId, ctx) {
         totalSentences += sentences;
         for (const w of wordList) globalWordSet.add(w.toLowerCase());
 
-        const indexResult = computePageIndex(fullText, { extraStopwords });
+        // Stil-Index auf dem Prosatext, Figuren-Erwaehnungen auf dem Volltext:
+        // eine in einer Tabellenzelle genannte Figur ist genannt.
+        const indexResult = computePageIndex(styleText, { extraStopwords });
         indexItems.push({ page_id: r.value.page_id, index: indexResult, fullText });
       }
     }

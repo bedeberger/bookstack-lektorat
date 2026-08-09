@@ -25,7 +25,7 @@
 .overview-review-date { color: var(--color-muted); font-size: var(--font-size-xs); }
 .overview-review-trend {
   font-variant-numeric: tabular-nums;
-  font-weight: 500;
+  font-weight: var(--fw-medium);
 }
 
 @media (max-width: 480px) {

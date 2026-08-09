@@ -47,7 +47,7 @@
     border-bottom: 1px solid var(--color-border);
   }
   .plot-vorschlag-body { flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; }
-  .plot-vorschlag-label { font-size: var(--font-size-sm); font-weight: 600; color: var(--color-text); }
+  .plot-vorschlag-label { font-size: var(--font-size-sm); font-weight: var(--fw-semibold); color: var(--color-text); }
   .plot-vorschlag-begruendung { font-size: var(--font-size-xs); color: var(--color-muted); }
 
   /* ── Consistency-Panel ─────────────────────────────────────────────────── */
@@ -80,7 +80,7 @@
      ganzen Akkordeon-Zeile unerwünscht — Signal ist Border-Color + Chevron. */
   .plot-konflikt.internal-link:hover { opacity: 1; text-decoration: none; }
   .plot-konflikt-head { display: flex; align-items: center; gap: var(--space-xs); }
-  .plot-konflikt-beat { font-weight: 600; font-size: var(--font-size-xs); color: var(--color-text); flex: 0 0 auto; }
+  .plot-konflikt-beat { font-weight: var(--fw-semibold); font-size: var(--font-size-xs); color: var(--color-text); flex: 0 0 auto; }
   .plot-konflikt-problem { font-size: var(--font-size-xs); color: var(--color-muted); flex: 1 1 auto; overflow-wrap: anywhere; }
   /* Klickbare Textbeleg-Fundstelle im Befund — dezenter Akzent-Chip, springt an
      die belegende Manuskript-Stelle (semantische Verankerung). */
@@ -158,55 +158,8 @@
   .plot-legend-item { display: inline-flex; align-items: center; gap: var(--space-2xs); }
   .plot-legend-swatch { width: 10px; height: 10px; border-radius: var(--radius-sm); flex: 0 0 auto; }
 
-  /* ── Akt-Farbe (Swatch + Palette-Popover) ──────────────────────────────── */
-  .plot-color-swatch-wrap { position: relative; flex: 0 0 auto; display: flex; }
-  .plot-color-swatch {
-    width: 14px; height: 14px;
-    padding: 0;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm);
-    background: var(--col-accent);
-    cursor: pointer;
-  }
-  .plot-color-swatch:hover { background: var(--col-accent); border-color: var(--color-text); }
-  .plot-color-popover {
-    position: absolute;
-    top: calc(100% + var(--space-2xs));
-    left: 0;
-    z-index: var(--z-popover);
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2xs);
-    width: 132px;
-    padding: var(--space-xs);
-    background: var(--color-card-bg);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm);
-    box-shadow: var(--shadow-md);
-  }
-  .plot-color-opt {
-    width: 18px; height: 18px;
-    padding: 0;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm);
-    background: var(--col-accent);
-    cursor: pointer;
-  }
-  /* button:hover (gleiche @layer) wuerde den Swatch-Hintergrund ueberschreiben — re-asserten. */
-  .plot-color-opt:hover { background: var(--col-accent); transform: scale(1.1); }
-  .plot-color-opt--on { outline: 2px solid var(--color-text); outline-offset: 1px; }
-  .plot-color-opt--none, .plot-color-opt--none:hover {
-    background: var(--color-card-bg);
-    position: relative;
-    overflow: hidden;
-    transform: none;
-  }
-  .plot-color-opt--none::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(to top right, transparent 44%, var(--color-err-border) 44%, var(--color-err-border) 56%, transparent 56%);
-  }
+  /* Akt-/Strang-Farbe: Swatch + Palette-Popover via .color-picker*
+     (components/color-picker.css), geteilt mit der Motiv-Werkstatt. */
 
   /* ── Beat-Intensität (Signal-Meter in der Kopfzeile) ───────────────────── */
   .plot-beat-intensity {

@@ -23,43 +23,6 @@
   .card--szenen .entity-row .kapitel-badges { display: inline-flex; }
 }
 
-/* === Figuren-Karte: Szenen-Sub-Liste === */
-.figur-szenen-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-6);
-  margin: var(--space-xs) 0 10px 0;
-}
-
-.figur-szene-item {
-  background: var(--color-card-bg);
-  border: 1px solid var(--color-border);
-  padding: var(--pad-btn-compact);
-}
-
-.figur-szene-header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  margin-bottom: var(--space-3);
-}
-
-.figur-szene-ort {
-  font-size: var(--font-size-xs);
-  color: var(--color-muted);
-}
-
-.figur-szene-titel {
-  font-size: var(--font-size-sm);
-  font-weight: 400;
-}
-
-.figur-szene-kommentar {
-  font-size: var(--font-size-mini);
-  color: var(--color-muted);
-  margin-top: var(--space-3);
-}
-
 /* === Szenen-Karte: Übersichts-Grid (Figur / Kapitel / Seite, klappbar) === */
 .szenen-uebersicht {
   padding: var(--space-xs) 0 12px;
@@ -97,7 +60,7 @@
   cursor: default;
 }
 .szenen-kapitel-name {
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   max-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -123,7 +86,7 @@
 /* === Szenen-Übersicht: Zähler pro Figur === */
 .szenen-figur-count-badge {
   font-size: var(--font-size-micro);
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   padding: var(--space-1) 7px;
   border-radius: 0;
   background: var(--color-tag-bg);

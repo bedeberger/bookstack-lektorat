@@ -144,7 +144,7 @@ body.palette-open { overflow: hidden; overscroll-behavior: contain; }
 .focus-editor__title {
   font-family: var(--font-serif);
   font-size: var(--font-size-lg);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   letter-spacing: -0.01em;
   color: var(--color-text);
   overflow: hidden;

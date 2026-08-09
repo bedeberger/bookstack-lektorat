@@ -1,39 +1,17 @@
 @layer components {
 /* TTS / Proof-Listening: schwebender Vorlese-Dock unten LINKS ueber dem
-   Seitentext (sticky/floating-Mechanik, an die linke Ecke verankert). */
+   Seitentext. Form/Tasten/Pille kommen aus components/floating-dock.css
+   (.dock/.dock-btn/.dock-status) — hier steht nur die Verankerung und der
+   akzentfarbene Wiedergabe-Zustand. Pendant im Share-Reader: share/tts.css. */
 .tts-dock {
   position: sticky;
   bottom: var(--space-sm);
   align-self: flex-start;
   margin-left: var(--space-sm);
   margin-top: calc(-1 * (36px + var(--space-sm)));
-  z-index: var(--z-spellcheck, 9);
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  pointer-events: none;
+  z-index: var(--z-spellcheck);
 }
-.tts-dock > * { pointer-events: auto; }
 
-.tts-dock-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-muted);
-  cursor: pointer;
-  box-shadow: var(--shadow-sm);
-  transition: color 0.2s, border-color 0.2s, background 0.2s;
-}
-.tts-dock-btn .icon { width: 18px; height: 18px; }
-.tts-dock-btn:hover { color: var(--color-primary); border-color: var(--color-primary); }
-/* Kleinere Sekundaer-Tasten (Skip/Stop) neben der Haupttaste. */
-.tts-dock-btn--sub { width: 30px; height: 30px; }
-.tts-dock-btn--sub .icon { width: 15px; height: 15px; }
 /* Aktive Wiedergabe: akzentfarbene Haupttaste mit ruhigem Puls. */
 .tts-dock-btn.is-reading[aria-pressed="true"] {
   border-color: var(--color-accent);
@@ -46,30 +24,7 @@
   50%      { box-shadow: 0 0 0 5px color-mix(in srgb, var(--color-accent) 0%, transparent); }
 }
 
-/* Status-Pill rechts vom Vorlese-Button (Satz-Fortschritt / „pausiert"). */
-.tts-dock .tts-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: var(--space-3) var(--space-6);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
-  font-size: var(--font-size-xs);
-  line-height: 1;
-  color: var(--color-muted);
-  white-space: nowrap;
-  user-select: none;
-}
-.tts-dock .tts-status::before {
-  content: "";
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--color-muted);
-  flex: none;
-}
+/* Status-Pille rechts vom Vorlese-Button (Satz-Fortschritt / „pausiert"). */
 .tts-dock .tts-status.is-reading {
   color: var(--color-accent);
   border-color: color-mix(in srgb, var(--color-accent) 40%, transparent);
@@ -82,10 +37,6 @@
 @keyframes ttsDotBreathe {
   0%, 100% { opacity: 1; }
   50%      { opacity: 0.5; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .tts-dock-btn.is-reading[aria-pressed="true"] { animation: none; }
-  .tts-dock .tts-status::before { animation: none !important; }
 }
 
 /* Der gerade vorgelesene Satz: weiche akzentfarbene Markierung in der

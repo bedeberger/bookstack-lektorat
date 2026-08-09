@@ -1,14 +1,13 @@
-import { escHtml } from '../utils.js';
+import { graphPlaceholder } from '../graph-kit.js';
 
 // Familienbaum: hierarchisches Layout, nur Familien-Edges.
-// innerHTML mit escHtml() — Escape-Invariante aus harten Regeln eingehalten.
 export const familiengraphMethods = {
   _renderFamiliengraph(container) {
     const figuren = this._graphFiguren();
     const { edgeList } = this._buildEdges(/* soziogrammModus */ false);
     const familyEdges = edgeList.filter(e => ['elternteil', 'kind', 'geschwister'].includes(e.typ));
     if (!familyEdges.length) {
-      container.innerHTML = `<span class="muted-msg muted-msg--block">${escHtml(window.__app.t('graph.empty.familie'))}</span>`;
+      graphPlaceholder(container, window.__app.t('graph.empty.familie'));
       return;
     }
     const familyIds = new Set();

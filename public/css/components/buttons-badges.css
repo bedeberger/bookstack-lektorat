@@ -41,7 +41,7 @@ button.danger:hover { background: var(--color-err-bg); }
   margin-left: var(--space-6);
   padding: 0 6px;
   font-size: var(--font-size-xs);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   line-height: 1.4;
   background: var(--color-border);
   color: var(--color-text);
@@ -59,7 +59,7 @@ button.primary .btn-count {
   font-size: var(--font-size-mini);
   padding: var(--space-3) 10px;
   border-radius: 0;
-  font-weight: 400;
+  font-weight: var(--fw-regular);
 }
 .badge-warn { background: var(--color-warn-bg); color: var(--color-warn-text); }
 .badge-ok   { background: var(--color-ok-bg);   color: var(--color-ok-text); }

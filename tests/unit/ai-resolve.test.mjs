@@ -1,4 +1,4 @@
-// resolveProvider Reihenfolge — User-Override > Global > Default.
+// resolveProvider Reihenfolge — KI-Profil des Users > Global > Default.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -21,6 +21,7 @@ function _bootstrap() {
   return {
     dir,
     appUsers: require_('../../db/app-users'),
+    aiProfiles: require_('../../db/ai-profiles'),
     appSettings: require_('../../lib/app-settings'),
     ai: require_('../../lib/ai'),
     teardown: () => { try { rmSync(dir, { recursive: true, force: true }); } catch {} },
@@ -43,32 +44,94 @@ test('resolveProvider: global ai.provider greift wenn kein Override', () => {
   } finally { ctx.teardown(); }
 });
 
-test('resolveProvider: Override gewinnt ueber Global', () => {
+test('resolveProvider: Profil gewinnt ueber Global', () => {
   const ctx = _bootstrap();
   try {
     ctx.appSettings.set('ai.provider', 'ollama');
     ctx.appUsers.createUser({ email: 'u@example.com' });
-    ctx.appUsers.setAiProviderOverride('u@example.com', 'claude');
+    const p = ctx.aiProfiles.createProfile({ name: 'Cloud', provider: 'claude' });
+    ctx.appUsers.setAiProfile('u@example.com', p.id);
     assert.equal(ctx.ai.resolveProvider({ userEmail: 'u@example.com' }), 'claude');
   } finally { ctx.teardown(); }
 });
 
-test('resolveProvider: NULL-Override faellt auf Global', () => {
+test('resolveProvider: geloeste Zuweisung faellt auf Global', () => {
   const ctx = _bootstrap();
   try {
     ctx.appSettings.set('ai.provider', 'openai-compat');
     ctx.appUsers.createUser({ email: 'u@example.com' });
-    ctx.appUsers.setAiProviderOverride('u@example.com', 'claude');
-    ctx.appUsers.setAiProviderOverride('u@example.com', null);
+    const p = ctx.aiProfiles.createProfile({ name: 'Cloud', provider: 'claude' });
+    ctx.appUsers.setAiProfile('u@example.com', p.id);
+    ctx.appUsers.setAiProfile('u@example.com', null);
     assert.equal(ctx.ai.resolveProvider({ userEmail: 'u@example.com' }), 'openai-compat');
   } finally { ctx.teardown(); }
 });
 
-test('setAiProviderOverride wirft bei ungueltigem Wert', () => {
+// Geloeschtes Profil haengt den User ab (FK ON DELETE SET NULL), statt ihn auf eine
+// tote ID zeigen zu lassen — er faellt zurueck auf den globalen Provider.
+test('Profil loeschen haengt zugewiesene User ab', () => {
   const ctx = _bootstrap();
   try {
+    ctx.appSettings.set('ai.provider', 'ollama');
     ctx.appUsers.createUser({ email: 'u@example.com' });
-    assert.throws(() => ctx.appUsers.setAiProviderOverride('u@example.com', 'gpt5'));
+    const p = ctx.aiProfiles.createProfile({ name: 'Cloud', provider: 'claude' });
+    ctx.appUsers.setAiProfile('u@example.com', p.id);
+    const { detachedUsers } = ctx.aiProfiles.deleteProfile(p.id);
+    assert.equal(detachedUsers, 1);
+    assert.equal(ctx.appUsers.getUser('u@example.com').ai_profile_id, null);
+    assert.equal(ctx.ai.resolveProvider({ userEmail: 'u@example.com' }), 'ollama');
+  } finally { ctx.teardown(); }
+});
+
+// Der Kern des Overlays: gesetzte Spalte gewinnt, NULL erbt den globalen Wert.
+test('aiSetting: Profil-Spalte ueberschreibt, NULL erbt global', () => {
+  const ctx = _bootstrap();
+  try {
+    const { aiSetting } = require_('../../lib/ai/profile');
+    ctx.appSettings.set('ai.openai-compat.model', 'global-model');
+    ctx.appSettings.set('ai.openai-compat.host', 'http://global:8080');
+    ctx.appUsers.createUser({ email: 'u@example.com' });
+    const p = ctx.aiProfiles.createProfile({ name: 'Kimi', provider: 'openai-compat', model: 'kimi-k2' });
+    ctx.appUsers.setAiProfile('u@example.com', p.id);
+    const opts = { userEmail: 'u@example.com' };
+    assert.equal(aiSetting('openai-compat', 'model', opts), 'kimi-k2');
+    assert.equal(aiSetting('openai-compat', 'host', opts), 'http://global:8080');
+  } finally { ctx.teardown(); }
+});
+
+// Ein Profil darf NUR seinen eigenen Provider ueberschreiben: sonst bekaeme ein
+// Call gegen einen anderen Provider die Parameter eines fremden Modells.
+test('aiSetting: Profil eines anderen Providers greift nicht', () => {
+  const ctx = _bootstrap();
+  try {
+    const { aiSetting } = require_('../../lib/ai/profile');
+    ctx.appSettings.set('ai.ollama.model', 'llama-global');
+    ctx.appUsers.createUser({ email: 'u@example.com' });
+    const p = ctx.aiProfiles.createProfile({ name: 'Kimi', provider: 'openai-compat', model: 'kimi-k2' });
+    ctx.appUsers.setAiProfile('u@example.com', p.id);
+    assert.equal(aiSetting('ollama', 'model', { userEmail: 'u@example.com' }), 'llama-global');
+  } finally { ctx.teardown(); }
+});
+
+// Der Cache-Schluessel jedes Jobs enthaelt _modelName(provider). Zeigen zwei Profile
+// desselben Providers auf verschiedene Modelle, muessen sie verschiedene Namen
+// liefern — sonst treffen sie gegenseitig ihre Cache-Zeilen.
+test('_modelName folgt dem Profil (Cache-Schluessel trennt Modelle)', () => {
+  const ctx = _bootstrap();
+  try {
+    const { _modelName } = require_('../../routes/jobs/shared/model');
+    ctx.appSettings.set('ai.openai-compat.model', 'global-model');
+    ctx.appUsers.createUser({ email: 'a@example.com' });
+    ctx.appUsers.createUser({ email: 'b@example.com' });
+    const p1 = ctx.aiProfiles.createProfile({ name: 'A', provider: 'openai-compat', model: 'kimi-k2' });
+    const p2 = ctx.aiProfiles.createProfile({ name: 'B', provider: 'openai-compat', model: 'qwen3' });
+    ctx.appUsers.setAiProfile('a@example.com', p1.id);
+    ctx.appUsers.setAiProfile('b@example.com', p2.id);
+    const { runWithContext } = require_('../../lib/log-context');
+    const nameA = runWithContext({ user: 'a@example.com' }, () => _modelName('openai-compat'));
+    const nameB = runWithContext({ user: 'b@example.com' }, () => _modelName('openai-compat'));
+    assert.equal(nameA, 'kimi-k2');
+    assert.equal(nameB, 'qwen3');
   } finally { ctx.teardown(); }
 });
 
@@ -136,6 +199,22 @@ test('providerClass: ai.openai-compat.cloud flippt openai-compat auf cloud', () 
     assert.equal(ctx.ai.providerClass('openai-compat'), 'cloud');
     // Ollama bleibt immer local — der Schalter gilt nur fuer openai-compat.
     assert.equal(ctx.ai.providerClass('ollama'), 'local');
+  } finally { ctx.teardown(); }
+});
+
+// Der Cloud-Schalter lebt PRO PROFIL, nicht nur global: zwei openai-compat-Profile
+// (lokales llama.cpp + gehostetes Frontier-Modell) muessen verschiedene Klassen haben.
+test('providerClass: cloud-Spalte des Profils schlaegt den globalen Schalter', () => {
+  const ctx = _bootstrap();
+  try {
+    ctx.appUsers.createUser({ email: 'u@example.com' });
+    const p = ctx.aiProfiles.createProfile({ name: 'Kimi', provider: 'openai-compat', cloud: true });
+    ctx.appUsers.setAiProfile('u@example.com', p.id);
+    const opts = { userEmail: 'u@example.com' };
+    assert.equal(ctx.ai.providerClass('openai-compat', opts), 'cloud');
+    assert.equal(ctx.ai.effectiveProviderClass(opts), 'cloud');
+    // Ohne Profil bleibt es beim globalen Default (aus).
+    assert.equal(ctx.ai.providerClass('openai-compat', { userEmail: null }), 'local');
   } finally { ctx.teardown(); }
 });
 

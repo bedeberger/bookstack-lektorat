@@ -2,7 +2,7 @@
 const { randomUUID } = require('crypto');
 const logger = require('../../../logger');
 const { insertJobRun, endJobRun } = require('../../../db/schema');
-const { MAX_TOKENS_OUT } = require('../../../lib/ai');
+const { MAX_TOKENS_OUT, resolveProvider } = require('../../../lib/ai');
 const appSettings = require('../../../lib/app-settings');
 const { jobs, runningJobs, jobAbortControllers, jobQueue, jobKey, jobDedupKey } = require('./state');
 const { _scheduleJobCleanup } = require('./queue');
@@ -92,21 +92,22 @@ function createJob(type, bookId, userEmail, label, labelParams = null, dedupId =
   const id = randomUUID();
   const dedupValue = dedupId != null ? String(dedupId) : null;
   const key = jobKey(type, dedupValue ?? bookId, userEmail);
-  const provider = String(appSettings.get('ai.provider') || 'claude').toLowerCase();
+  // Effektiver (per-User aufgeloester) Provider, nicht der globale: der Job laeuft mit dem
+  // Provider des zugewiesenen KI-Profils, und job_runs.provider/model sind die Grundlage
+  // der Kostenrechnung. Ohne Aufloesung verbucht ein Profil-Lauf unter fremdem Tarif.
+  const provider = resolveProvider({ userEmail: userEmail || null });
   let model = _modelName(provider);
-  // Einzelne Job-Familien fahren ein eigenes Claude-Modell (Per-Job-Override in den
-  // App-Settings, gespiegelt von _komplettClaudeOverrides bzw. _bookChatClaudeOverrides).
-  // Dann muss job_runs.model das TATSÄCHLICH genutzte Modell spiegeln, nicht das globale —
-  // sonst verbucht das Kosten-Tracking z.B. einen Opus-Lauf zum Sonnet-Default-Tarif.
-  // Greift nur bei globalem Provider=claude (Override wird sonst ohnehin verworfen).
-  if (provider === 'claude') {
-    let overrideKey = null;
-    if (type === 'komplett-analyse' || type === 'kontinuitaet') overrideKey = 'ai.claude.model.komplett';
-    else if (type === 'book-chat') overrideKey = 'ai.claude.model.bookchat';
-    if (overrideKey) {
-      const overrideModel = String(appSettings.get(overrideKey) || '').trim();
-      if (overrideModel) model = overrideModel;
-    }
+  // Einzelne Job-Familien fahren ein eigenes Modell (Per-Job-Override in den App-Settings,
+  // gespiegelt von _komplettAiOverrides bzw. _bookChatClaudeOverrides). Dann muss
+  // job_runs.model das TATSÄCHLICH genutzte Modell spiegeln, nicht das globale — sonst
+  // verbucht das Kosten-Tracking z.B. einen Opus-Lauf zum Sonnet-Default-Tarif.
+  // Der Buch-Chat-Override bleibt claude-only (Tool-Use), der Komplett-Override nicht.
+  let overrideKey = null;
+  if (type === 'komplett-analyse' || type === 'kontinuitaet') overrideKey = `ai.${provider}.model.komplett`;
+  else if (type === 'book-chat' && provider === 'claude') overrideKey = 'ai.claude.model.bookchat';
+  if (overrideKey) {
+    const overrideModel = String(appSettings.get(overrideKey) || '').trim();
+    if (overrideModel) model = overrideModel;
   }
   jobs.set(id, {
     id, type, bookId: String(bookId), dedupId: dedupValue, userEmail: userEmail || null,

@@ -64,7 +64,7 @@
 .pdfx-hf-zone-title {
   display: block;
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--color-text);
   margin-bottom: 0.4rem;
 }
@@ -95,13 +95,13 @@
   cursor: pointer;
 }
 .pdfx-hf-sbtn b, .pdfx-hf-sbtn i { font-style: normal; font-weight: inherit; }
-.pdfx-hf-sbtn b { font-weight: 700; }
+.pdfx-hf-sbtn b { font-weight: var(--fw-bold); }
 .pdfx-hf-sbtn i { font-style: italic; }
 .pdfx-hf-sbtn:hover { border-color: var(--card-accent, var(--color-accent)); }
 .pdfx-hf-sbtn.is-on {
   background: var(--card-accent, var(--color-accent));
   border-color: var(--card-accent, var(--color-accent));
-  color: #fff;
+  color: var(--color-on-accent-fill);
 }
 .pdfx-hf-colhead {
   font-size: var(--font-size-xs);
@@ -149,7 +149,7 @@
 }
 .pdfx-font-group-title {
   font-size: var(--font-size-xs);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--color-muted);
@@ -166,7 +166,7 @@
   color: var(--color-muted);
   text-transform: none;
   letter-spacing: 0;
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   font-size: var(--font-size-xs);
 }
 /* „Für alle übernehmen" — überträgt die Familie dieser Rolle auf alle anderen.
@@ -219,7 +219,7 @@
   display: block;
   font-size: var(--font-size-xs);
   color: var(--color-muted);
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   text-transform: none;
   letter-spacing: 0;
   margin-top: 0.15rem;
@@ -245,12 +245,6 @@
   height: 100%;
   object-fit: contain;
 }
-/* Autorfoto-Variante: kleiner als das Cover (Portrait-Headshot, randfüllend). */
-.pdfx-author-preview {
-  width: 150px;
-  height: 190px;
-}
-.pdfx-author-preview img { object-fit: cover; }
 /* Niedrig-Auflösungs-Warnung nach Export (Druck-Tab / 300-dpi-Check). */
 .pdfx-lowres-warn { color: var(--color-warn-text); }
 /* KDP-Vorgaben-Block (Druck-Tab): 1-Klick-Preset + Bundsteg-Prüfung. */
@@ -271,7 +265,7 @@
 .pdfx-kdp-check .is-info { color: var(--color-muted); }
 /* Separates Umschlag-PDF (Cover-Tab): Live-Rückenbreite + Render-Aktion. */
 .pdfx-spine-width {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   font-variant-numeric: tabular-nums;
 }
 .pdfx-cover-spine-actions {
@@ -296,7 +290,7 @@
   background: var(--color-surface);
   color: var(--color-text);
   font-size: var(--size-compact-font-size);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   cursor: pointer;
   transition: background var(--transition-base), border-color var(--transition-base);
 }
@@ -318,7 +312,7 @@
     align-items: baseline;
     gap: 0.4rem;
     margin-top: 0.25rem;
-    font-weight: 600;
+    font-weight: var(--fw-semibold);
   }
 }
 @media (max-width: 480px) {

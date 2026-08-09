@@ -11,7 +11,7 @@
   align-items: center;
   justify-content: center;
   padding: var(--space-lg);
-  background: var(--color-shadow-strong, rgba(0, 0, 0, 0.4));
+  background: var(--color-shadow-strong);
 }
 
 .conflict-modal {
@@ -46,7 +46,7 @@
 .conflict-modal__title {
   margin: 0;
   font-size: var(--font-size-base);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .conflict-modal__bulk {

@@ -93,7 +93,7 @@ function buildCorpus() {
     join(ROOT, 'routes/auth.js'),
     join(ROOT, 'routes/jobs/folder-import.js'),
     join(ROOT, 'lib/wp-html.js'),
-    join(ROOT, 'lib/export-builders/epub.js'),
+    ...walk(join(ROOT, 'lib/export-builders/epub'), ['.js']),
     join(ROOT, 'lib/pdf-render/html-walker.js'),
   ];
   return [...new Set(files)]

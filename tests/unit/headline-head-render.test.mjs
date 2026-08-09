@@ -224,11 +224,14 @@ test('der Stream escapt Namen, reicht Kopf-Markup aber verbatim durch', () => {
 test('alle Export-Builder konsultieren die Kopf-SSoT', () => {
   // Wer den Seitennamen direkt rendert, zeigt „Beitrag 12" statt der
   // Schlagzeile — und das fällt in einem Export niemandem sofort auf.
-  const wege = ['html.js', 'md.js', 'txt.js', 'epub.js', 'docx.js', 'substack.js'];
+  const wege = ['html.js', 'md.js', 'txt.js', 'docx.js', 'substack.js'];
   for (const w of wege) {
     const src = fs.readFileSync(path.join(ROOT, 'lib/export-builders', w), 'utf8');
     assert.match(src, /require\('\.\.\/headline-render'\)/, `${w} löst den Titel-Kopf nicht auf`);
   }
+  // EPUB ist auf ein Unterverzeichnis aufgeteilt; der Kopf entsteht im Orchestrator.
+  const ep = fs.readFileSync(path.join(ROOT, 'lib/export-builders/epub/build.js'), 'utf8');
+  assert.match(ep, /require\('\.\.\/\.\.\/headline-render'\)/, 'epub/build.js löst den Titel-Kopf nicht auf');
   // Der PDF-Renderer baut seine Blöcke in coalesce.js.
   const co = fs.readFileSync(path.join(ROOT, 'lib/pdf-render/coalesce.js'), 'utf8');
   assert.match(co, /require\('\.\.\/headline-render'\)/);

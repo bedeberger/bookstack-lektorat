@@ -38,9 +38,13 @@
 //             /config (globaler ai.provider, OHNE Per-User-Override). Steuert die
 //             Provider-Anzeige im Avatar-Menü; configurePrompts liest den Wert
 //             beim Boot separat aus cfg.
-//   effectiveProvider — per-User aufgelöster Provider (Override > global). Basis
-//             fürs Claude-only-Feature-Gating (Kontinuität/Erzählprofil-Karten via
-//             `requiresClaude` in feature-registry, _toggleCardGeneric-Guard).
+//   effectiveProvider — per-User aufgelöster Provider (Profil > global). Basis fürs
+//             Claude-only-Gating dessen, was eine Anthropic-API-Fähigkeit braucht
+//             (Recherche-Chat, Faktencheck).
+//   effectiveProviderClass — Klasse desselben Providers ('cloud' | 'local', SSoT
+//             lib/ai/config.js#providerClass). Basis fürs Modell-Klassen-Gating
+//             (Kontinuität/Erzählprofil-Karten via `requiresCloudModel` in
+//             feature-registry, _toggleCardGeneric-Guard).
 //   claudeModel / claudeMaxTokens / ollamaModel / openaiCompatModel — Modell-IDs
 //             + Output-Cap des jeweiligen Providers, rein fürs Avatar-Menü-Label.
 
@@ -59,6 +63,7 @@ export function registerConfigStore() {
     factcheckEnabled: false,
     apiProvider: 'claude',
     effectiveProvider: 'claude',
+    effectiveProviderClass: 'cloud',
     claudeModel: 'claude-sonnet-4-6',
     claudeMaxTokens: 64000,
     ollamaModel: 'llama3.2',

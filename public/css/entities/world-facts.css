@@ -62,7 +62,7 @@
 .weltfakten-row--nosubj { grid-template-columns: 1fr; }
 
 .weltfakten-subjekt {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--color-text);
   line-height: var(--lh-base);
   overflow-wrap: anywhere;

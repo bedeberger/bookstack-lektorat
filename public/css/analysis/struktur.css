@@ -18,7 +18,7 @@
   }
 
   .struktur-cell-title .internal-link {
-    font-weight: 600;
+    font-weight: var(--fw-semibold);
   }
 
   /* Die Textsorten-Combobox bleibt schmal: die Spalte soll die Tabelle nicht

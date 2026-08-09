@@ -59,4 +59,77 @@
 
         <p class="card-form-section-divider" x-text="$app.t('pdfExport.apparat.group.limits')"></p>
         <p class="card-form-field-note" x-text="$app.t('pdfExport.apparat.limits.hint')"></p>
+
+        <!-- Tabellensatz. Steht im Apparat-Tab, weil eine Tabelle wie der
+             Fussnotenapparat ein Satz-Element neben dem Fliesstext ist — kein
+             eigener Tab für sechs Regler. Gerendert wird in
+             lib/pdf-render/table.js. -->
+        <p class="card-form-section-divider" x-text="$app.t('pdfExport.table.group')"></p>
+        <p class="card-form-field-note" x-text="$app.t('pdfExport.table.hint')"></p>
+
+        <div class="card-form-grid">
+          <div class="card-form-row">
+            <label class="card-form-label" x-text="$app.t('pdfExport.table.width')"></label>
+            <div class="card-form-field">
+              <div x-data="combobox($app.t('pdfExport.table.width'))"
+                   x-modelable="value" x-model="activeProfile.config.table.width"
+                   x-effect="options = [{ value: 'full', label: $app.t('pdfExport.table.width.full') }, { value: 'auto', label: $app.t('pdfExport.table.width.auto') }]"
+></div>
+            </div>
+          </div>
+
+          <div class="card-form-row">
+            <label class="card-form-label" x-text="$app.t('pdfExport.table.borders')"></label>
+            <div class="card-form-field">
+              <div x-data="combobox($app.t('pdfExport.table.borders'))"
+                   x-modelable="value" x-model="activeProfile.config.table.borders"
+                   x-effect="options = [{ value: 'all', label: $app.t('pdfExport.table.borders.all') }, { value: 'horizontal', label: $app.t('pdfExport.table.borders.horizontal') }, { value: 'outer', label: $app.t('pdfExport.table.borders.outer') }, { value: 'none', label: $app.t('pdfExport.table.borders.none') }]"
+></div>
+            </div>
+          </div>
+
+          <div class="card-form-row card-form-row--top">
+            <label class="card-form-label" x-text="$app.t('pdfExport.table.rows')"></label>
+            <div class="card-form-field">
+              <label class="pdfx-check">
+                <input type="checkbox" x-model="activeProfile.config.table.zebra">
+                <span x-text="$app.t('pdfExport.table.zebraOn')"></span>
+              </label>
+              <label class="pdfx-check">
+                <input type="checkbox" x-model="activeProfile.config.table.headerRepeat">
+                <span x-text="$app.t('pdfExport.table.headerRepeatOn')"></span>
+              </label>
+              <p class="card-form-field-note" x-text="$app.t('pdfExport.table.headerRepeat.hint')"></p>
+            </div>
+          </div>
+
+          <div class="card-form-row">
+            <label class="card-form-label" x-text="$app.t('pdfExport.table.fontScale')"></label>
+            <div class="card-form-field">
+              <input type="text" x-data="numInput({ step: 0.05, min: 0.6, max: 1.2 })"
+                     x-modelable="value" x-model="activeProfile.config.table.fontScale"
+                     class="pdfx-num-input">
+              <p class="card-form-field-note" x-text="$app.t('pdfExport.table.fontScale.hint')"></p>
+            </div>
+          </div>
+
+          <div class="card-form-row">
+            <label class="card-form-label" x-text="$app.t('pdfExport.table.paddingPt')"></label>
+            <div class="card-form-field">
+              <input type="text" x-data="numInput({ step: 0.5, min: 0, max: 20 })"
+                     x-modelable="value" x-model="activeProfile.config.table.paddingPt"
+                     class="pdfx-num-input">
+            </div>
+          </div>
+
+          <div class="card-form-row">
+            <label class="card-form-label" x-text="$app.t('pdfExport.table.captionPosition')"></label>
+            <div class="card-form-field">
+              <div x-data="combobox($app.t('pdfExport.table.captionPosition'))"
+                   x-modelable="value" x-model="activeProfile.config.table.captionPosition"
+                   x-effect="options = [{ value: 'below', label: $app.t('pdfExport.table.caption.below') }, { value: 'above', label: $app.t('pdfExport.table.caption.above') }]"
+></div>
+            </div>
+          </div>
+        </div>
       </div>

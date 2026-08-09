@@ -1,3 +1,4 @@
+@layer components {
 /* Device-Token-Verwaltung (User-Settings → native Clients, z.B. Mac-Focus-Writer).
    Row-List-Layout (kein Table) — wenige Eintraege pro User. Reveal-Block zeigt
    den Klartext-Token einmalig nach Create. */
@@ -71,7 +72,7 @@
 }
 
 .device-tokens-name {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -117,4 +118,5 @@
   gap: var(--space-sm);
   flex-wrap: wrap;
   margin-top: var(--space-xs);
+}
 }

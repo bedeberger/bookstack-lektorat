@@ -1,3 +1,4 @@
+@layer components {
 /* Hilfe & Funktionen — statischer Funktionsueberblick (Karte `.card--help`).
    Feature-Grid spiegelt das Landing-Page-Layout (public-feature-grid), bleibt
    aber in der SPA-Karten-Optik. Akzent = globaler var(--color-accent), wie in
@@ -33,7 +34,7 @@
 .help-feature-title {
   margin: 0;
   font-size: var(--font-size-md);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--color-text);
 }
 
@@ -112,7 +113,7 @@
   background: var(--color-accent-bg);
   color: var(--color-accent-text);
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   font-variant-numeric: tabular-nums;
 }
 .welcome-step-body {
@@ -122,7 +123,7 @@
 }
 .welcome-step-title {
   font-size: var(--font-size-md);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--color-text);
 }
 .welcome-step-desc {
@@ -142,4 +143,5 @@
   .help-features { grid-template-columns: 1fr; }
   .help-feature { padding: var(--space-md); }
   .welcome-steps { max-width: 100%; }
+}
 }

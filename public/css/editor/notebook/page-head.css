@@ -141,7 +141,7 @@
   .page-head__field--dachzeile .page-head__input {
     font-family: var(--font-sans);
     font-size: var(--ph-kicker-size);
-    font-weight: 600;
+    font-weight: var(--fw-semibold);
     line-height: 1.3;
     text-transform: uppercase;
     letter-spacing: 0.08em;
@@ -152,7 +152,7 @@
   .page-head__field--titel .page-head__input {
     font-family: var(--font-serif);
     font-size: var(--ph-title-size);
-    font-weight: 700;
+    font-weight: var(--fw-bold);
     line-height: 1.18;
     letter-spacing: -0.01em;
     color: inherit;
@@ -162,7 +162,7 @@
   .page-head__field--lead .page-head__input {
     font-family: var(--font-serif);
     font-size: var(--ph-lead-size);
-    font-weight: 500;
+    font-weight: var(--fw-medium);
     line-height: 1.5;
     color: inherit;
   }
@@ -217,7 +217,7 @@
   .page-head .page-head__input::placeholder {
     color: var(--color-muted);
     opacity: 0.4;
-    font-weight: 400;
+    font-weight: var(--fw-regular);
   }
 
   /* Bedien-Affordanz ohne Rahmen: eine getönte Fläche, die per box-shadow nach

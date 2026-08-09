@@ -6,6 +6,7 @@ const {
   db,
   saveCheckpoint, loadCheckpoint, deleteCheckpoint,
   backfillLocationChaptersFromScenes,
+  rebuildFigureAppearances,
   saveFaktenToDb,
   getBookSettings,
 } = require('../../../db/schema');
@@ -16,56 +17,31 @@ const {
 const CONSOLIDATION_CP_TYPE = 'komplett-consolidation';
 const appUsers = require('../../../db/app-users');
 const bookAccess = require('../../../db/book-access');
-const { narrativeLabels } = require('../narrative-labels');
 const {
   makeJobLogger, updateJob, completeJob, failJob, i18nError, contentHttpError,
-  aiCall, toSystemBlocks, getPrompts, getBookPrompts,
-  loadOrderedBookContents, loadPageContents, groupByChapter, buildSinglePassBookText, cleanPageTextForClaude,
+  aiCall, getPrompts, getBookPrompts,
+  loadOrderedBookContents, loadPageContents, groupByChapter, buildSinglePassBookText, cleanPageTextForAi,
   chunkLimitsFor, resolveExtractSinglePassLimit, BATCH_SIZE, jobAbortControllers,
   _modelName, fmtTok, tps,
   createJob, enqueueJob, findActiveJobId,
-  retryOnTransientAi, settledAll,
   summarizeCostByPhase, formatCostByPhase,
 } = require('../shared');
+const { providerClass } = require('../../../lib/ai');
 const contentStore = require('../../../lib/content-store');
 const appSettings = require('../../../lib/app-settings');
 const { setContext } = require('../../../lib/log-context');
-const { runNonCritical, buildBookSystemBlockText, buildBookPagesSig, _stelleQuote, makePhaseTimer,
-  sampleChapters, computeCoverageScore, buildConsolidationSig } = require('./utils');
+const { runNonCritical, buildBookPagesSig, makePhaseTimer,
+  buildConsolidationSig } = require('./utils');
 const { loadAndValidateCheckpoint, restorePhase1FromCheckpoint } = require('./checkpoint');
-const { remapSzenen, remapAssignments, saveSzenenAndEvents, saveKontinuitaetResult,
+const { remapSzenen, remapAssignments, saveSzenenAndEvents,
         planSzenenMatch, resolveSzenenForSave } = require('./remap');
 const { judgeEntityPairs, isJudgeEnabled } = require('./entity-reconcile');
 const {
-  runPhase1, runPhase2, runPhase3, runPhase3Songs, runPhase3b, runZeitstrahl,
-  buildPrelimFigurenKompakt, runPhase3OrteCall, runErzaehlprofil, komplettMaxTokens,
+  runPhase1, runPhase2, runPhase3, runPhase3Songs, runPhase3b,
+  buildPrelimFigurenKompakt, runPhase3OrteCall, runErzaehlprofil,
+  runKontinuitaetPhase, runCoverageAudit,
 } = require('./phases');
-const { buildAnachronismusData, verifyKontinuitaetProbleme, _komplettClaudeOverrides, runAttributeContradictionCheck, resolveRemapNames } = require('./job-shared');
-
-// ── Coverage-Self-Audit (F2, nur Claude) ─────────────────────────────────────
-// Misst den Extraktions-Recall an einer Kapitel-Stichprobe: pro Sample bekommt das Modell
-// den Kapiteltext + die bekannten Figuren-/Ort-Namen und meldet Wiedererkannte + Fehlende.
-// Rein diagnostisch (kein DB-Schreibzugriff), non-critical. Läuft auf dem Extraktions-Tier.
-// Gibt `{ score, erkannt, fehlend, missingFiguren, missingOrte, sampledChapters }` oder null.
-async function runCoverageAudit(ctx, figurenNames, orteNames) {
-  const { jobId, bookName, call, tok, log, prompts, sys, groups, groupOrder, extractTier } = ctx;
-  const n = Math.max(0, Math.min(20, parseInt(appSettings.get('ai.komplett.coverage_audit_chapters'), 10) || 0));
-  if (n <= 0) return null;
-  const samples = sampleChapters(groups, groupOrder, n);
-  if (!samples.length) return null;
-  updateJob(jobId, { statusText: 'job.phase.coverageAudit' });
-  const cap = komplettMaxTokens(ctx.effectiveProvider);
-  const results = await settledAll(samples.map(s => () => retryOnTransientAi(() => call(jobId, tok,
-    prompts.buildCoverageAuditPrompt(bookName, s.name, s.chText, figurenNames, orteNames),
-    toSystemBlocks(sys.SYSTEM_KOMPLETT_EXTRAKTION_BLOCKS), null, null, cap, 0.2, null,
-    prompts.SCHEMA_COVERAGE_AUDIT, extractTier,
-  ), { log, label: `Coverage «${s.name}»` })), { concurrency: 3 });
-  const ok = results.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value);
-  if (!ok.length) { log.warn('Coverage-Audit: keine auswertbare Stichprobe.'); return null; }
-  const cov = computeCoverageScore(ok);
-  log.info(`Coverage-Audit: Score ${cov.score == null ? 'n/a' : cov.score} (${cov.erkannt} erkannt, ${cov.fehlend} fehlend) über ${ok.length}/${samples.length} Kapitel.`);
-  return { ...cov, sampledChapters: ok.length };
-}
+const { buildAnachronismusData, _komplettAiOverrides, resolveRemapNames } = require('./job-shared');
 
 // ── Job: Komplettanalyse ─────────────────────────────────────────────────────
 // Pipeline (token-optimiert):
@@ -96,12 +72,20 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
   // Ceiling fälschlich auf ai.claude.max_tokens_out kappen, während callAI intern den echten
   // Provider auflöst und z.B. openai-compat/ollama anspricht → vorzeitige Truncation.
   const effectiveProvider = provider || appSettings.get('ai.provider') || 'claude';
-  const overrides = _komplettClaudeOverrides(effectiveProvider);
+  // Strategie-Entscheidungen dieser Pipeline haengen an der KLASSE, nicht am Namen
+  // (SSoT: lib/ai/config.js#providerClass) — ein gehostetes Frontier-Modell ueber
+  // openai-compat kann dasselbe wie Claude. Am Namen bleibt nur, was eine
+  // Anthropic-API-Faehigkeit braucht (Tiered Routing, Prompt-Cache-Warmup,
+  // phase1_concurrency, web_search-Faktencheck). Details: docs/ai-providers.md.
+  const isCloudModel = providerClass(effectiveProvider) === 'cloud';
+  const overrides = _komplettAiOverrides(effectiveProvider);
   if (overrides) {
     setContext(overrides);
-    log.info(`Komplettanalyse-Claude-Override: ${JSON.stringify(overrides)} (global model=${appSettings.get('ai.claude.model')}, ctx=${appSettings.get('ai.claude.context_window')}, out=${appSettings.get('ai.claude.max_tokens_out')}, timeout=${appSettings.get('ai.claude.timeout_ms')}).`);
+    log.info(`Komplettanalyse-Override (${effectiveProvider}): ${JSON.stringify(overrides.aiJob)} `
+      + `(global model=${appSettings.get(`ai.${effectiveProvider}.model`)}, ctx=${appSettings.get(`ai.${effectiveProvider}.context_window`)}, `
+      + `out=${appSettings.get(`ai.${effectiveProvider}.max_tokens_out`)}, timeout=${appSettings.get(`ai.${effectiveProvider}.timeout_ms`)}).`);
   }
-  const komplettModel = overrides?.claudeModel || '';
+  const komplettModel = overrides?.aiJob?.model || '';
   // Tiered Routing (nur Claude): die mechanischen Extraktions-Calls laufen auf einem
   // EIGENEN Tier — anderes Modell UND andere Denk-Tiefe — als die Konsolidierung und das
   // Kontinuitäts-Urteil (die folgen dem job-weiten ALS-Modell/-Effort =
@@ -126,7 +110,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
   // Recall + Truncation-Risiko im 128K-Output). ai.komplett.extract_single_pass_cap > 0 zwingt
   // die Extraktion in kapitelweise Chunks (Gap-Pässe + Alias-Cluster greifen), während
   // Kontinuität/Erzählprofil weiter das ganze Buch sehen. Nur Claude.
-  const extractCapChars = effectiveProvider === 'claude'
+  const extractCapChars = isCloudModel
     ? Math.max(0, parseInt(appSettings.get('ai.komplett.extract_single_pass_cap'), 10) || 0)
     : 0;
   const extractSinglePassLimit = resolveExtractSinglePassLimit(singlePassLimit, extractCapChars);
@@ -173,11 +157,11 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     // Wirkt auf pageContents → schlägt automatisch in fullBookText UND
     // Multi-Pass-Chunks durch (beide werden aus pageContents gebaut).
     // P1 und P8 nutzen identischen Buchtext → 1h-Cache-Read in P8 bleibt intakt.
-    if (effectiveProvider === 'claude') {
+    if (isCloudModel) {
       let savedChars = 0;
       for (const p of pageContents) {
         const before = p.text.length;
-        p.text = cleanPageTextForClaude(p.text);
+        p.text = cleanPageTextForAi(p.text);
         savedChars += before - p.text.length;
       }
       if (savedChars > 0) log.info(`Buchtext-Preprocessing ${savedChars} Zeichen entfernt (Entities/Whitespace/ZWS).`);
@@ -209,10 +193,10 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     // Verhalten (extraktion.js) lesen dieselben Werte, kein Drift.
     const coverageAuditChapters = Math.max(0, Math.min(20,
       parseInt(appSettings.get('ai.komplett.coverage_audit_chapters'), 10) || 0));
-    const coverageFeedbackEnabled = effectiveProvider === 'claude'
+    const coverageFeedbackEnabled = isCloudModel
       && coverageAuditChapters > 0
       && appSettings.get('ai.komplett.coverage_feedback') !== false;
-    const sceneBackfillEnabled = effectiveProvider === 'claude'
+    const sceneBackfillEnabled = isCloudModel
       && appSettings.get('ai.komplett.scene_backfill') !== false;
     const sceneBackfillMinChars = Math.max(500, parseInt(appSettings.get('ai.komplett.scene_backfill_min_chars'), 10) || 3000);
     const figureBatchSize = Math.max(1, parseInt(appSettings.get('ai.komplett.figure_batch_size'), 10) || 20);
@@ -228,7 +212,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     // und die Umstellung sähe wirkungslos aus. Ohne Tiering sind beide Felder leer und
     // wir fallen wie bisher auf das Komplett-/Provider-Modell zurück.
     const cacheModel = extractTier.model || komplettModel || _modelName(effectiveProvider);
-    const singlePassAug = effectiveProvider === 'claude'
+    const singlePassAug = isCloudModel
       ? `:esp${extractCapChars}:cf${coverageFeedbackEnabled ? 1 : 0}:cac${coverageAuditChapters}:sb${sceneBackfillEnabled ? 1 : 0}:sbm${sceneBackfillMinChars}`
       : '';
     const effortAug = extractTier.effort ? `:ee${extractTier.effort}` : '';
@@ -314,10 +298,10 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     // finalen kanonischen fig_ids aufgelöst.
     // Single-Pass: kein AI-Call in P2/P3 → Parallelisierung bringt nichts.
     // Lokale Provider: sequentiell (Mutex serialisiert AI-Calls ohnehin).
-    const isMultiPassClaude = effectiveProvider === 'claude' && chapterFiguren.length > 1;
+    const isMultiPassParallel = isCloudModel && chapterFiguren.length > 1;
     let figuren, figNameToId, figNameToIdLower, figurenKompakt, isSinglePass;
     let orte, ortNameToId, ortNameToIdLower;
-    if (isMultiPassClaude) {
+    if (isMultiPassParallel) {
       const prelimFigKompakt = buildPrelimFigurenKompakt(chapterFiguren);
       const [p2Result, orteRaw] = await Promise.all([
         runPhase2(ctx, chapterFiguren, chapterAssignments, chapterSzenen),
@@ -382,6 +366,16 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     const szenenResult = saveSzenenAndEvents(bookIdInt, email, szenen, assignments, locIdToDbId, idMaps, log, jobId,
       { resolved: szenenResolved, matchHint: szeneHint && szeneHint.size ? szeneHint : null });
     backfillLocationChaptersFromScenes(bookIdInt, email);
+    // Kapitel-Auftritte neu aufbauen — Full-Replace, JETZT liegen alle drei Quellen vor:
+    // KI-`kapitel` aus Phase 2 (`figuren`) + die eben gespeicherten Szenen/Ereignisse.
+    // Phase 2 schreibt den Index bewusst nicht (Begründung an rebuildFigureAppearances).
+    // Non-fatal: bei Fehler bleibt der Stand des letzten vollständigen Laufs stehen.
+    try {
+      const { figuren: appFiguren, paare } = rebuildFigureAppearances(bookIdInt, email, figuren, idMaps);
+      log.info(`Kapitel-Auftritte neu aufgebaut – ${paare} Paare für ${appFiguren} Figuren (figure_appearances).`);
+    } catch (e) {
+      log.warn(`Kapitel-Auftritts-Aufbau fehlgeschlagen: ${e.message}`);
+    }
     pt.mark('P5 Szenen');
 
     const figKompakt = figuren.map(f => ({ name: f.name, typ: f.typ || 'andere', beschreibung: f.beschreibung || '' }));
@@ -393,132 +387,20 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     // Anachronismus-Kontext (nur bei echter Zeitlinie) – Daten stehen hier bereits in der DB
     // (Figuren-Events, Songs, Fakten alle vor Block 2 persistiert).
     const anachronismus = buildAnachronismusData(bookIdInt, email);
-    // Single-Pass nur bei Claude (voller Buchtext im 1h-Cache); sonst Fakten-Multi-Pass.
-    const kontMultiPass = !(totalChars <= singlePassLimit && effectiveProvider === 'claude');
-    // P8-Call als Closure – wird je nach Provider parallel oder sequentiell ausgeführt.
-    const runP8 = async () => {
-      try {
-        if (!kontMultiPass) {
-          log.info(`Kontinuität Single-Pass: ${fullBookText.length} Zeichen, ${figKompakt.length} Figuren, ${orteKompakt.length} Orte`);
-          const bookSystemBlock = { text: buildBookSystemBlockText(bookName, pageContents.length, fullBookText), ttl: '1h' };
-          return await retryOnTransientAi(() => call(jobId, tok,
-            prompts.buildKontinuitaetSinglePassPrompt(bookName, null, figKompakt, orteKompakt, narrativeLabels(getBookSettings(bookIdInt, email)), anachronismus),
-            [bookSystemBlock, ...toSystemBlocks(sys.SYSTEM_KONTINUITAET_BLOCKS, '1h')],
-            82, 97, komplettMaxTokens(effectiveProvider), 0.2, null, prompts.SCHEMA_KONTINUITAET_PROBLEME,
-          ), { log, label: 'Kontinuität Single-Pass (P8)' });
-        }
-        log.info(`Kontinuität facts-basiert: ${chapterFakten.length} Kapitel, ${figKompakt.length} Figuren`);
-        return await retryOnTransientAi(() => call(jobId, tok,
-          prompts.buildKontinuitaetCheckPrompt(bookName, chapterFakten, figKompakt, orteKompakt, anachronismus),
-          sys.SYSTEM_KONTINUITAET_BLOCKS, 82, 97, komplettMaxTokens(effectiveProvider), 0.2, null, prompts.SCHEMA_KONTINUITAET_PROBLEME,
-        ), { log, label: 'Kontinuität facts-basiert (P8)' });
-      } catch (e) {
-        if (e.name === 'AbortError') throw e;
-        // P8 ist die letzte, read-only Phase: Figuren/Orte/Szenen sind bereits gültig
-        // gespeichert. Ein Fehler hier (Trunkierung bei zu vielen Befunden, Parse-Fehler,
-        // erschöpfter Retry) darf den Katalog NICHT als „fehlgeschlagen" verwerfen.
-        // Kontinuität überspringen (vorheriges Ergebnis bleibt), Warnung sammeln, Job ok.
-        log.warn(`Kontinuitätsprüfung fehlgeschlagen (Katalog bleibt erhalten): ${e.message}`);
-        warnings.push({ key: 'job.warn.continuityFailed' });
-        return null;
-      }
-    };
-
-    let kontResult;
-    // P6 (Zeitstrahl) non-critical kapseln: ein Fehler im Zeitstrahl-DB-Save (oder im
-    // Konsolidierungs-Call, der im Fallback synchron speichert) darf den bereits gültig
-    // gespeicherten Katalog NICHT verwerfen — P6 ist Endphase, kein kritischer Pfad.
-    // AbortError (User-Cancel) muss aber durchschlagen → eigene Kapselung statt
-    // runNonCritical (das AbortError schluckt). runP8 ist intern bereits so abgesichert;
-    // damit kann keiner der beiden Promise.all-Zweige den Job über failJob kippen.
-    const runZeitstrahlSafe = async (opts) => {
-      try { await runZeitstrahl(ctx, opts); }
-      catch (e) {
-        if (e.name === 'AbortError') throw e;
-        log.warn(`Zeitstrahl-Phase fehlgeschlagen (Katalog bleibt erhalten): ${e.message}`);
-        warnings.push({ key: 'job.warn.timelineFailed' });
-      }
-    };
-    if (skipContinuity) {
-      // Teil-Lauf: P8 abgewählt. Der Zeitstrahl (P6) ist Kern-Katalog und läuft weiter;
-      // das vorherige Kontinuitäts-Ergebnis bleibt unangetastet (P8 ist read-only).
-      // Die Bar muss über den P8-Bereich (82..97) hinweg selbst vorrücken — sonst
-      // hängt sie bei 82, bis completeJob auf 100 springt.
-      // Kein eigener statusText: runZeitstrahl (nicht-silent) setzt seinen eigenen.
-      log.info('Kontinuitätsprüfung (P8) auf Wunsch übersprungen – bestehendes Ergebnis bleibt.');
-      await runZeitstrahlSafe();
-      updateJob(jobId, { progress: 97 });
-      kontResult = null;
-    } else if (effectiveProvider === 'claude') {
-      // Parallel: P6 silent, P8 ownt Bar (82..97).
-      updateJob(jobId, { progress: 82, statusText: 'job.phase.checkContinuity' });
-      const [, p8Out] = await Promise.all([
-        runZeitstrahlSafe({ silent: true }),
-        runP8(),
-      ]);
-      kontResult = p8Out;
-    } else {
-      // Kontinuitätsprüfung (P8) ist Claude-only — für lokale Provider übersprungen:
-      // ohne Single-Pass/Verify-Filter/Attribut-Check produziert der Fakten-Multi-Pass
-      // zu viele False Positives. Der Zeitstrahl (P6) ist Kern-Katalog und läuft weiter.
-      await runZeitstrahlSafe();
-      kontResult = null;
-    }
-    // Pflichtfeld-Check als Degradierung (P8 read-only → kein throw): ein schema-valides
-    // Ergebnis ohne «zusammenfassung» würde saveKontinuitaetResult wortlos null liefern
-    // (kein Befund, kein Hinweis) → der User hielte die Prüfung für sauber durchgelaufen.
-    if (kontResult && typeof kontResult.zusammenfassung === 'undefined') {
-      log.warn('Kontinuitätsprüfung: Pflichtfeld «zusammenfassung» fehlt – Ergebnis verworfen, Warnung gesammelt.');
-      warnings.push({ key: 'job.warn.continuityFailed' });
-      kontResult = null;
-    }
-    if (kontResult) {
-      // Multi-Pass-Befunde gegen den Originaltext verifizieren (False-Positive-Filter).
-      if (kontMultiPass && effectiveProvider === 'claude') {
-        kontResult = await verifyKontinuitaetProbleme(ctx, kontResult, 96, 97);
-      }
-    }
-
-    // ── F4: Attribut-Widerspruchs-Detektor (non-critical, nur Claude) ──────────
-    // Deterministisch gefundene Cross-Chapter-Widersprüche (Lebensereignis-Jahre, Welt-Fakten),
-    // die der fakten-basierte P8 pro Kapitel übersieht; das Modell (Konsolidierungs-Tier) urteilt.
-    // Bereits geurteilt → NICHT durch die verify-Stufe schleusen, sondern nach ihr einmischen.
-    // Mit abgewähltem P8 entfällt er mit: er ist ein ERGÄNZENDER Kontinuitäts-Detektor
-    // (seine Befunde werden in denselben Check geschrieben) — ihn allein laufen zu
-    // lassen würde den bestehenden Check mit einem fast leeren neuen überschreiben.
-    let attrFindings = [];
-    if (!skipContinuity && effectiveProvider === 'claude' && appSettings.get('ai.komplett.attribute_check') === true) {
-      try {
-        attrFindings = await runAttributeContradictionCheck(ctx, 97, 98);
-      } catch (e) {
-        if (e.name === 'AbortError') throw e;
-        log.warn(`Attribut-Widerspruchs-Detektor fehlgeschlagen (ignoriert): ${e.message}`);
-        warnings.push({ key: 'job.warn.attributeCheckFailed' });
-      }
-    }
-
-    if (kontResult) {
-      if (attrFindings.length) {
-        kontResult = { ...kontResult, probleme: [...(kontResult.probleme || []), ...attrFindings] };
-      }
-      // Single-Pass (Claude, voller Buchtext im Prompt): Beleg-Zitate gegen den Text
-      // prüfen. Multi-Pass-Claude hat die separate verify-Stufe; der Fakten-Pfad zitiert
-      // paraphrasiert → requireQuoteEvidence dort aus (false negatives sonst). Die
-      // F4-Befunde tragen keine «»-Zitate → von der Beleg-Prüfung unberührt.
-      saveKontinuitaetResult(bookIdInt, email, kontResult, figNameToId, idMaps.chNameToId, effectiveProvider, log,
-        { fullBookText, requireQuoteEvidence: !kontMultiPass });
-    } else if (attrFindings.length) {
-      // P8 selbst fehlgeschlagen/leer, aber der Attribut-Detektor fand Cross-Chapter-Widersprüche:
-      // eigenständig als Kontinuitäts-Check persistieren (nicht verlieren).
-      saveKontinuitaetResult(bookIdInt, email, { zusammenfassung: '', probleme: attrFindings },
-        figNameToId, idMaps.chNameToId, effectiveProvider, log, { requireQuoteEvidence: false });
-    }
+    // Single-Pass nur bei Cloud-Klasse (voller Buchtext im 1h-Cache); sonst Fakten-Multi-Pass.
+    const kontMultiPass = !(totalChars <= singlePassLimit && isCloudModel);
+    // Zeitstrahl (P6) + Kontinuität (P8) + Attribut-Detektor inkl. Persistenz —
+    // die Phase kapselt ihre Fehler selbst (read-only Endphasen, siehe dort).
+    await runKontinuitaetPhase(ctx, {
+      skipContinuity, isCloudModel, kontMultiPass,
+      figKompakt, orteKompakt, chapterFakten, anachronismus, figNameToId,
+    });
 
     pt.mark('Block 2 (Zeitstrahl+Kontinuität)');
 
     // ── Coverage-Self-Audit (F2, non-critical, nur Claude): Extraktions-Recall messbar machen ──
     let coverage = null;
-    if (effectiveProvider === 'claude') {
+    if (isCloudModel) {
       coverage = await runNonCritical('Coverage-Self-Audit',
         () => runCoverageAudit(ctx, figuren.map(f => f.name), orteKompakt.map(o => o.name)), log);
       if (coverage && coverage.score != null) {
@@ -532,14 +414,14 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     // Intensität und Themen/Motive pro Kapitel. Read-only Endphase wie Kontinuität –
     // ein Fehler darf den bereits gespeicherten Katalog nicht kippen. Läuft nur, wenn
     // der Konsolidierungs-Checkpoint NICHT griff (unveränderte Bücher überspringen sie
-    // oben komplett → das bestehende Profil bleibt gültig). Claude-only (wie
-    // Kontinuität ausgeblendet für Nicht-Claude); Kill-Switch
+    // oben komplett → das bestehende Profil bleibt gültig). Nur Cloud-Klasse (wie
+    // Kontinuität ausgeblendet für lokale Modelle); Kill-Switch
     // `ai.komplett.narrative_profile` (Default an; in Integration-Tests aus).
     if (skipNarrativeProfile) {
       // Teil-Lauf: read-only Endphase abgewählt, das bestehende Profil bleibt gültig.
       // Nachziehen über POST /jobs/erzaehlprofil (rechnet nur diese Phase neu).
       log.info('Erzählprofil auf Wunsch übersprungen – bestehendes Profil bleibt.');
-    } else if (effectiveProvider === 'claude' && appSettings.get('ai.komplett.narrative_profile') !== false) {
+    } else if (isCloudModel && appSettings.get('ai.komplett.narrative_profile') !== false) {
       await runNonCritical('Erzählprofil',
         () => runErzaehlprofil(ctx, { figNameToId, fromPct: 98, toPct: 99 }), log,
         { warnings, warnKey: 'job.warn.narrativeProfileFailed' });

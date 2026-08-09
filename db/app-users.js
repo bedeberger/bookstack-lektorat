@@ -24,7 +24,7 @@ const _stmtFindByEmail = db.prepare(`
          invited_by, invited_at, created_at, last_login_at,
          theme, default_buchtyp, default_language, default_region,
          focus_granularity, daily_goal_minutes,
-         monthly_budget_usd, budget_mode, ai_provider_override,
+         monthly_budget_usd, budget_mode, ai_profile_id,
          onboarding_state
     FROM app_users
    WHERE email = ?
@@ -82,35 +82,30 @@ const _stmtSetInviteFlag = db.prepare(`
 `);
 
 const _stmtListUsers = db.prepare(`
-  SELECT id, email, display_name, global_role, status, language,
-         can_invite_users, first_seen_at, last_seen_at, created_at,
-         monthly_budget_usd, budget_mode, ai_provider_override
-    FROM app_users
-   ORDER BY created_at DESC, email
+  SELECT u.id, u.email, u.display_name, u.global_role, u.status, u.language,
+         u.can_invite_users, u.first_seen_at, u.last_seen_at, u.created_at,
+         u.monthly_budget_usd, u.budget_mode, u.ai_profile_id,
+         p.name     AS ai_profile_name,
+         p.provider AS ai_profile_provider
+    FROM app_users u
+    LEFT JOIN ai_profiles p ON p.id = u.ai_profile_id
+   ORDER BY u.created_at DESC, u.email
 `);
 
-// Admin setzt Provider-Override pro User. NULL/'' loescht den Override
-// (User folgt global ai.provider). Validierung in der Route, hier nur Persistenz.
-const _stmtSetAiProvider = db.prepare(`
-  UPDATE app_users SET ai_provider_override = ? WHERE email = ?
+// Admin weist einem User ein KI-Profil zu. NULL/'' loescht die Zuweisung (User
+// folgt dann dem globalen ai.provider samt globaler Parameter). Validierung der
+// Existenz in der Route; hier nur Persistenz — der FK faengt eine tote ID ohnehin.
+const _stmtSetAiProfile = db.prepare(`
+  UPDATE app_users SET ai_profile_id = ? WHERE email = ?
 `);
-function setAiProviderOverride(email, provider) {
+function setAiProfile(email, profileId) {
   const e = _normEmail(email);
-  if (!e) throw new Error('setAiProviderOverride: email required');
-  const v = (provider === null || provider === undefined || provider === '') ? null : String(provider).toLowerCase();
-  // Allowlist aus lib/ai/config (VALID_PROVIDERS) statt einer eigenen Liste — die
-  // driftete auseinander: sie kannte 'openai-compat' nicht (Admin-Route erlaubt es,
-  // hier scheiterte es mit 400 AI_PROVIDER_INVALID → der Override war gar nicht
-  // setzbar) und akzeptierte umgekehrt ein 'llama', das resolveProvider verwirft
-  // (Row bliebe wirkungslos). Lazy require: lib/ai/config zieht seinerseits
-  // db/app-users, ein Top-Level-require ergaebe einen Zyklus.
-  if (v !== null) {
-    const { VALID_PROVIDERS } = require('../lib/ai/config');
-    if (!VALID_PROVIDERS.has(v)) {
-      throw new Error(`setAiProviderOverride: provider must be null|${[...VALID_PROVIDERS].map(p => `'${p}'`).join('|')}`);
-    }
-  }
-  _stmtSetAiProvider.run(v, e);
+  if (!e) throw new Error('setAiProfile: email required');
+  const v = (profileId === null || profileId === undefined || profileId === '')
+    ? null
+    : parseInt(profileId, 10);
+  if (v !== null && !Number.isInteger(v)) throw new Error('setAiProfile: profileId must be an integer or null');
+  _stmtSetAiProfile.run(v, e);
 }
 
 // Onboarding-Fortschritt (persistierter Teil: welcomeDismissed/completed) als
@@ -425,7 +420,7 @@ module.exports = {
   getUser, listUsers, getActiveAdminEmails, createUser, touchLogin,
   touchUserLastSeen, updateUserSettings, addUserActivity,
   setStatus, setGlobalRole, setCanInviteUsers, setBudget, softDeleteUser,
-  setAiProviderOverride, setOnboardingState,
+  setAiProfile, setOnboardingState,
   recordAuditEvent, listAuditForUser,
   createInvite, findInviteByToken, findInviteById, inviteStatus,
   acceptInvite, revokeInvite, listActiveInvites,

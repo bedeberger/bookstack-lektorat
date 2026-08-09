@@ -76,7 +76,7 @@ test('Modell-Prädikate: Generation, Output-Ceiling und Effort-Leiter konsistent
 test('Effort-Clamping: xhigh/max nur wo unterstützt, sonst auf high', () => {
   const { cfg, logCtx, teardown } = _bootstrap();
   try {
-    const effortFor = (model, effort) => logCtx.runWithContext({ claudeEffort: effort },
+    const effortFor = (model, effort) => logCtx.runWithContext({ aiJob: { provider: 'claude', effort } },
       () => cfg._claudeOutputConfigParams(model).output_config?.effort ?? null);
 
     for (const [model, , , acceptsEffort, allowsMax, allowsXhigh] of TABLE) {

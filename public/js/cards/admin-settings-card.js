@@ -2,6 +2,7 @@
 // State + Lifecycle hier, Show-Flag (`showAdminSettingsCard`) im Root.
 
 import { adminSettingsMethods } from '../admin/admin-settings.js';
+import { adminAiProfilesMethods } from '../admin/admin-ai-profiles.js';
 import { EVT } from '../events.js';
 
 export function registerAdminSettingsCard() {
@@ -17,6 +18,14 @@ export function registerAdminSettingsCard() {
     adminSettingsTab: 'auth',
     adminSettingsProviderSubtab: 'claude',
     adminSettingsTestResult: null,
+
+    // ── KI-Profile (Provider-Tab, Sub-Tab `profiles`) ───────────────────────
+    adminProfilesList: [],
+    adminProfilesLoading: false,
+    adminProfilesError: '',
+    adminProfilesEditing: false,
+    adminProfilesSaving: false,
+    adminProfilesForm: {},
 
     // ── API-Tokens (Tab `api`) — Prometheus/HA/Grafana-Scraper ──────────────
     adminApiTokensList: [],
@@ -35,6 +44,11 @@ export function registerAdminSettingsCard() {
         if (!visible) return;
         await this.adminSettingsLoad();
       });
+      // Profil-Liste erst beim Betreten des Sub-Tabs holen — die Karte oeffnet
+      // meistens fuer etwas anderes.
+      this.$watch('adminSettingsProviderSubtab', (t) => {
+        if (t === 'profiles' && !this.adminProfilesList.length) this.adminProfilesLoad();
+      });
       this._onViewReset = () => {
         this.adminSettingsError = '';
         this.adminSettingsTestResult = null;
@@ -47,5 +61,6 @@ export function registerAdminSettingsCard() {
     },
 
     ...adminSettingsMethods,
+    ...adminAiProfilesMethods,
   }));
 }

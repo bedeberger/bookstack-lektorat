@@ -242,7 +242,7 @@
   flex-shrink: 0;
 }
 .search-hit-title {
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--color-text);
 }
 .search-hit-chapter {

@@ -38,7 +38,7 @@
   align-items: center;
   gap: 4px;
   font-size: var(--font-size-micro);
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   padding: var(--space-1) 6px;
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--gz-subtyp-color, var(--color-accent)) 18%, var(--color-surface));
@@ -63,7 +63,7 @@
 /* Manuell bearbeitet — leichter Hinweis, keine starke Färbung. */
 .gz-manual-badge {
   font-size: var(--font-size-micro);
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   padding: var(--space-1) 6px;
   border-radius: var(--radius-sm);
   background: var(--color-tag-bg);

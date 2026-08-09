@@ -20,7 +20,7 @@
 }
 .admin-backup-meta dd {
   font-size: var(--font-size-base);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .admin-backup-section {
@@ -28,7 +28,7 @@
 }
 .admin-backup-section-title {
   font-size: var(--font-size-mini);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--color-muted);
@@ -45,7 +45,7 @@
 }
 .admin-backup-danger-title {
   font-size: var(--font-size-mini);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--color-err-text);
@@ -64,7 +64,7 @@
   margin-top: var(--space-md);
 }
 .admin-backup-confirm-ok {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--color-ok-text);
   margin: 0 0 var(--space-2xs);
 }

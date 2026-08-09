@@ -45,6 +45,18 @@ export function stripDiagramBlocks(html) {
   return String(html || '').replace(_DIAGRAM_BLOCK_RE, ' ');
 }
 
+// Tabellen. ANDERS ALS DIAGRAMME nicht generell ausgeschnitten — Zellinhalt ist
+// Text des Autors und zaehlt in `page_stats.chars/words`. Nur die satzbasierten
+// Masse (Wortschatz, Stil-Rhythmus) schneiden sie weg; das passiert
+// serverseitig. Der Export steht hier fuer die Parity mit
+// lib/html-text.js#stripTableBlocks — dort steht die Begruendung.
+const _TABLE_BLOCK_RE = /<table\b[^>]*>[\s\S]*?<\/table\s*>/gi;
+
+/** Tabellen aus HTML entfernen (Block → ein Space). */
+export function stripTableBlocks(html) {
+  return String(html || '').replace(_TABLE_BLOCK_RE, ' ');
+}
+
 export function htmlToPlainText(html) {
   return _decodeEntities(stripDiagramBlocks(html).replace(/<[^>]+>/g, ' '))
     .replace(/\s+/g, ' ')

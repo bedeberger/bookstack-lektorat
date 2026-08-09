@@ -25,7 +25,7 @@ const { callAIWithTools, parseJSON } = require('../../../lib/ai');
 const appSettings = require('../../../lib/app-settings');
 const { setContext } = require('../../../lib/log-context');
 const { makePhaseTimer } = require('./utils');
-const { _komplettClaudeOverrides } = require('./job-shared');
+const { _komplettAiOverrides } = require('./job-shared');
 
 // Modellname für den Cost-Ledger / Check-Zeile (parallel zu _modelName in remap.js).
 function _factcheckModelName(provider) {
@@ -115,7 +115,7 @@ async function runFaktencheckJob(jobId, bookId, bookName, userEmail, userToken, 
   const log = makeJobLogger(jobId);
   const pt = makePhaseTimer(log);
   const effectiveProvider = provider || appSettings.get('ai.provider') || 'claude';
-  const overrides = _komplettClaudeOverrides(effectiveProvider);
+  const overrides = _komplettAiOverrides(effectiveProvider);
   if (overrides) setContext(overrides);
 
   try {

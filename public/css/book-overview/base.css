@@ -94,7 +94,7 @@
 }
 .overview-cta-action {
   color: var(--color-primary);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   font-size: var(--font-size-sm);
 }
 
@@ -112,7 +112,7 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--color-muted);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 /* Tile-Head: Label + sekundäre Median-Anzeige nebeneinander. Genutzt von

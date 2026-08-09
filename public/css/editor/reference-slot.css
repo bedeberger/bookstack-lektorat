@@ -22,7 +22,7 @@
   margin-left: var(--space-xs);
   padding: 0 var(--space-3);
   font-size: var(--font-size-xs);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   line-height: 1.4;
   color: var(--color-muted);
   background: var(--color-border);
@@ -61,7 +61,7 @@
 }
 
 .reference-row-title {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--color-text);
 }
 
@@ -141,7 +141,7 @@
   font-variant-numeric: tabular-nums;
   color: var(--color-muted);
 }
-.reference-oton-who { font-weight: 600; }
+.reference-oton-who { font-weight: var(--fw-semibold); }
 .reference-oton-text {
   margin: var(--space-2xs) 0;
   overflow-wrap: anywhere;

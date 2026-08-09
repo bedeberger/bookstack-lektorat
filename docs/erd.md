@@ -1,6 +1,6 @@
 # ERD — schreibwerkstatt
 
-Stand: Schema-Version 270, 152 Tabellen (ohne `sqlite_*`/`schema_version`/FTS5-Shadow-Tables; inkl. FTS5-Virtual `search_index`/`search_trigram` + `search_meta`).
+Stand: Schema-Version 272, 153 Tabellen (ohne `sqlite_*`/`schema_version`/FTS5-Shadow-Tables; inkl. FTS5-Virtual `search_index`/`search_trigram` + `search_meta`).
 
 Quelle: Squashed-Schema-Snapshot in [db/squashed-schema.js](../db/squashed-schema.js) (regeneriert via `node tools/dump-schema.js`) + [db/migrations.js](../db/migrations.js). Drift gegen die Legacy-Migration-Kette ist durch [tests/unit/squash-drift.test.mjs](../tests/unit/squash-drift.test.mjs) gegated. Mermaid-Diagramme — in VSCode mit „Markdown Preview Mermaid Support" (oder GitHub) direkt sichtbar.
 
@@ -175,6 +175,7 @@ erDiagram
   app_users ||--o{ budget_alerts     : dedupes
   app_users ||--o{ user_dictionary   : owns
   app_users ||--o{ js_errors         : logs
+  ai_profiles ||--o{ app_users       : "assigned to"
   books     ||--o{ user_dictionary   : "scoped (NULL=global)"
 
   user_invites ||--o{ registration_requests : "linked invite"
@@ -450,6 +451,8 @@ erDiagram
     INTEGER bibliography_in_blog     "0|1, Verzeichnis an Blog-/HubSpot-Posts anhängen (dort ist die Einheit die Seite = ein Post)"
     TEXT    citation_notes           "inline = Kurzbeleg im Fliesstext | endnotes = Anmerkungsapparat pro Kapitel | footnotes = Apparat am Seitenfuss (PDF/Word; übrige Formate zeigen den Kapitelapparat)"
     TEXT    textsorte                "vorherrschende journalistische Textsorte (nachricht|bericht|reportage|interview|portraet|feature|kommentar|glosse|rezension) — Default für jede Seite ohne eigenen Override"
+    INTEGER figure_numbering         "0|1, Abbildungen kapitelweise nummerieren („Abb. 3.2\") — buchweit, nie pro Exportprofil"
+    INTEGER table_numbering          "0|1, Tabellen kapitelweise nummerieren („Tab. 3.2\") — eigener Zähler neben den Abbildungen"
     TEXT    updated_at
   }
   book_snapshots {
@@ -651,18 +654,20 @@ erDiagram
 
   xref_anchors {
     INTEGER page_id PK,FK "ON DELETE CASCADE"
-    TEXT    kind    PK "CHECK: figure"
+    TEXT    kind    PK "CHECK: figure | table"
     TEXT    bid     PK "data-bid des Ziel-Blocks (ensureBlockIds), kein eigenes Anker-Attribut"
-    INTEGER ord     "Position innerhalb der Seite; die buchweite Nummer entsteht erst beim Rendern"
-    TEXT    caption
+    INTEGER ord     "Position innerhalb der Seite, über beide Typen hinweg; die buchweite Nummer entsteht erst beim Rendern"
+    TEXT    caption "figcaption (Abbildung) bzw. caption (Tabelle) als Klartext"
     %% Reiner Ableitungs-Index der nummerierbaren Ziele. Kapitel stehen NICHT hier —
     %% chapters.chapter_id ist selbst der stabile Zeiger.
+    %% Abbildung und Tabelle zählen GETRENNT (xref-number.js): „Abb. 3.1" und
+    %% „Tab. 3.1" stehen im Fachbuch nebeneinander.
   }
   xref_links {
     INTEGER page_id      FK "ON DELETE CASCADE — Seite, die verweist"
-    TEXT    kind         "CHECK: chapter | figure"
+    TEXT    kind         "CHECK: chapter | figure | table"
     INTEGER chapter_id   FK "ON DELETE CASCADE — nur bei kind=chapter, sonst NULL"
-    TEXT    anchor_bid   "nur bei kind=figure, sonst NULL; bewusst kein FK auf xref_anchors"
+    TEXT    anchor_bid   "nur bei kind=figure|table, sonst NULL; bewusst kein FK auf xref_anchors"
     INTEGER count
     INTEGER first_offset
     %% Sentinel-frei: kind-Diskriminator + je Typ eine echte Zielspalte, CHECK erzwingt
@@ -1554,6 +1559,26 @@ erDiagram
     TEXT    created_at
   }
 
+  ai_profiles {
+    INTEGER id             PK "AUTOINCREMENT"
+    TEXT    name           "UNIQUE; Anzeigename in Admin + User-Zuweisung"
+    TEXT    provider       "CHECK in ('claude','ollama','openai-compat')"
+    TEXT    model          "NULL = globales ai.<provider>.model"
+    TEXT    host           "NULL = global; nur ollama/openai-compat"
+    TEXT    api_key        "enc:v1:… (lib/crypto); NULL = globaler Key"
+    INTEGER cloud          "0|1|NULL — Provider-Klasse (lib/ai/config.js#providerClass)"
+    REAL    temperature    "NULL = global"
+    INTEGER context_window "NULL = global"
+    INTEGER max_tokens_out "NULL = global"
+    REAL    repeat_penalty "NULL = global"
+    INTEGER think          "0|1|NULL = global"
+    INTEGER max_parallel   "NULL = global; eigener Semaphore-Bucket je Profil"
+    TEXT    notes
+    TEXT    created_by     FK "app_users(email) ON DELETE SET NULL"
+    TEXT    created_at
+    TEXT    updated_at
+  }
+
   app_users {
     INTEGER id               PK "AUTOINCREMENT"
     TEXT    email            "UNIQUE, lowercase-normalisiert"
@@ -1578,7 +1603,7 @@ erDiagram
     INTEGER daily_goal_minutes "persoenliches Tagesziel (min); NULL = aus"
     REAL    monthly_budget_usd "NULL = kein numerisches Limit"
     TEXT    budget_mode        "none | soft | hard (Default none)"
-    TEXT    ai_provider_override "NULL = follows global ai.provider; CHECK in ('claude','ollama','llama')"
+    INTEGER ai_profile_id     FK "ai_profiles(id) ON DELETE SET NULL; NULL = folgt global ai.provider"
     TEXT    onboarding_state  "JSON { welcomeDismissed, completed }; NULL = frisch (Mig 241)"
   }
   user_invites {

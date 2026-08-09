@@ -135,7 +135,7 @@ export const ttsProofMethods = {
     const blocks = editEl.children.length ? Array.from(editEl.children) : [editEl];
     const segs = [];
     for (const block of blocks) {
-      // Diagramme haben keinen Sprech-Text (SSoT tts-segment.js).
+      // Diagramme und Tabellen haben keinen Sprech-Text (SSoT tts-segment.js).
       if (isTtsSkippedBlock(block)) continue;
       // Sprech-Text OHNE Beleg-Chips (SSoT tts-segment.js#ttsBlockText) — ein
       // vorgelesenes „(Kafka, 1915, S. 44)" zerreisst den Hoerfluss. Der

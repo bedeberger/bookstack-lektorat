@@ -61,7 +61,7 @@ test('Tier-Effort schlägt den ALS-Wert, ohne ihn zu verändern', () => {
   const { cfg, logCtx, teardown } = _bootstrap();
   try {
     const M = 'claude-opus-4-8';
-    const eff = (override) => logCtx.runWithContext({ claudeEffort: 'xhigh' },
+    const eff = (override) => logCtx.runWithContext({ aiJob: { provider: 'claude', effort: 'xhigh' } },
       () => cfg._claudeOutputConfigParams(M, override).output_config?.effort ?? null);
 
     // Ohne Tier gilt der Job-weite ALS-Wert (unverändertes Verhalten).
@@ -91,7 +91,7 @@ test('Parallel-Sicherheit: gleichzeitige Calls mit verschiedenen Tiers beeinflus
       return { model, effort: cfg._claudeOutputConfigParams(model, effort).output_config?.effort ?? null };
     };
 
-    const out = await logCtx.runWithContext({ claudeModel: 'claude-opus-4-8', claudeEffort: 'xhigh' },
+    const out = await logCtx.runWithContext({ aiJob: { provider: 'claude', model: 'claude-opus-4-8', effort: 'xhigh' } },
       () => Promise.all([
         resolve({ model: 'claude-sonnet-5', effort: 'medium' }), // Extraktion
         resolve({}),                                             // Konsolidierung (folgt ALS)

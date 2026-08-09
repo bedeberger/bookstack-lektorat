@@ -19,11 +19,11 @@
   gap: 0.9rem;
 }
 .book-create-dialog::backdrop {
-  background: rgba(0, 0, 0, 0.45);
+  background: var(--color-overlay);
 }
 .book-create-title {
   font-size: var(--font-size-xl, 1.4rem);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 .book-create-input {
   width: 100%;
@@ -50,7 +50,7 @@
 }
 .book-create-label {
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--color-muted);
 }
 .book-create-error {
@@ -69,7 +69,7 @@
   background: var(--color-surface);
   color: var(--color-text);
   font: inherit;
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   cursor: pointer;
 }
 .book-create-btn:hover:not(:disabled) { background: var(--color-hover-light); }

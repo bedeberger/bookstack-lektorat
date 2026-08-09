@@ -4,9 +4,9 @@
 // optionale Soll-Layer (Figuren/Beats/Kapitel). Eigene Netzwerk-Instanz — teilt
 // keinen State mit dem Figuren-Graph.
 
-import { loadVis } from '../../lazy-libs.js';
 import { sendJson, escHtml } from '../../utils.js';
 import { toggleWrapFullscreen } from '../../fullscreen.js';
+import { ensureVis, graphPlaceholder, createGraphTooltip, graphTheme, paletteColors } from '../../graph-kit.js';
 
 // Themen-Palette: primär die vom Autor gewählte Farbe (themes.farbe = Palette-
 // Schlüssel, theme-aware --palette-*-Tokens wie in der Plot-Werkstatt); ohne Wahl
@@ -36,6 +36,34 @@ export function parseNode(id) {
   return { kind, id: Number(m[2]) };
 }
 
+// Knotengrösse der Motiv-Naben — reine Skala, ohne DOM und ohne Karten-State.
+// Zwei Dimensionen fliessen ein, nicht bloss die Fundstellen-Zahl:
+//   1. Ist-Dichte  — Anzahl Fundstellen, √-gedämpft und gegen die reale Spanne
+//      des Datensatzes auf [0,1] normalisiert (Ausreisser dämpfen).
+//   2. Übereinstimmung — mittlere Konfidenz der Fundstellen (score, 0..1; wörtliche
+//      Trigger-Treffer = 100%). Absolut interpretiert, nicht gegen die Spanne
+//      normalisiert — ein 95%-Motiv soll gross sein, egal wie die anderen liegen.
+// Blend: gewichtete Summe (Dichte dominiert, Qualität moduliert). Ein oft-aber-
+// schwach gefundenes Motiv bleibt so kleiner als ein etwas seltener, aber sehr
+// treffsicher belegtes. Geist-Knoten (0 Treffer) bleiben fix klein.
+export const MOTIF_SIZE_MIN = 14, MOTIF_SIZE_MAX = 46, MOTIF_SIZE_GHOST = 10;
+const COUNT_WEIGHT = 0.6, QUALITY_WEIGHT = 0.4;
+
+// counts = Fundstellen-Zahlen der NICHT-Geist-Motive (die Spanne des Datensatzes).
+export function makeMotifSize(counts) {
+  const min = counts.length ? Math.min(...counts) : 0;
+  const max = counts.length ? Math.max(...counts) : 0;
+  return ({ ghost, count = 0, score = 0 }) => {
+    if (ghost) return MOTIF_SIZE_GHOST;
+    const density = max === min
+      ? 0.5
+      : (Math.sqrt(count) - Math.sqrt(min)) / (Math.sqrt(max) - Math.sqrt(min));
+    const quality = Math.max(0, Math.min(1, score));
+    const blend = COUNT_WEIGHT * density + QUALITY_WEIGHT * quality;
+    return MOTIF_SIZE_MIN + blend * (MOTIF_SIZE_MAX - MOTIF_SIZE_MIN);
+  };
+}
+
 // paletteVars: Palette-Schlüssel → konkreter Farbwert (vis-network zeichnet auf
 // Canvas, CSS-Custom-Props werden dort NICHT aufgelöst → zur Render-Zeit gelesen).
 function _themeColor(themeId, themes, paletteVars) {
@@ -53,21 +81,25 @@ export const graphMethods = {
     const r = this.relations.map(x => `${x.from_motif_id}-${x.to_motif_id}:${x.typ}`).join('|');
     const t = this.themes.map(x => `${x.id}:${x.name || ''}:${x.farbe || ''}`).join(',');
     const layers = `${this.layerFigures}${this.layerBeats}${this.layerChapters}`;
-    return [m, r, t, layers, this.$store.shell?.uiLocale].join('##');
+    // Theme im Schlüssel: die Farben liegen im gezeichneten Canvas-Bild, ein
+    // blosser CSS-Wechsel erreicht sie nicht.
+    const theme = this._graphTheme?.dark ? 'dark' : 'light';
+    return [m, r, t, layers, this.$store.shell?.uiLocale, theme].join('##');
   },
 
   async renderMotivGraph() {
     const container = document.getElementById('motiv-graph');
     if (!container) return;
 
-    if (!window.vis?.Network) {
-      const ph = document.createElement('span');
-      ph.className = 'muted-msg muted-msg--block';
-      ph.textContent = window.__app.t('graph.empty.visLoading');
-      container.replaceChildren(ph);
-      try { await loadVis(); }
-      catch (e) { ph.textContent = e.message; return; }
-    }
+    if (!await ensureVis(container)) return;
+
+    // vis-network zeichnet auf Canvas → CSS-Custom-Properties werden NICHT
+    // aufgelöst. Konkrete Farben zur Render-Zeit auflösen (geteilt mit dem
+    // Figuren-Graph), bevor die Signatur gebaut wird — das Theme steckt darin.
+    this._graphTheme = graphTheme(container);
+    const textColor = this._graphTheme.text;
+    const bgColor = this._graphTheme.bg;
+    const mutedColor = this._graphTheme.muted;
 
     const sig = this._graphSignature();
     if (this._motivNetwork && this._motivHash === sig) return;
@@ -75,25 +107,14 @@ export const graphMethods = {
     this._destroyGraph();
 
     if (!this.motifs.length && !this.themes.length) {
-      const ph = document.createElement('span');
-      ph.className = 'muted-msg muted-msg--block';
-      ph.textContent = window.__app.t('motiv.empty.graph');
-      container.replaceChildren(ph);
+      graphPlaceholder(container, window.__app.t('motiv.empty.graph'));
       return;
     }
     container.replaceChildren();
 
-    // vis-network zeichnet auf Canvas → CSS-Custom-Properties werden NICHT
-    // aufgelöst. Konkrete Theme-Farben zur Render-Zeit aus dem DOM lesen.
-    const cs = getComputedStyle(container);
-    const textColor = cs.color || '#333';
-    const bgColor = cs.backgroundColor && cs.backgroundColor !== 'rgba(0, 0, 0, 0)' ? cs.backgroundColor : '#fff';
-    const mutedColor = getComputedStyle(document.documentElement).getPropertyValue('--color-muted').trim() || textColor;
-    // Gewählte Theme-Farben (Palette-Schlüssel → konkreter Wert) einmal aus den
-    // --palette-*-Tokens auflösen (theme-aware; Canvas löst CSS-Vars nicht auf).
-    const rootCS = getComputedStyle(document.documentElement);
-    const paletteVars = {};
-    for (const k of THEME_COLOR_KEYS) paletteVars[k] = rootCS.getPropertyValue(`--palette-${k}`).trim();
+    // Gewählte Themen-Farben (Palette-Schlüssel → konkreter Wert) aus den
+    // --palette-*-Tokens auflösen (theme-aware).
+    const paletteVars = paletteColors(THEME_COLOR_KEYS);
 
     const nodes = [];
     const edges = [];
@@ -112,30 +133,15 @@ export const graphMethods = {
       });
     }
 
-    // Motiv-Naben (Grösse = Ist-Präsenz; Geist = geplant aber 0 Fundstellen).
-    // Zwei Dimensionen fliessen ein, nicht bloss die Fundstellen-Zahl:
-    //   1. Ist-Dichte  — Anzahl Fundstellen, √-gedämpft und gegen die reale Spanne
-    //      des Datensatzes auf [0,1] normalisiert (Ausreisser dämpfen).
-    //   2. Übereinstimmung — mittlere Konfidenz der Fundstellen (occAvgScore, 0..1;
-    //      wörtliche Trigger-Treffer = 100%). Absolut interpretiert, nicht gegen die
-    //      Spanne normalisiert — 95%-Motiv soll gross sein, egal wie die anderen liegen.
-    // Blend: gewichtete Summe (Dichte dominiert, Qualität moduliert) → √-Fläche.
-    // Ein oft-aber-schwach gefundenes Motiv bleibt so kleiner als ein etwas seltener,
-    // aber sehr treffsicher belegtes. Geist-Knoten (0 Treffer) bleiben fix klein.
-    const MOTIF_SIZE_MIN = 14, MOTIF_SIZE_MAX = 46, MOTIF_SIZE_GHOST = 10;
-    const COUNT_WEIGHT = 0.6, QUALITY_WEIGHT = 0.4;
-    const _occCounts = this.motifs.filter(m => !this.isGhost(m)).map(m => m.occurrenceCount || 0);
-    const _occMin = _occCounts.length ? Math.min(..._occCounts) : 0;
-    const _occMax = _occCounts.length ? Math.max(..._occCounts) : 0;
-    const _motifSize = (m) => {
-      if (this.isGhost(m)) return MOTIF_SIZE_GHOST;
-      const density = _occMax === _occMin
-        ? 0.5
-        : (Math.sqrt(m.occurrenceCount || 0) - Math.sqrt(_occMin)) / (Math.sqrt(_occMax) - Math.sqrt(_occMin));
-      const quality = Math.max(0, Math.min(1, m.occAvgScore || 0));
-      const blend = COUNT_WEIGHT * density + QUALITY_WEIGHT * quality;
-      return MOTIF_SIZE_MIN + blend * (MOTIF_SIZE_MAX - MOTIF_SIZE_MIN);
-    };
+    // Knotengrösse = Ist-Präsenz (Skala unten, rein berechnet).
+    const motifSize = makeMotifSize(
+      this.motifs.filter(m => !this.isGhost(m)).map(m => m.occurrenceCount || 0)
+    );
+    const _motifSize = (m) => motifSize({
+      ghost: this.isGhost(m),
+      count: m.occurrenceCount || 0,
+      score: m.occAvgScore || 0,
+    });
     const figCatalog = this.$store.catalog.figuren || [];
     // Layer-Knoten (Figur/Beat/Kapitel) können von mehreren Motiven geteilt werden →
     // ID-Set gegen Doppel-Push (statt O(n²)-`nodes.some` je Layer-Eintrag).
@@ -312,23 +318,7 @@ export const graphMethods = {
     const tip = document.getElementById('motiv-tooltip');
     if (!tip) return;
     const t = (k, p) => window.__app.t(k, p);
-
-    const showTipAt = (html, clientX, clientY) => {
-      tip.innerHTML = html;
-      tip.style.left = '0px';
-      tip.style.top = '0px';
-      tip.classList.add('visible');
-      const rect = container.getBoundingClientRect();
-      const cx = clientX - rect.left;
-      const cy = clientY - rect.top;
-      let left = cx + 14;
-      let top = cy + 14;
-      if (left + tip.offsetWidth > container.offsetWidth) left = Math.max(0, cx - tip.offsetWidth - 14);
-      if (top + tip.offsetHeight > container.offsetHeight) top = Math.max(0, cy - tip.offsetHeight - 14);
-      tip.style.left = Math.max(0, left) + 'px';
-      tip.style.top = Math.max(0, top) + 'px';
-    };
-    const hideTip = () => tip.classList.remove('visible');
+    const { show: showTipAt, hide: hideTip } = createGraphTooltip(container, tip);
 
     const motifTipHtml = (m) => {
       const theme = m.theme_id ? this.themeById(m.theme_id) : null;

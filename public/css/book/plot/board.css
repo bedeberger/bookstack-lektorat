@@ -51,7 +51,7 @@
      eigene Zeile darunter — analog zur Strang-Lane / zum Grid-Akt-Kopf. */
   .plot-column-header .plot-column-actions { flex: 1 0 100%; }
   .plot-column-title {
-    font-weight: 600;
+    font-weight: var(--fw-semibold);
     font-size: var(--font-size-sm);
     color: var(--color-text);
     cursor: text;
@@ -60,7 +60,7 @@
   }
   .plot-column-title-input {
     flex: 1 1 auto;
-    font-weight: 600;
+    font-weight: var(--fw-semibold);
     font-size: var(--font-size-sm);
     padding: var(--space-2xs) var(--space-xs);
     border: 1px solid var(--card-accent);
@@ -270,7 +270,7 @@
     border-color: color-mix(in oklch, var(--color-schwach) 45%, transparent);
     background: color-mix(in oklch, var(--color-schwach) 14%, transparent);
     cursor: default;
-    font-weight: 700;
+    font-weight: var(--fw-bold);
   }
   /* Promotion: geplanter Beat, der offenbar schon im Text steht (Vorschlag, ihn
      auf „im Buch" zu setzen). Amber statt Grün/Rot — actionabler Hinweis, kein
@@ -318,7 +318,7 @@
   .plot-occ-item-name {
     flex: 1 1 auto;
     font-size: var(--font-size-base);
-    font-weight: 600;
+    font-weight: var(--fw-semibold);
     overflow-wrap: anywhere;
   }
   .plot-occ-item-score {
@@ -546,7 +546,7 @@
   /* ── Verworfen-Collapse-Toggle ─────────────────────────────────────────── */
   .plot-verworfen-toggle {
     text-transform: none;
-    font-weight: 400;
+    font-weight: var(--fw-regular);
     letter-spacing: 0;
     color: var(--color-muted);
   }

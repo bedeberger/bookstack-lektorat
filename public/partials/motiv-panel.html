@@ -18,21 +18,21 @@
                 <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#grip-vertical"/></svg>
               </span>
               <!-- Thema-Farbe: Swatch öffnet ein Palette-Popover (theme-aware --palette-*). -->
-              <div class="motiv-color-swatch-wrap">
-                <button type="button" class="motiv-color-swatch"
+              <div class="color-picker">
+                <button type="button" class="color-picker__swatch"
                         :style="{ '--col-accent': 'var(--palette-' + themeSwatchKey(t) + ')' }"
                         @click.stop="toggleThemeColorPicker(t.id)"
                         :data-tip="$app.t('motiv.theme.color')" :aria-label="$app.t('motiv.theme.color')"></button>
-                <div class="motiv-color-popover" x-show="themeColorPickerId === t.id" x-cloak
+                <div class="color-picker__popover" x-show="themeColorPickerId === t.id" x-cloak
                      @click.outside="themeColorPickerId === t.id && (themeColorPickerId = null)">
-                  <button type="button" class="motiv-color-opt motiv-color-opt--none"
-                          :class="{ 'motiv-color-opt--on': !t.farbe }"
+                  <button type="button" class="color-picker__opt color-picker__opt--none"
+                          :class="{ 'color-picker__opt--on': !t.farbe }"
                           @click="setThemeColor(t, null)"
                           :data-tip="$app.t('motiv.theme.colorAuto')" :aria-label="$app.t('motiv.theme.colorAuto')"></button>
                   <template x-for="key in themeColorKeys()" :key="key">
-                    <button type="button" class="motiv-color-opt"
+                    <button type="button" class="color-picker__opt"
                             :style="{ '--col-accent': 'var(--palette-' + key + ')' }"
-                            :class="{ 'motiv-color-opt--on': t.farbe === key }"
+                            :class="{ 'color-picker__opt--on': t.farbe === key }"
                             @click="setThemeColor(t, key)" :aria-label="key"></button>
                   </template>
                 </div>
@@ -81,21 +81,21 @@
       </div>
 
       <label class="motiv-field-label" x-text="$app.t('motiv.theme.color')"></label>
-      <div class="motiv-color-swatch-wrap">
-        <button type="button" class="motiv-color-swatch"
+      <div class="color-picker">
+        <button type="button" class="color-picker__swatch"
                 :style="{ '--col-accent': 'var(--palette-' + themeSwatchKey(selectedTheme()) + ')' }"
                 @click.stop="toggleThemeColorPicker(selectedTheme().id)"
                 :data-tip="$app.t('motiv.theme.color')" :aria-label="$app.t('motiv.theme.color')"></button>
-        <div class="motiv-color-popover" x-show="themeColorPickerId === selectedThemeId" x-cloak
+        <div class="color-picker__popover" x-show="themeColorPickerId === selectedThemeId" x-cloak
              @click.outside="themeColorPickerId === selectedThemeId && (themeColorPickerId = null)">
-          <button type="button" class="motiv-color-opt motiv-color-opt--none"
-                  :class="{ 'motiv-color-opt--on': !selectedTheme().farbe }"
+          <button type="button" class="color-picker__opt color-picker__opt--none"
+                  :class="{ 'color-picker__opt--on': !selectedTheme().farbe }"
                   @click="setThemeColor(selectedTheme(), null)"
                   :data-tip="$app.t('motiv.theme.colorAuto')" :aria-label="$app.t('motiv.theme.colorAuto')"></button>
           <template x-for="key in themeColorKeys()" :key="key">
-            <button type="button" class="motiv-color-opt"
+            <button type="button" class="color-picker__opt"
                     :style="{ '--col-accent': 'var(--palette-' + key + ')' }"
-                    :class="{ 'motiv-color-opt--on': selectedTheme().farbe === key }"
+                    :class="{ 'color-picker__opt--on': selectedTheme().farbe === key }"
                     @click="setThemeColor(selectedTheme(), key)" :aria-label="key"></button>
           </template>
         </div>

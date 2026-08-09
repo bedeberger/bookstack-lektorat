@@ -1,0 +1,75 @@
+/* Farbwähler-Popover: kleines Swatch-Quadrat, das ein Raster von Farboptionen
+   aufklappt. Geteilte SSoT für die beiden Werkstätten, die einer Entität eine
+   Ordnungsfarbe geben — Motiv-Werkstatt (Themen) und Plot-Werkstatt (Akte,
+   Handlungsstränge). Beide trugen dasselbe Markup unter eigenem Präfix.
+
+   Die Farbe selbst kommt vom Konsumenten über `--col-accent` (pro Option per
+   inline-Style aus der Palette gesetzt) — dieses Modul kennt keine Palette,
+   nur die Form.
+
+   Markup:
+     <div class="color-picker">
+       <button class="color-picker__swatch" style="--col-accent: …">
+       <div class="color-picker__popover">
+         <button class="color-picker__opt color-picker__opt--none">   (Farbe entfernen)
+         <button class="color-picker__opt" style="--col-accent: …">   (+ --on = gewählt)
+       </div>
+     </div> */
+
+@layer components {
+
+  .color-picker { position: relative; flex: 0 0 auto; display: flex; }
+
+  .color-picker__swatch {
+    width: 14px; height: 14px;
+    padding: 0;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--col-accent);
+    cursor: pointer;
+  }
+  .color-picker__swatch:hover { background: var(--col-accent); border-color: var(--color-text); }
+
+  .color-picker__popover {
+    position: absolute;
+    top: calc(100% + var(--space-2xs));
+    left: 0;
+    z-index: var(--z-popover);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2xs);
+    width: 132px;
+    padding: var(--space-xs);
+    background: var(--color-card-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-md);
+  }
+
+  .color-picker__opt {
+    width: 18px; height: 18px;
+    padding: 0;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--col-accent);
+    cursor: pointer;
+  }
+  /* button:hover (gleiche @layer) wuerde den Swatch-Hintergrund ueberschreiben — re-asserten. */
+  .color-picker__opt:hover { background: var(--col-accent); transform: scale(1.1); }
+  .color-picker__opt--on { outline: 2px solid var(--color-text); outline-offset: 1px; }
+
+  /* „Keine Farbe" — durchgestrichenes leeres Feld statt eines Farbfelds. */
+  .color-picker__opt--none, .color-picker__opt--none:hover {
+    background: var(--color-card-bg);
+    position: relative;
+    overflow: hidden;
+    transform: none;
+  }
+  .color-picker__opt--none::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top right, transparent 44%, var(--color-err-border) 44%, var(--color-err-border) 56%, transparent 56%);
+  }
+
+}

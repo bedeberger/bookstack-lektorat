@@ -20,7 +20,7 @@
 import { getEditEl, caretRangeIn } from './_shared.js';
 import { capHits, cycleIdx, insertHtmlAtRange, onPickerKeydown, panelAnchorFor } from './caret-panel.js';
 import { buildXrefHtml, markXrefsAtomic } from '../../../xrefs/xref-html.js';
-import { defaultChapterLabels, figureNumbers } from '../../../xrefs/xref-number.js';
+import { defaultChapterLabels, anchorNumbers } from '../../../xrefs/xref-number.js';
 import { formatXref } from '../../../xrefs/xref-format.js';
 
 // Deckel der Trefferliste — wie beim Beleg-Picker: mehr als 40 Zeilen scannt
@@ -47,6 +47,7 @@ async function loadTargets(bookId) {
   const out = {
     chapters: Array.isArray(data?.chapters) ? data.chapters : [],
     figures: Array.isArray(data?.figures) ? data.figures : [],
+    tables: Array.isArray(data?.tables) ? data.tables : [],
   };
   _targetCache.set(key, out);
   return out;
@@ -54,7 +55,7 @@ async function loadTargets(bookId) {
 
 // Vorschau-Nummern über beide Achsen — dieselbe pure Logik, die auch der
 // Renderer benutzt, nur ohne Profil-Labels.
-function previewNumbers({ chapters, figures }) {
+function previewNumbers({ chapters, figures, tables }) {
   // Tiefe aus der Elternkette (max 3 Ebenen, siehe docs/chapter-hierarchy.md).
   const byId = new Map(chapters.map(c => [String(c.target), c]));
   const shaped = chapters.map((c) => {
@@ -70,11 +71,16 @@ function previewNumbers({ chapters, figures }) {
     return { chapterId: c.target, depth, title: c.title };
   });
   const chapterLabels = defaultChapterLabels(shaped);
-  const figNums = figureNumbers(
-    figures.map(f => ({ bid: f.target, chapterId: f.chapterId })),
-    chapterLabels,
-  );
-  return { chapterLabels, figNums, depthById: new Map(shaped.map(s => [String(s.chapterId), s.depth])) };
+  // Zwei Aufrufe, zwei Zaehler: Abbildungen und Tabellen zaehlen getrennt (siehe
+  // xref-number.js). Ein gemeinsamer Aufruf zeigte im Picker Nummern, die der
+  // Renderer nachher nicht setzt.
+  const toAnchors = (list) => (list || []).map(a => ({ bid: a.target, chapterId: a.chapterId }));
+  const figNums = anchorNumbers(toAnchors(figures), chapterLabels);
+  const tblNums = anchorNumbers(toAnchors(tables), chapterLabels);
+  return {
+    chapterLabels, figNums, tblNums,
+    depthById: new Map(shaped.map(s => [String(s.chapterId), s.depth])),
+  };
 }
 
 export const xrefMethods = {
@@ -108,11 +114,11 @@ export const xrefMethods = {
     this.xrefLoading = true;
     try {
       const data = await loadTargets(bookId);
-      const { chapterLabels, figNums, depthById } = previewNumbers(data);
+      const { chapterLabels, figNums, tblNums, depthById } = previewNumbers(data);
       // Eine flache Liste in Buch-Leserichtung: erst die Kapitel (mit ihrer
-      // Hierarchie-Einrückung), dann die Abbildungen. Beide tragen ihre
-      // Vorschau-Nummer schon hier, damit der Picker zeigt, was gleich im Text
-      // steht.
+      // Hierarchie-Einrückung), dann die Abbildungen, dann die Tabellen. Alle
+      // tragen ihre Vorschau-Nummer schon hier, damit der Picker zeigt, was
+      // gleich im Text steht.
       this.xrefTargets = [
         ...data.chapters.map(c => ({
           kind: 'chapter',
@@ -128,6 +134,14 @@ export const xrefMethods = {
           number: figNums.get(f.target) || null,
           depth: 1,
           pageName: f.pageName,
+        })),
+        ...data.tables.map(t => ({
+          kind: 'table',
+          target: t.target,
+          title: t.title,
+          number: tblNums.get(t.target) || null,
+          depth: 1,
+          pageName: t.pageName,
         })),
       ];
     } catch (_) {

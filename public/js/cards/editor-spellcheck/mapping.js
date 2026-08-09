@@ -41,12 +41,30 @@ const SHOW_ELEMENT_AND_TEXT = 1 | 4;
 // App-Bundle-Importen), gegated durch tests/unit/mermaid-drift.test.mjs.
 const DIAGRAM_SKIP_SEL = 'pre.mermaid';
 
+// Tabellen werden im Manuskript ebenfalls geschnitten — aber aus einem anderen
+// Grund als das Diagramm, und der Unterschied ist wichtig: Zellinhalt IST
+// Prosa und soll geprueft werden. Nur nicht hier.
+//
+// Der Block ist `contenteditable="false"` (markTablesAtomic) und wird
+// ausschliesslich im Gitter-Dialog bearbeitet. Eine Meldung im Manuskript waere
+// darum nicht anwendbar: der Ersetzungs-Vorschlag hat keine Schreibstelle, und
+// die Zellen-Randfaelle (Zelle endet ohne Satzzeichen, Zahlenkolonne, „ff.")
+// erzeugen reihenweise Falschmeldungen mitten im Fliesstext-Stream.
+//
+// GEPRUEFT WIRD, WO GESCHRIEBEN WIRD: die Zellenfelder des Dialogs tragen
+// `data-spellcheck="spelling"` und laufen damit ueber denselben globalen
+// Dispatcher wie jedes andere Prosafeld (harte Regel „LanguageTool auf
+// Prosatextfeldern Pflicht"). Kopie von TABLE_SEL aus
+// public/js/table/table-html.js; dieses Modul haelt sich frei von
+// App-Bundle-Importen. Gegated durch tests/unit/table-drift.test.mjs.
+const TABLE_SKIP_SEL = 'table';
+
 function _isSkippedIsland(el) {
   if (!el || el.nodeType !== 1) return false;
   const cl = el.classList;
   if (!cl) return false;
   if (cl.contains('lt-popover') || cl.contains('lt-badge')) return true;
-  return !!el.matches && el.matches(DIAGRAM_SKIP_SEL);
+  return !!el.matches && (el.matches(DIAGRAM_SKIP_SEL) || el.matches(TABLE_SKIP_SEL));
 }
 
 // Quellen-Chips (Quellennachweise) werden NICHT aus dem Stream geschnitten, sondern

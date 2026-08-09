@@ -369,3 +369,75 @@ test('wpToAppHtml: Chip mit unbrauchbarem data-src verliert das Chip-Markup', as
   assert.match(app, /x \(\?\) y/);
   assert.equal(stats.citesDegraded, undefined);
 });
+
+// ── Tabellen ────────────────────────────────────────────────────────────────
+// Der Pull ist hier der kritische Weg, nicht der Push: Gutenberg verpackt seinen
+// Tabellenblock in `<figure class="wp-block-table">`, und der Pull entfernt
+// „Figuren ohne Bild". Ohne die Entpackung LOESCHT ein Abgleich damit die ganze
+// Tabelle aus dem Manuskript — Inhaltsverlust, den niemand ausgeloest hat, bei
+// jedem Pull erneut. Genau diese Zusage steht hier.
+
+const TABLE_APP = '<table data-bid="aabbccdd">'
+  + '<caption>Umsatz nach Jahr</caption>'
+  + '<thead><tr><th scope="col">Jahr</th><th scope="col" data-align="right">Umsatz</th></tr></thead>'
+  + '<tbody><tr><td>2023</td><td data-align="right">1.2 Mio</td></tr></tbody></table>';
+
+test('Push: Tabelle wird ein wp:table-Block mit figure-Wrapper', async () => {
+  const wp = await appToWpHtml(TABLE_APP);
+  assert.match(wp, /<!-- wp:table -->/);
+  assert.match(wp, /<figure class="wp-block-table">/);
+  assert.match(wp, /<thead><tr><th>Jahr<\/th>/);
+  assert.match(wp, /<figcaption[^>]*>Umsatz nach Jahr<\/figcaption>/,
+    'WordPress traegt die Beschriftung als figcaption, nicht als caption');
+});
+
+test('Push: Ausrichtung wird auf Gutenbergs Klasse abgebildet', async () => {
+  const wp = await appToWpHtml(TABLE_APP);
+  assert.match(wp, /class="has-text-align-right"/,
+    'ohne die WP-Klasse zeigt der Block-Editor alle Spalten linksbuendig');
+});
+
+test('Pull: die Tabelle ueberlebt — figure-Wrapper wird entpackt, nicht entfernt', async () => {
+  const wp = await appToWpHtml(TABLE_APP);
+  const app = await wpToAppHtml(wp);
+  assert.match(app, /<table/, 'die Regel „Figuren ohne Bild fallen weg" darf die Tabelle nicht treffen');
+  assert.match(app, /2023/);
+  assert.match(app, /1\.2 Mio/);
+  assert.doesNotMatch(app, /wp-block-table/, 'der WP-Wrapper gehoert nicht ins Manuskript');
+});
+
+test('Pull: Beschriftung kommt als caption zurueck, nicht als figcaption', async () => {
+  const app = await wpToAppHtml(await appToWpHtml(TABLE_APP));
+  assert.match(app, /<caption>Umsatz nach Jahr<\/caption>/);
+  assert.doesNotMatch(app, /figcaption/);
+});
+
+test('Pull: Ausrichtung und scope werden auf unseren Vertrag normalisiert', async () => {
+  const app = await wpToAppHtml(await appToWpHtml(TABLE_APP));
+  assert.match(app, /data-align="right"/, 'has-text-align-* muss auf data-align gehoben werden');
+  assert.doesNotMatch(app, /has-text-align/, 'die Theme-Klasse gehoert nicht ins Manuskript');
+  assert.match(app, /<th scope="col"/, 'scope gehoert zum Markup-Vertrag und wird beim Pull gesetzt');
+});
+
+test('Pull: eine in WordPress angelegte Tabelle kommt vollstaendig an', async () => {
+  // Rohform, wie der Block-Editor sie schreibt: kein data-align, kein scope,
+  // Beschriftung als figcaption.
+  const raw = '<!-- wp:table -->\n'
+    + '<figure class="wp-block-table"><table><thead><tr><th>A</th>'
+    + '<th class="has-text-align-center">B</th></tr></thead>'
+    + '<tbody><tr><td>1</td><td class="has-text-align-center">2</td></tr></tbody></table>'
+    + '<figcaption class="wp-element-caption">Fremde Tabelle</figcaption></figure>\n'
+    + '<!-- /wp:table -->';
+  const app = await wpToAppHtml(raw);
+  assert.match(app, /<table/);
+  assert.match(app, /<caption>Fremde Tabelle<\/caption>/);
+  assert.match(app, /data-align="center"/);
+  assert.match(app, /<th scope="col"/);
+  for (const bit of ['A', 'B', '1', '2']) assert.match(app, new RegExp(bit));
+});
+
+test('Pull: eine Figur OHNE Bild faellt weiterhin weg', async () => {
+  // Die Entpackung darf die bestehende Regel nicht aushebeln.
+  const app = await wpToAppHtml('<figure class="wp-block-embed"><div>nur Wrapper</div></figure>');
+  assert.doesNotMatch(app, /<figure/);
+});

@@ -1060,9 +1060,10 @@ const VALID_BIBLIOGRAPHY_SCOPES = ['cited', 'all'];
 // abweichen. Default 0 — ein Roman mit Bildern will keine „Abb. 1:"-Praefixe.
 const XREF_DEFAULTS = Object.freeze({
   figure_numbering: 0,
+  table_numbering: 0,
 });
 
-const _getBookSettings = db.prepare('SELECT language, region, buchtyp, buch_kontext, stilprofil, erzaehlperspektive, erzaehlzeit, is_finished, allow_lektor_book_chat, daily_goal_chars, goal_target_chars, goal_deadline, entities_enabled, orte_real, schauplatz_land, zeitlinie_real, weltfakten_real_pruefen, exclude_from_stats, citation_style, bibliography_enabled, bibliography_title, bibliography_scope, bibliography_in_blog, citation_notes, figure_numbering, textsorte FROM book_settings WHERE book_id = ?');
+const _getBookSettings = db.prepare('SELECT language, region, buchtyp, buch_kontext, stilprofil, erzaehlperspektive, erzaehlzeit, is_finished, allow_lektor_book_chat, daily_goal_chars, goal_target_chars, goal_deadline, entities_enabled, orte_real, schauplatz_land, zeitlinie_real, weltfakten_real_pruefen, exclude_from_stats, citation_style, bibliography_enabled, bibliography_title, bibliography_scope, bibliography_in_blog, citation_notes, figure_numbering, table_numbering, textsorte FROM book_settings WHERE book_id = ?');
 const _upsertBookSettings = db.prepare(`
   INSERT INTO book_settings (book_id, language, region, buchtyp, buch_kontext, stilprofil, erzaehlperspektive, erzaehlzeit, is_finished, allow_lektor_book_chat, daily_goal_chars, goal_target_chars, goal_deadline, orte_real, schauplatz_land, zeitlinie_real, weltfakten_real_pruefen, exclude_from_stats, updated_at)
   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -1116,10 +1117,11 @@ const _updateBookCitationSettings = db.prepare(`
 `);
 // Querverweis-Einstellungen, eigener Schreibpfad aus demselben Grund.
 const _updateBookXrefSettings = db.prepare(`
-  INSERT INTO book_settings (book_id, figure_numbering, updated_at)
-  VALUES (?, ?, ?)
+  INSERT INTO book_settings (book_id, figure_numbering, table_numbering, updated_at)
+  VALUES (?, ?, ?, ?)
   ON CONFLICT(book_id) DO UPDATE SET
     figure_numbering=excluded.figure_numbering,
+    table_numbering=excluded.table_numbering,
     updated_at=excluded.updated_at
 `);
 
@@ -1145,6 +1147,7 @@ function getBookSettings(bookId, userEmail = null) {
     bibliography_in_blog: row.bibliography_in_blog ? 1 : 0,
     citation_notes: row.citation_notes || CITATION_DEFAULTS.citation_notes,
     figure_numbering: row.figure_numbering ? 1 : 0,
+    table_numbering: row.table_numbering ? 1 : 0,
     textsorte: row.textsorte || null,
   };
   if (userEmail) {
@@ -1235,10 +1238,11 @@ function setBookCitationSettings(bookId, {
 
 /** Querverweis-Einstellungen pro Buch. Eigener Schreibpfad — beruehrt keine
  *  anderen Settings. */
-function setBookXrefSettings(bookId, { figure_numbering } = {}) {
+function setBookXrefSettings(bookId, { figure_numbering, table_numbering } = {}) {
   _updateBookXrefSettings.run(
     parseInt(bookId),
     figure_numbering ? 1 : 0,
+    table_numbering ? 1 : 0,
     new Date().toISOString(),
   );
 }
@@ -1734,7 +1738,7 @@ module.exports = {
   getChapterFigures:        figures.getChapterFigures,
   getChapterFigureRelations: figures.getChapterFigureRelations,
   getFigureWithDetails:     figures.getFigureWithDetails,
-  backfillAppearancesFromScenesEvents: figures.backfillAppearancesFromScenesEvents,
+  rebuildFigureAppearances: figures.rebuildFigureAppearances,
   // locations
   getChapterLocations,
   // motifs (Soll-Kontext fürs Lektorat)

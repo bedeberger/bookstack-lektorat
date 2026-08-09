@@ -11,6 +11,7 @@ const {
   validateBeziehungenDescriptions, backfillFiguren, ensureUniqueFigIds, applyAliasClusters,
 } = require('../figuren-merge');
 const { komplettMaxTokens } = require('./tokens');
+const { providerClass } = require('../../../../lib/ai');
 
 /** Phase 2: Figuren konsolidieren + Soziogramm + Name→ID Lookup.
  *  Single-Pass-Optimierung: Wenn Phase 1 im Single-Pass-Modus lief (ein „Kapitel"
@@ -31,7 +32,7 @@ async function runPhase2(ctx, chapterFiguren, chapterAssignments, chapterSzenen)
     const raw = chapterFiguren[0].figuren || [];
     figuren = raw.map((f, i) => ({ ...f, id: f.id || ('fig_' + (i + 1)) }));
     log.info(`Phase 2 übersprungen (Single-Pass, ${figuren.length} Figuren aus P1 übernommen) – spart einen KI-Call.`);
-    updateJob(jobId, { progress: effectiveProvider === 'claude' ? 40 : 43 });
+    updateJob(jobId, { progress: providerClass(effectiveProvider) === 'cloud' ? 40 : 43 });
   } else {
     updateJob(jobId, { progress: 30, statusText: 'job.phase.consolidatingFiguren' });
     // Welle 3 · Rollierender Dedup: Duplikate regelbasiert VOR dem KI-Call entfernen.
@@ -39,12 +40,12 @@ async function runPhase2(ctx, chapterFiguren, chapterAssignments, chapterSzenen)
     const { chapterFiguren: preMerged, dupesRemoved } = preMergeChapterFiguren(chapterFiguren);
     if (dupesRemoved > 0) log.info(`Rollierender Pre-Merge – ${dupesRemoved} Figuren-Duplikate regelbasiert zusammengeführt.`);
 
-    // ── Alias-Cluster (F3, nur Claude): Namensvarianten derselben Figur (Epitheta/Spitznamen/
+    // ── Alias-Cluster (F3, nur Cloud-Klasse): Namensvarianten derselben Figur (Epitheta/Spitznamen/
     // Umbenennungen) VOR der Konsolidierung auf einen kanonischen Namen vereinheitlichen, damit
     // die Konsolidierung sie zusammenführt statt als Dubletten zu behalten. Smart-Tier (das
     // job-weite Komplett-Modell, kein extractTier-Override). Non-critical: bei Fehler bleibt
     // die Konsolidierung wie bisher. Nur sinnvoll ab genügend Kandidaten. */
-    if (effectiveProvider === 'claude') {
+    if (providerClass(effectiveProvider) === 'cloud') {
       const candidates = preMerged.flatMap(cf => (cf.figuren || []).map(f => ({
         name: f.name,
         beschreibung: (f.beschreibung || '').slice(0, 160),
@@ -67,7 +68,7 @@ async function runPhase2(ctx, chapterFiguren, chapterAssignments, chapterSzenen)
       }
     }
 
-    const figProgressEnd = effectiveProvider === 'claude' ? 40 : 43;
+    const figProgressEnd = providerClass(effectiveProvider) === 'cloud' ? 40 : 43;
     let figResult;
     try {
       figResult = await call(jobId, tok,
@@ -101,9 +102,9 @@ async function runPhase2(ctx, chapterFiguren, chapterAssignments, chapterSzenen)
   // auch Claude attribuiert gelegentlich eine Beschreibung der falschen Figur zu.
   const { cleared, moved } = validateBeziehungenDescriptions(figuren);
   if (cleared > 0 || moved > 0) log.info(`Beziehungs-Beschreibungen bereinigt – ${moved} verschoben, ${cleared} geleert.`);
-  // Sozialschicht-Mehrheitsvotum nur für lokale Modelle: Claude läuft durch den
-  // holistischen Soziogramm-Refine-Call und braucht das nicht.
-  if (effectiveProvider && effectiveProvider !== 'claude') {
+  // Sozialschicht-Mehrheitsvotum nur für lokale Modelle: die Cloud-Klasse läuft durch
+  // den holistischen Soziogramm-Refine-Call und braucht das nicht.
+  if (effectiveProvider && providerClass(effectiveProvider) !== 'cloud') {
     const schichtChanges = applySozialschichtModeVote(chapterFiguren, figuren);
     if (schichtChanges > 0) log.info(`Sozialschicht per Mehrheitsvotum korrigiert (${schichtChanges} Figuren).`);
   }
@@ -149,10 +150,10 @@ async function runPhase2(ctx, chapterFiguren, chapterAssignments, chapterSzenen)
         .map(bz => ({ from_fig_id: f.id, to_fig_id: bz.figur_id, machtverhaltnis: bz.machtverhaltnis }))
     );
 
-    // Claude-only + Multi-Pass: holistische Soziogramm-Konsolidierung (sozialschicht + machtverhaltnis)
-    // Bei Single-Pass hat Claude das ganze Buch gesehen → preliminary-Werte sind bereits holistisch,
-    // der Refine-Call fügt nichts hinzu und kostet ~3K Tokens extra.
-    if (effectiveProvider === 'claude' && !isSinglePass) {
+    // Cloud-Klasse + Multi-Pass: holistische Soziogramm-Konsolidierung (sozialschicht + machtverhaltnis)
+    // Bei Single-Pass hat das Modell das ganze Buch gesehen → preliminary-Werte sind bereits
+    // holistisch, der Refine-Call fügt nichts hinzu und kostet ~3K Tokens extra.
+    if (providerClass(effectiveProvider) === 'cloud' && !isSinglePass) {
       updateJob(jobId, { progress: 40, statusText: 'job.phase.refiningSoziogramm' });
       try {
         const sozResult = await call(jobId, tok,

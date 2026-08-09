@@ -334,7 +334,7 @@ export function createSynonymController({
     header.appendChild(title);
     const close = document.createElement('button');
     close.type = 'button';
-    close.className = 'synonym-picker-close';
+    close.className = 'btn-close synonym-picker-close';
     const closeLabel = i18n('synonym.close');
     close.setAttribute('data-tip', closeLabel);
     close.setAttribute('aria-label', closeLabel);

@@ -4,7 +4,7 @@
   font-size: var(--font-size-micro);
   padding: var(--space-2xs) 6px;
   border-radius: var(--radius-sm);
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   flex-shrink: 0;
 }
 .tok-ok      { background: var(--color-ok-bg);   color: var(--color-ok-text); }
@@ -196,7 +196,7 @@
 
 .figur-name {
   font-size: var(--font-size-sm);
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   flex: 1;
 }
 
@@ -221,7 +221,7 @@
 }
 
 .kapitel-badge--primary {
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   background: var(--color-text);
   color: var(--color-surface);
 }
@@ -235,7 +235,7 @@
   padding: var(--space-2xs) 6px;
   background: var(--color-tag-bg);
   color: var(--color-muted);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 @media (max-width: 600px) {
@@ -260,7 +260,7 @@
 .figur-bz-typ {
   --rel-hue: var(--palette-gray);
   font-size: var(--font-size-xs);
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   padding: var(--space-2xs) 7px;
   border-radius: 0;
   flex-shrink: 0;
@@ -280,7 +280,7 @@
 
 .figur-bz-macht {
   font-size: var(--font-size-xs);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: 1px;
   margin-left: var(--space-2xs);
 }

@@ -209,20 +209,24 @@ router.put('/:book_id/citation', aclParamGuard('editor'), jsonBody, (req, res) =
 });
 
 /** Querverweis-Einstellungen. Eigener Endpunkt aus demselben Grund wie
- *  /citation: ob ein Werk seine Abbildungen nummeriert, gilt buchweit fuer alle
- *  Ausgabewege und gehoert deshalb nicht in ein Exportprofil. */
+ *  /citation: ob ein Werk seine Abbildungen und Tabellen nummeriert, gilt buchweit
+ *  fuer alle Ausgabewege und gehoert deshalb nicht in ein Exportprofil. */
 router.put('/:book_id/xrefs', aclParamGuard('editor'), jsonBody, (req, res) => {
   const bookId = req.bookId;
   const b = req.body || {};
   const cur = getBookSettings(bookId, req.session?.user?.email || null);
 
+  // Teil-PUT: nicht uebergebene Felder behalten ihren Stand. Abbildungen und
+  // Tabellen haben getrennte Schalter — ein Werk kann Tabellen nummerieren und
+  // Abbildungen nicht.
   setBookXrefSettings(bookId, {
     figure_numbering: b.figure_numbering !== undefined ? b.figure_numbering : cur.figure_numbering,
+    table_numbering: b.table_numbering !== undefined ? b.table_numbering : cur.table_numbering,
   });
 
   const next = getBookSettings(bookId, req.session?.user?.email || null);
-  logger.info(`[querverweise] settings book=${bookId} abbNummerierung=${next.figure_numbering}`);
-  res.json({ ok: true, figure_numbering: next.figure_numbering });
+  logger.info(`[querverweise] settings book=${bookId} abbNummerierung=${next.figure_numbering} tabNummerierung=${next.table_numbering}`);
+  res.json({ ok: true, figure_numbering: next.figure_numbering, table_numbering: next.table_numbering });
 });
 
 /** Vorherrschende Textsorte des Buchs (journalistische Projekte). Default fuer

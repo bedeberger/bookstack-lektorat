@@ -8,9 +8,10 @@ export const adminUsersMethods = {
     this.adminUsersLoading = true;
     this.adminUsersError = '';
     try {
-      const [usersResp, settingResp] = await Promise.all([
+      const [usersResp, settingResp, profilesResp] = await Promise.all([
         fetch('/admin/users', { credentials: 'same-origin' }),
         fetch('/admin/settings/ai.provider', { credentials: 'same-origin' }).catch(() => null),
+        fetch('/admin/ai-profiles', { credentials: 'same-origin' }).catch(() => null),
       ]);
       if (!usersResp.ok) {
         const j = await usersResp.json().catch(() => ({}));
@@ -22,6 +23,13 @@ export const adminUsersMethods = {
         const s = await settingResp.json().catch(() => null);
         const v = s?.setting?.value;
         if (typeof v === 'string') this.adminUsersGlobalProvider = v;
+      }
+      // Zuweisbare KI-Profile fuer die Combobox je Zeile. Faellt der Call aus,
+      // bleibt die Liste leer — die Zeile zeigt dann nur „Global: <provider>",
+      // und eine bestehende Zuweisung bleibt unangetastet.
+      if (profilesResp && profilesResp.ok) {
+        const p = await profilesResp.json().catch(() => null);
+        this.adminUsersProfiles = Array.isArray(p?.profiles) ? p.profiles : [];
       }
     } catch (e) {
       this.adminUsersError = e.message;

@@ -42,18 +42,19 @@ const { setContext } = require('../../lib/log-context');
 const { requireBookAccess, sendACLError } = require('../../lib/acl');
 const { resolvePageBookId } = require('../../lib/content-ownership');
 const appSettings = require('../../lib/app-settings');
-const { resolveProvider, providerClass } = require('../../lib/ai');
+const { resolveProvider, effectiveProviderClass } = require('../../lib/ai');
 const { lektoratAnalyze, objektivRuns, splitEnabled } = require('./lektorat-split');
 
 // Lokale Provider (ollama/llama) bekommen einen deutlich abgespeckten Lektorat-Prompt:
 // kein Vorseiten-Kontext (BookStack-Roundtrip gespart), keine Figuren-Beziehungen,
 // kein POV-/Tempus-Block. Alle Einsparungen auch in public/js/prompts.js (_isLocal).
-// Klassen-SSoT: lib/ai/config.js#providerClass (openai-compat flippt via
-// `ai.openai-compat.cloud` auf 'cloud').
-const _isLocalProvider = () => {
-  const p = appSettings.get('ai.provider') || 'claude';
-  return providerClass(p) === 'local';
-};
+// Klassen-SSoT: lib/ai/config.js#effectiveProviderClass (openai-compat flippt via
+// Cloud-Schalter auf 'cloud'). Am EFFEKTIVEN Provider dieses Users (KI-Profil vor
+// globalem ai.provider) — an der Instanz-Einstellung gelesen bekaeme im
+// Mischbetrieb der falsche User den abgemagerten Prompt.
+const _isLocalProvider = (userEmail) => effectiveProviderClass(
+  userEmail === undefined ? {} : { userEmail }
+) === 'local';
 
 // Letzten Absatz eines Texts extrahieren (max. maxChars Zeichen). Dient als
 // Übergangskontext für den Lektorat-Prompt, damit Tempus-/Perspektivwechsel
@@ -236,7 +237,7 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
 
     // Kapitelkontext laden: Figuren, Beziehungen, Schauplätze (falls Komplettanalyse gelaufen ist).
     // Lokale Provider: Beziehungen weglassen – der Prompt-Block wird für _isLocal ohnehin gedroppt.
-    const local = _isLocalProvider();
+    const local = _isLocalProvider(userEmail);
     const figuren           = getChapterFigures(bookId, pd.chapter_id, userEmail);
     const figurenBeziehungen = (!local && bookId) ? getChapterFigureRelations(bookId, pd.chapter_id, userEmail) : [];
     const orte              = bookId ? getChapterLocations(bookId, pd.chapter_id, userEmail) : [];
@@ -391,7 +392,7 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
   // Kapitelname-Cache (chapter_id → name) aus lokaler DB, spart wiederholte Lookups pro Seite.
   const chapterRows = db.prepare('SELECT chapter_id, chapter_name FROM chapters WHERE book_id = ?').all(parseInt(bookId));
   const chapterNameById = Object.fromEntries(chapterRows.map(r => [String(r.chapter_id), r.chapter_name]));
-  const local = _isLocalProvider();
+  const local = _isLocalProvider(userEmail);
   try {
     updateJob(jobId, { statusText: 'job.phase.loadingPages', progress: 0 });
     const pages = await contentStore.listPages(bookId, userToken).catch(e => { throw contentHttpError(e); });

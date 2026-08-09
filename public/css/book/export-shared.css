@@ -1,3 +1,4 @@
+@layer components {
 /* Geteilte Grammatik der drei Export-Karten (PDF / Word / EPUB).
    SSoT für den gemeinsamen Aufbau: Header-Scope-Picker, Profil-Leiste,
    Anlege-Zeile, Tab-Wrapper/-Panels, Chip-Reihen, Progress-Block + Mobile.
@@ -134,4 +135,5 @@
   .export-profile-pick { min-width: 0; flex: 1; }
   .export-create-clone,
   .export-create-clone > .combobox-wrap { width: 100%; min-width: 0; }
+}
 }

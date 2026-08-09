@@ -11,7 +11,7 @@ const {
 const { getNarrativeReport, getAutorenBefund } = require('../../../db/narrative-report');
 const { getBookSettings } = require('../../../db/schema');
 const { toIntId } = require('../../../lib/validate');
-const { resolveProvider } = require('../../../lib/ai');
+const { resolveProvider, effectiveProviderClass } = require('../../../lib/ai');
 const appSettings = require('../../../lib/app-settings');
 const { setContext } = require('../../../lib/log-context');
 const { aclParamGuard, requireBookAccess, sendACLError } = require('../../../lib/acl');
@@ -58,10 +58,11 @@ komplettRouter.post('/kontinuitaet', jsonBody, (req, res) => {
   try { requireBookAccess(req, book_id, 'editor'); }
   catch (e) { if (sendACLError(res, e)) return; throw e; }
   const userEmail = req.session?.user?.email || null;
-  // Kontinuitätsprüfung ist Claude-only (Verify-Filter/Attribut-Check gibt es nur
-  // dort). Das Frontend blendet die Karte für Nicht-Claude aus; dieser Guard erzwingt
-  // es serverseitig zur Sicherheit (Defense-in-depth, wie beim Recherche-Chat).
-  if (resolveProvider({ userEmail }) !== 'claude') return res.status(400).json({ error_code: 'CONTINUITY_CLAUDE_ONLY' });
+  // Kontinuitätsprüfung braucht die Cloud-KLASSE (Single-Pass, Verify-Filter,
+  // Attribut-Check setzen ein faehiges Modell voraus — keine Anthropic-API-Faehigkeit).
+  // Dieselbe Entscheidung wie `/config` komplett.continuity und das Ueberspringen der
+  // Phase im Job; dieser Guard erzwingt sie serverseitig (Defense-in-depth).
+  if (effectiveProviderClass({ userEmail }) !== 'cloud') return res.status(400).json({ error_code: 'CONTINUITY_PROVIDER_UNSUPPORTED' });
   const userToken = null;
   const existing = findActiveJobId('kontinuitaet', book_id, userEmail);
   if (existing) return res.json({ jobId: existing, existing: true });
@@ -129,9 +130,9 @@ komplettRouter.post('/erzaehlprofil', jsonBody, (req, res) => {
   try { requireBookAccess(req, book_id, 'editor'); }
   catch (e) { if (sendACLError(res, e)) return; throw e; }
   const userEmail = req.session?.user?.email || null;
-  // Erzählprofil ist Claude-only (Single-Pass gibt es nur dort; für Nicht-Claude
-  // Karte ausgeblendet). Serverseitiger Guard analog Kontinuität (Defense-in-depth).
-  if (resolveProvider({ userEmail }) !== 'claude') return res.status(400).json({ error_code: 'NARRATIVE_PROFILE_CLAUDE_ONLY' });
+  // Erzählprofil braucht die Cloud-Klasse (Single-Pass). Serverseitiger Guard analog
+  // Kontinuität (Defense-in-depth), gleiche Entscheidung wie `/config`.
+  if (effectiveProviderClass({ userEmail }) !== 'cloud') return res.status(400).json({ error_code: 'NARRATIVE_PROFILE_PROVIDER_UNSUPPORTED' });
   const userToken = null;
   const existing = findActiveJobId('erzaehlprofil', book_id, userEmail);
   if (existing) return res.json({ jobId: existing, existing: true });

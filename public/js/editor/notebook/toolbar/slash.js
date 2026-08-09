@@ -242,6 +242,13 @@ export const slashMethods = {
       return;
     }
 
+    // Tabelle: oeffnet den Gitter-Dialog, gleiche Uebergabe wie beim Diagramm.
+    if (item.table) {
+      this.openTableDialog(block);
+      this._closeSlash();
+      return;
+    }
+
     // Datums-/Zeit-Stempel: ersetzt den (per Trigger leeren) Block durch
     // einen <p> mit dem formatierten Stempel-String. Caret hinter den Text,
     // damit der User direkt weiterschreiben kann.

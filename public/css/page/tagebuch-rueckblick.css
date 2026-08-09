@@ -1,3 +1,4 @@
+@layer components {
 /* Tagebuch-Rückblick-Karte. Akzent via var(--card-accent) (.card--tagebuchRueckblick
    → card-accents.css). Badges eckig (--radius-sm). Mobile-Breakpoint im selben File. */
 
@@ -6,7 +7,7 @@
 .card--tagebuchRueckblick .rb-title-period {
   margin-left: var(--space-sm);
   color: var(--card-accent);
-  font-weight: 400;
+  font-weight: var(--fw-regular);
 }
 
 /* Hinweis, solange der User noch keinen Rückblick gespeichert hat. */
@@ -135,7 +136,7 @@
 
 .card--tagebuchRueckblick .rb-belege-strip-label {
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--color-text);
 }
 
@@ -193,7 +194,7 @@
   background: none;
   color: var(--card-accent);
   font-variant-numeric: tabular-nums;
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   font-size: var(--font-size-sm);
   white-space: nowrap;
   cursor: pointer;
@@ -210,7 +211,7 @@
 
 .card--tagebuchRueckblick .rb-history-zeitraum {
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--card-accent);
 }
 
@@ -259,4 +260,5 @@
     grid-template-columns: 1fr;
     gap: var(--space-2xs);
   }
+}
 }

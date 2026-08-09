@@ -17,7 +17,7 @@
 .overview-hero-value {
   font-family: var(--font-serif);
   font-size: var(--font-size-4xl);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
   line-height: 1;
@@ -40,7 +40,7 @@
 .overview-substat-value {
   font-family: var(--font-serif);
   font-size: var(--font-size-lg);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
 }
@@ -98,7 +98,7 @@
   justify-content: flex-start;
   align-items: center;
   font-size: var(--font-size-sm);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
 }
 
 /* ── 7-Tage-Bar-Chart ────────────────────────────────────────────────────── */
@@ -141,7 +141,7 @@
 .overview-bars7-total {
   margin-top: var(--space-2xs);
   font-size: var(--font-size-sm);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
 }
 
 /* ── Donut (Coverage + Today-Ring) ───────────────────────────────────────── */
@@ -158,7 +158,7 @@
 .overview-donut-text {
   font-family: var(--font-serif);
   font-size: var(--font-size-base);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   fill: var(--color-text);
   font-variant-numeric: tabular-nums;
 }
@@ -293,12 +293,12 @@
 }
 .overview-goal-current {
   font-size: var(--font-size-md);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--color-text);
 }
 .overview-goal-target {
   font-size: var(--font-size-sm);
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   color: var(--color-muted);
   margin-left: var(--space-2xs);
 }
@@ -317,7 +317,7 @@
   gap: var(--space-2xs);
   color: var(--color-text);
 }
-.overview-goal-status--reached { color: var(--color-success); font-weight: 600; }
+.overview-goal-status--reached { color: var(--color-success); font-weight: var(--fw-semibold); }
 .overview-goal-status--stalled { color: var(--color-muted); }
 .overview-goal-status .icon { width: 0.9em; height: 0.9em; }
 .overview-goal-stats {

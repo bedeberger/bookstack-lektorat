@@ -1,3 +1,4 @@
+@layer components {
 /* AdminSettingsCard. Akzent-Mapping in card-accents.css. */
 
 .admin-settings-tabs {
@@ -21,7 +22,7 @@
 .admin-settings-tab.is-active {
   color: var(--color-text);
   border-bottom-color: var(--card-accent);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .admin-settings-section {
@@ -71,7 +72,7 @@
 
 .setting-field__label {
   color: var(--color-text);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   min-width: 0;
 }
 
@@ -151,7 +152,7 @@
   color: var(--color-text);
   border-color: var(--card-accent);
   background: var(--color-accent-bg);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .admin-settings-subtab.is-default-provider {
@@ -171,7 +172,7 @@
 .admin-settings-subheading {
   margin: 0;
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--color-text);
   display: flex;
   align-items: center;
@@ -185,7 +186,7 @@
   color: var(--color-surface);
   border-radius: var(--radius-sm);
   font-size: var(--font-size-xs);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -196,15 +197,6 @@
   border-radius: var(--radius-md);
   background: var(--color-tag-bg);
   font-size: var(--font-size-sm);
-}
-
-.success-msg {
-  padding: var(--space-md);
-  background: var(--color-ok-bg);
-  color: var(--color-ok-text);
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-sm);
-  margin-bottom: var(--space-lg);
 }
 
 /* Komplettanalyse-Budget-Hinweis unter den Provider-Feldern: neutral als
@@ -255,7 +247,7 @@
 .admin-settings-sweep h4 {
   margin: 0;
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--color-text);
 }
 
@@ -326,6 +318,65 @@
   padding: var(--space-2xs) var(--space-sm);
 }
 
+/* ── KI-Profile (Provider-Tab, Sub-Tab `profiles`) ───────────────────────────
+   Eigene Klassen statt Wiederverwendung der .admin-users-*-Regeln: die leben in
+   admin-users.css und gehoeren zur User-Karte — ein Zugriff darauf von hier waere
+   eine Kopplung ueber Kartengrenzen hinweg. */
+.admin-profiles-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.admin-profiles-table th,
+.admin-profiles-table td {
+  text-align: left;
+  padding: var(--space-md) var(--space-sm);
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+}
+
+.admin-profiles-table th {
+  font-weight: var(--fw-semibold);
+  color: var(--color-muted);
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.admin-profiles-actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.admin-profiles-actions button {
+  font-size: var(--font-size-xs);
+  padding: var(--space-xs) var(--space-sm);
+}
+
+.admin-profiles-actions button + button {
+  margin-left: var(--space-sm);
+}
+
+.admin-profiles-actions .danger {
+  color: var(--color-err-text);
+}
+
+.admin-profiles-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+  margin-top: var(--space-md);
+}
+
+.admin-profiles-form legend {
+  font-weight: var(--fw-semibold);
+  padding: 0 var(--space-sm);
+}
+
 @media (max-width: 600px) {
   .admin-settings-tabs {
     overflow-x: auto;
@@ -349,4 +400,5 @@
     white-space: pre-wrap;
     word-break: break-word;
   }
+}
 }

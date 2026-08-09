@@ -1,87 +1,46 @@
 @layer components {
 /* STT-Diktat: schwebender Mic-Button + Live-Status unten rechts im Editorfeld
-   (visuell analog zum LanguageTool-Badge oben rechts). `position: sticky` haelt
-   den Mic am unteren Rand des jeweiligen Scrollports (Seite ODER Vollbild-Karte);
-   negativer margin-top zieht die Box in den Textfluss zurueck, sodass sie keine
-   Layout-Hoehe verbraucht und wirklich „schwebt". pointer-events:none am Container
-   (nur die Kinder klickbar), damit der freie Bereich darum weiter den Text trifft. */
+   (visuell analog zum LanguageTool-Badge oben rechts). Form/Tasten/Pille kommen
+   aus components/floating-dock.css (.dock/.dock-btn/.dock-status) — hier steht
+   nur die Verankerung und was am Diktat eigen ist: der rote Aufnahmezustand.
+
+   `position: sticky` haelt den Mic am unteren Rand des jeweiligen Scrollports
+   (Seite ODER Vollbild-Karte); negativer margin-top zieht die Box in den
+   Textfluss zurueck, sodass sie keine Layout-Hoehe verbraucht und wirklich
+   „schwebt". */
 .stt-dock {
   position: sticky;
   bottom: var(--space-sm);
   align-self: flex-end;
   margin-right: var(--space-sm);
   margin-top: calc(-1 * (36px + var(--space-sm)));
-  z-index: var(--z-spellcheck, 9);
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  pointer-events: none;
+  z-index: var(--z-spellcheck);
 }
-.stt-dock > * { pointer-events: auto; }
 
-.stt-dock-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-muted);
-  cursor: pointer;
-  box-shadow: var(--shadow-sm);
-  transition: color 0.2s, border-color 0.2s, background 0.2s;
-}
-.stt-dock-btn .icon { width: 18px; height: 18px; }
-.stt-dock-btn:hover { color: var(--color-primary); border-color: var(--color-primary); }
 /* Aktive Aufnahme: rot mit pulsierendem Akzent. */
 .stt-dock-btn.is-recording[aria-pressed="true"] {
-  border-color: var(--color-danger, #b04040);
-  color: var(--color-danger, #b04040);
-  background: color-mix(in srgb, var(--color-danger, #b04040) 10%, transparent);
+  border-color: var(--color-err-border);
+  color: var(--color-err-text);
+  background: color-mix(in srgb, var(--color-err-border) 10%, transparent);
   animation: sttRecPulse 1.4s ease-in-out infinite;
 }
 /* Pending = kurzer Wartezustand (getUserMedia laeuft) ohne Puls. */
 .stt-dock-btn.is-pending { opacity: 0.6; cursor: default; }
 @keyframes sttRecPulse {
-  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-danger, #b04040) 45%, transparent); }
-  50%      { box-shadow: 0 0 0 5px color-mix(in srgb, var(--color-danger, #b04040) 0%, transparent); }
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-err-border) 45%, transparent); }
+  50%      { box-shadow: 0 0 0 5px color-mix(in srgb, var(--color-err-border) 0%, transparent); }
 }
 
-/* Status-Pill links vom Mic. Punkt-Indikator: grau (bereit), rot pulsierend
-   (erkennt Sprache), akzentfarben pulsierend (transkribiert). */
-.stt-dock .stt-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: var(--space-3) var(--space-6);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
-  font-size: var(--font-size-xs);
-  line-height: 1;
-  color: var(--color-muted);
-  white-space: nowrap;
-  user-select: none;
-}
-.stt-dock .stt-status::before {
-  content: "";
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--color-muted);
-  flex: none;
-}
-/* Aufnahme laeuft: roter Punkt, ruhiger langsamer Puls (signalisiert „aktiv",
-   reagiert aber NICHT auf den Mikrofonpegel — das strobte frueher). */
+/* Punkt-Indikator der Status-Pille: grau (bereit — Ruhefarbe aus .dock-status),
+   rot pulsierend (erkennt Sprache), akzentfarben pulsierend (transkribiert).
+   Aufnahme laeuft: ruhiger langsamer Puls (signalisiert „aktiv", reagiert aber
+   NICHT auf den Mikrofonpegel — das strobte frueher). */
 .stt-dock .stt-status.is-listening {
-  color: var(--color-danger, #b04040);
-  border-color: color-mix(in srgb, var(--color-danger, #b04040) 40%, transparent);
+  color: var(--color-err-text);
+  border-color: color-mix(in srgb, var(--color-err-border) 40%, transparent);
 }
 .stt-dock .stt-status.is-listening::before {
-  background: var(--color-danger, #b04040);
+  background: var(--color-err-border);
   animation: sttDotBreathe 2s ease-in-out infinite;
 }
 /* Segment wird transkribiert: Akzentfarbe, etwas zuegigerer Puls. */
@@ -100,9 +59,5 @@
 @keyframes sttDotBreathe {
   0%, 100% { opacity: 1; }
   50%      { opacity: 0.5; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .stt-dock-btn.is-recording[aria-pressed="true"] { animation: none; }
-  .stt-dock .stt-status::before { animation: none !important; }
 }
 }

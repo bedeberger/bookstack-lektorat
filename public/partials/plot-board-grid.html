@@ -23,20 +23,20 @@
                  x-text="row.thread ? row.thread.name : $app.t('plot.thread.axisLabel')"></div>
             <template x-for="act in row.acts" :key="act.id">
               <div class="plot-swim-acthead" :style="{ '--col-accent': actAccent(act) }">
-                <div class="plot-color-swatch-wrap" x-show="editingActId !== act.id">
-                  <button type="button" class="plot-color-swatch"
+                <div class="color-picker" x-show="editingActId !== act.id">
+                  <button type="button" class="color-picker__swatch"
                           @click.stop="toggleActColorPicker(act.id)"
                           :data-tip="$app.t('plot.act.color')" :aria-label="$app.t('plot.act.color')"></button>
-                  <div class="plot-color-popover" x-show="actColorPickerId === act.id" x-cloak
+                  <div class="color-picker__popover" x-show="actColorPickerId === act.id" x-cloak
                        @click.outside="actColorPickerId === act.id && (actColorPickerId = null)">
-                    <button type="button" class="plot-color-opt plot-color-opt--none"
-                            :class="{ 'plot-color-opt--on': !act.farbe }"
+                    <button type="button" class="color-picker__opt color-picker__opt--none"
+                            :class="{ 'color-picker__opt--on': !act.farbe }"
                             @click="setActColor(act, null)"
                             :data-tip="$app.t('plot.act.colorNone')" :aria-label="$app.t('plot.act.colorNone')"></button>
                     <template x-for="key in actPalette()" :key="key">
-                      <button type="button" class="plot-color-opt"
+                      <button type="button" class="color-picker__opt"
                               :style="{ '--col-accent': 'var(--palette-' + key + ')' }"
-                              :class="{ 'plot-color-opt--on': act.farbe === key }"
+                              :class="{ 'color-picker__opt--on': act.farbe === key }"
                               @click="setActColor(act, key)" :aria-label="key"></button>
                     </template>
                   </div>
@@ -108,20 +108,20 @@
               <!-- Strang-Lane: Ansicht -->
               <template x-if="row.lane.thread && editingThreadId !== row.lane.id">
                 <div class="plot-swim-lane-view">
-                  <div class="plot-color-swatch-wrap">
-                    <button type="button" class="plot-color-swatch"
+                  <div class="color-picker">
+                    <button type="button" class="color-picker__swatch"
                             @click.stop="toggleThreadColorPicker(row.lane.id)"
                             :data-tip="$app.t('plot.thread.color')" :aria-label="$app.t('plot.thread.color')"></button>
-                    <div class="plot-color-popover" x-show="threadColorPickerId === row.lane.id" x-cloak
+                    <div class="color-picker__popover" x-show="threadColorPickerId === row.lane.id" x-cloak
                          @click.outside="threadColorPickerId === row.lane.id && (threadColorPickerId = null)">
-                      <button type="button" class="plot-color-opt plot-color-opt--none"
-                              :class="{ 'plot-color-opt--on': !row.lane.thread.farbe }"
+                      <button type="button" class="color-picker__opt color-picker__opt--none"
+                              :class="{ 'color-picker__opt--on': !row.lane.thread.farbe }"
                               @click="setThreadColor(row.lane.thread, null)"
                               :data-tip="$app.t('plot.act.colorNone')" :aria-label="$app.t('plot.act.colorNone')"></button>
                       <template x-for="key in actPalette()" :key="key">
-                        <button type="button" class="plot-color-opt"
+                        <button type="button" class="color-picker__opt"
                                 :style="{ '--col-accent': 'var(--palette-' + key + ')' }"
-                                :class="{ 'plot-color-opt--on': row.lane.thread.farbe === key }"
+                                :class="{ 'color-picker__opt--on': row.lane.thread.farbe === key }"
                                 @click="setThreadColor(row.lane.thread, key)" :aria-label="key"></button>
                       </template>
                     </div>

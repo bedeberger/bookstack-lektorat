@@ -67,7 +67,7 @@
   white-space: nowrap;
 }
 .ymheat-year:hover:not(:disabled) { color: var(--color-text); text-decoration: underline; }
-.ymheat-year--has { color: var(--color-text); font-weight: 600; }
+.ymheat-year--has { color: var(--color-text); font-weight: var(--fw-semibold); }
 .ymheat-year--active { color: var(--ymheat-accent); }
 .ymheat-year:disabled { cursor: default; opacity: 0.5; }
 

@@ -1,3 +1,4 @@
+@layer components {
 /* Sortierbare Tabellen-Header.
    Pattern: <th @click="sortBy('key')" :class="sortClass('key')" :aria-sort="...">
    `sortableTable`-Komponente (public/js/sortable-table.js) liefert die Klassen.
@@ -71,4 +72,5 @@
 .sortable-th:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: -2px;
+}
 }

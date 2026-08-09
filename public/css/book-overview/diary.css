@@ -19,7 +19,7 @@
 .overview-consistency-value {
   font-family: var(--font-serif);
   font-size: var(--font-size-2xl);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   letter-spacing: -0.02em;
   line-height: 1;
   font-variant-numeric: tabular-nums;

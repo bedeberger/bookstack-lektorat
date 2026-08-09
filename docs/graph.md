@@ -4,14 +4,17 @@ Drei Render-Modi auf einer vis-network-Instanz: Figurengraph (Kapitel-Swimlane),
 
 Code: [public/js/graph.js](../public/js/graph.js) (Facade) + [public/js/graph/](../public/js/graph/) (Slices). Eingehängt in [public/js/cards/figuren-card.js](../public/js/cards/figuren-card.js) via `...graphMethods` im `Alpine.data`-Pool.
 
+Den vis-network-Unterbau teilt er sich mit der **Motiv-Konstellation** ([docs/motiv-werkstatt.md](motiv-werkstatt.md)): [public/js/graph-kit.js](../public/js/graph-kit.js) hält Bundle-Nachladen, Hover-Tooltip und Canvas-Farbauflösung. Was dort liegt, wird **nicht** pro Graph nachgebaut; was fachlich ist (Figurentyp-Palette, Beziehungs-Styling, Layout), bleibt hier.
+
 ## Modul-Layout
 
 | Slice | Verantwortung |
 |-------|---------------|
 | `graph/constants.js` | **SSoT für alle Graph-Farben.** `DEFAULT_FONT`, `nodeLabel`, `SCHICHT_COLOR` (inkl. `band`-Streifen + `label`-Textfarbe pro Schicht), `SCHICHT_LEVEL`, `TYP_COLOR` (Node-Füllung), `TIER_COLOR` (Text-/Akzentfarbe), `BZ` (Edge-Styles Figurengraph), `BZ_SOZIO_COLOR`/`BZ_SOZIO_CAT` (Soziogramm), `DIRECTED_TYPES`. |
-| `graph/core.js` | Mode-Switch (`setFigurenGraphModus`), Fullscreen-Toggle, Render-Dispatcher (`renderFigurGraph`), Hash-Cache, vis-Lazy-Load. |
-| `graph/shared.js` | `_figTypColor` (Lookup in `TYP_COLOR`), `_baseNode` (gemeinsame vis-Node-Basis), `_figurenGraphSetKapitel` (Kapitel-Filter dim/highlight), `_buildEdges` (Edge-Liste mit Dedup, id→Figur-Map), `_attachTooltip` (Hover-Tooltip mit Escape, id→Figur-Map). |
-| `graph/figurengraph.js` | Kapitel-Swimlane (deterministisch, ohne Physics). |
+| `graph/core.js` | Mode-Switch (`setFigurenGraphModus`), Fullscreen-Toggle, Render-Dispatcher (`renderFigurGraph`), Hash-Cache, vis-Bundle + Theme-Auflösung. |
+| `graph/shared.js` | `_theme` (aufgelöste Canvas-Farben), `_figTypColor`/`_schichtNodeColor`/`_nodeFont` (Paletten, für den Grund nachgeführt), `_baseNode` (gemeinsame vis-Node-Basis), `_figurenGraphSetKapitel` (Kapitel-Filter dim/highlight), `_buildEdges` (Edge-Liste mit Dedup, id→Figur-Map), `_attachTooltip` (Hover-Tooltip mit Escape, id→Figur-Map). |
+| `graph/layout.js` | **Reine** Swimlane-Berechnung: `computeSwimlaneLayout`, `figureInfo`, `columnWidth`, `importanceBorderWidth` + die Konstanten (`TIER_ORDER`, `ROW_H`, `MIN_DX`). Kein DOM, kein vis → in [tests/unit/graph-layout.test.mjs](../tests/unit/graph-layout.test.mjs) direkt testbar. |
+| `graph/figurengraph.js` | Kapitel-Swimlane (deterministisch, ohne Physics) — zeichnet, was `layout.js` rechnet. |
 | `graph/familiengraph.js` | Hierarchischer Baum, nur Familien-Edges (elternteil/kind/geschwister). |
 | `graph/soziogramm.js` | Sozialschicht-Bands, Macht-Sortierung innerhalb Schicht. |
 
@@ -102,13 +105,22 @@ Figurengraph-Modus: Style aus `BZ`-Tabelle (Farbe, Highlight, Arrows, Dashes).
 
 ## Kapitel-Filter (`_figurenGraphSetKapitel`)
 
-Greift nach dem initialen Render. Mutiert nur Node-Color/Font + Edge-Color via `DataSet.update` — kein Re-Layout, keine Stabilisierung. Figuren, deren `kapitel`-Liste das gewählte Kapitel **nicht** enthält, werden grau dimmt (Background `#efefef`, Border `#ccc`, Font `#bbb`). Edges werden gedimmt, wenn weder `from` noch `to` aktiv sind.
+Greift nach dem initialen Render. Mutiert nur Node-Color/Font + Edge-Color via `DataSet.update` — kein Re-Layout, keine Stabilisierung. Figuren, deren `kapitel`-Liste das gewählte Kapitel **nicht** enthält, werden gedimmt (`theme.dim`, aus der Oberflächenfarbe abgeleitet statt fest hellgrau). Edges werden gedimmt, wenn weder `from` noch `to` aktiv sind.
 
 Modus-aware: im Soziogramm-Modus bleibt die Schichtfarbe (`SCHICHT_COLOR`), sonst Typ-Farbe (`_figTypColor`). Edge-Farben kommen aus `BZ_SOZIO_COLOR` (Soziogramm) bzw. `BZ` (Figurengraph).
 
+## Farben auf dem Canvas
+
+vis-network zeichnet auf ein `<canvas>` — dort werden **keine CSS-Custom-Properties aufgelöst**. Jede Farbe muss zur Render-Zeit als konkreter Wert vorliegen, und ein Theme-Wechsel erreicht das bereits gezeichnete Bild nicht. Daraus folgt die Arbeitsteilung:
+
+- `renderFigurGraph` löst einmal pro Render `graphTheme(container)` auf und legt das Ergebnis in `this._graphTheme` ab; alle Slices lesen es über `this._theme()`.
+- Chrome (Spaltenstreifen, Trennlinien, Kapitel-Header, Label-Pills, Presence-Untergrund, Dim-Zustand) kommt **ausschliesslich** aus dem Theme — keine `rgba(0,0,0,…)`/`#555`-Literale mehr im Draw-Pfad.
+- Die fachlichen Paletten in `constants.js` bleiben für hellen Grund notiert und werden nachgeführt: Node-Flächen über `adaptNodeColor` (Füllung gegen die Oberfläche abgemischt, gesättigte Border bleibt der Erkennungsanker), Akzent-/Kantenfarben über `theme.ink()` (hellt nur auf, was auf dunklem Grund zu dunkel wäre).
+- Der Hell/Dunkel-Stand ist Teil des Render-Hashs, und ein `observeThemeChange`-Observer in [figuren-card.js](../public/js/cards/figuren-card.js) stösst bei `data-theme`-Wechsel neu an.
+
 ## Tooltip (`_attachTooltip`)
 
-Hängt am `#figur-tooltip`-Element. Listener: `hoverNode`/`blurNode`, `hoverEdge`/`blurEdge`. Positionierung berücksichtigt Container-Bounds (`offsetWidth`/`offsetHeight`) und flippt das Tooltip nach links/oben, wenn es rechts/unten überlaufen würde.
+Hängt am `#figur-tooltip`-Element (Klasse `.graph-tooltip`, CSS-Komponente — siehe DESIGN.md „Graph-Tooltip"). Listener: `hoverNode`/`blurNode`, `hoverEdge`/`blurEdge`, `dragStart` (ausblenden). Positionierung + Klemmung liefert `createGraphTooltip` aus dem Graph-Kit; die reine Geometrie steckt in `clampTipPos`.
 
 **XSS-Escape-Invariante:** `escHtml()` für jeden eingesetzten Wert (Figurnamen, Beschreibungen, Schicht-/Typ-Labels). Template-Strings setzen Markup-Wrapper, alle Datenwerte vorher escaped.
 
@@ -118,10 +130,12 @@ Hängt am `#figur-tooltip`-Element. Listener: `hoverNode`/`blurNode`, `hoverEdge
 
 ## Pflicht-Invarianten
 
-- **vis-Lazy-Load:** `_renderXxx` setzt `loadVis()` voraus. `renderFigurGraph` checkt `window.vis` und lädt bei Bedarf, mit Placeholder.
-- **`escHtml` für jeden User-/KI-Wert** in Tooltips + Placeholder-Strings. `container.innerHTML` mit raw `t()`-Output wäre unsicher (Übersetzungen sind statisch, aber Konvention im Repo zwingt Escape überall).
+- **vis-Lazy-Load:** `_renderXxx` setzt das geladene Bundle voraus. `renderFigurGraph` ruft `ensureVis(container)` (Graph-Kit) und bricht bei `false` ab — kein eigener `loadVis`-Aufruf mit eigenem Placeholder.
+- **`escHtml` für jeden User-/KI-Wert** im Tooltip (`innerHTML`-Sink). Reine Text-Platzhalter laufen über `graphPlaceholder` (setzt `textContent`, gar keine HTML-Sink).
+- **Keine Farb-Literale im Draw-Pfad** — Chrome-Farben aus `this._theme()`, Paletten aus `constants.js` durch `adaptNodeColor`/`theme.ink()`. Ein hartes `#fff`/`rgba(0,0,0,…)` ist im Dark-Mode ein Leuchtbalken bzw. unsichtbar.
+- **Layout rechnet `layout.js`, nicht der Renderer.** Positionslogik gehört in die reine Schicht (testbar); `figurengraph.js` zeichnet nur.
 - **Network destroyen vor Re-Render.** `renderFigurGraph` cleant `_figurenNetwork` vor Neu-Erzeugung; Card-Lifecycle (`onBookChanged`, `destroy`) ebenso.
-- **Hash-Cache prüft die komplette Render-Signatur** (id, typ, sozialschicht, Kapitel-Häufigkeiten, Beziehungen inkl. Machtverhältnis), nicht nur die Kapitel — sonst zeigt ein Re-Render nach Typ-/Schicht-/Beziehungs-Edit den alten Stand. Modus-Switches und Locale-Wechsel erzwingen ebenfalls Re-Render.
+- **Hash-Cache prüft die komplette Render-Signatur** (id, typ, sozialschicht, Kapitel-Häufigkeiten, Beziehungen inkl. Machtverhältnis), nicht nur die Kapitel — sonst zeigt ein Re-Render nach Typ-/Schicht-/Beziehungs-Edit den alten Stand. Modus-, Locale- und Theme-Wechsel erzwingen ebenfalls Re-Render.
 - **`fit()` nimmt Node-IDs**, nicht Canvas-Bounding-Box (Figurengraph hat sonst leere Spalten am Rand).
 - **Soziogramm fixiert Y**, Figurengraph läuft komplett ohne Physics (User-Drags bleiben stehen), Familiengraph deaktiviert Physics nach Stabilisierung.
 
@@ -132,8 +146,9 @@ Hängt am `#figur-tooltip`-Element. Listener: `hoverNode`/`blurNode`, `hoverEdge
 3. In `core.js#renderFigurGraph` Modus-Switch ergänzen.
 4. UI-Toggle in `partials/figuren.html` + `figurenGraphModus`-Werte-Set in `figuren-card.js`.
 5. `_figurenNodes` + `_figurenEdges` setzen — Kapitel-Filter (`_figurenGraphSetKapitel`) liest sie und passt seinen Modus-Branch entsprechend an (ggf. `else if` ergänzen).
-6. Wenn eigene Canvas-Overlays: `beforeDrawing`/`afterDrawing` (Pflicht-Trennung: Netzwerk-Koordinaten vs. Screen-Koordinaten via `setTransform(1,0,0,1,0,0)`).
+6. Wenn eigene Canvas-Overlays: `beforeDrawing`/`afterDrawing` (Pflicht-Trennung: Netzwerk-Koordinaten vs. Screen-Koordinaten via `setTransform(1,0,0,1,0,0)`), Farben aus `this._theme()`.
 7. Tooltip via `this._attachTooltip(container)` aus shared.
+8. Positionsrechnung in `layout.js` (oder ein eigenes reines Modul), nicht in den Render-Slice.
 
 ## Neuer Beziehungstyp
 

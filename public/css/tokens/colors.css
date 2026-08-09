@@ -49,20 +49,16 @@
   --color-success: #34d399;
   --color-success-hover: #1D9E75;
 
-  /* KI-Funken aus dem Logo — dekorative Akzente für KI-/Analyse-Kontexte. */
-  --color-spark-blue: #7eb8f0;
-  --color-spark-purple: #a78bfa;
-  --color-spark-green: var(--color-success);
-
   /* === Status-Achse 2: content-severity (Findings, Continuity) ===
      Eigene Shades — semantisch reicher als ok/warn/err und visuell
-     getrennt, damit Findings nicht wie System-Banner aussehen. */
+     getrennt, damit Findings nicht wie System-Banner aussehen.
+     Die Vollton-Werte tragen Dots/Tags (entity-list.css); die weiche
+     -bg/-text-Paarung gibt es nur fuer `schwach` — das ist die einzige
+     Stufe, die als getoentes Feld statt als Vollton-Chip auftritt
+     (szenen.css, search.css). Neue Stufe als weiches Feld => Paar hier
+     ergaenzen, nicht auf Verdacht vorhalten. */
   --color-stark: #3a8f3e;
-  --color-stark-bg: #D6F0D8;
-  --color-stark-text: #1e5c23;
   --color-mittel: #b38600;
-  --color-mittel-bg: #FFF3CC;
-  --color-mittel-text: #6b4c00;
   --color-schwach: #c43838;
   --color-schwach-bg: #FFE0E0;
   --color-schwach-text: #8B1E1E;
@@ -88,7 +84,6 @@
   --color-hover-strong: rgba(0, 0, 0, 0.07);
 
   /* Inverse-Text (auf dauerhaft dunklen Flächen) */
-  --color-text-inverse-muted: rgba(255, 255, 255, 0.65);
   --color-text-inverse: #eee;
 
   /* Inline-Markierungen (Lektorat + Chat) */
@@ -102,12 +97,10 @@
   --color-mark-del-text: #999;
   --color-mark-ins-bg: rgba(34, 170, 90, 0.13);
   --color-mark-ins-text: #1a7f37;
-  --color-mark-highlight: #fff3b0;
 
   /* Historie aktiv (Tönung aus dem Marken-Blau #1d4b73) */
   --color-history-active-bg: rgba(29, 75, 115, 0.08);
   --color-history-active-bg-hover: rgba(29, 75, 115, 0.14);
-  --color-history-section-bg: #e8e6e0;
 
   /* Page-Content-View + Tooltip-Panels */
   --color-page-view-bg: #fbf8f3;
@@ -120,7 +113,6 @@
      der optisch das obere Ende desselben Bogens ist. Beide Themes teilen sie —
      die Tönung sitzt im Grund, nicht im Korn. */
   --color-page-view-texture: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='4' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.35  0 0 0 0 0.27  0 0 0 0 0.18  0 0 0 0.05 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>") repeat;
-  --color-notebook-rule: rgba(120, 95, 60, 0.16);
   --color-tooltip-bg: #ffffff;
 
   /* Bucheditor — eigene Paper/Ink-Palette, entkoppelt von Notebook */
@@ -318,7 +310,6 @@
   /* Mix-Rezepte (figpal) */
   --figpal-bg-mix:     18%;
   --figpal-text-mix:   75%;
-  --figpal-border-mix: 60%;
 }
 
 /* === Dark-Theme Overrides === */
@@ -360,17 +351,8 @@
   --color-success: #4fd9aa;
   --color-success-hover: #6eead0;
 
-  /* KI-Funken — aufgehellt für dunklen Grund. */
-  --color-spark-blue: #9ec8f5;
-  --color-spark-purple: #c4abff;
-  --color-spark-green: var(--color-success);
-
   --color-stark: #6ac96e;
-  --color-stark-bg: rgba(58, 143, 62, 0.18);
-  --color-stark-text: #9bd49e;
   --color-mittel: #d8b040;
-  --color-mittel-bg: rgba(179, 134, 0, 0.18);
-  --color-mittel-text: #e5c272;
   --color-schwach: #e25c5c;
   --color-schwach-bg: rgba(226, 75, 74, 0.18);
   --color-schwach-text: #ff9090;
@@ -400,15 +382,12 @@
   --color-mark-del-text: #8a8580;
   --color-mark-ins-bg: rgba(34, 170, 90, 0.25);
   --color-mark-ins-text: #5fd58c;
-  --color-mark-highlight: rgba(255, 243, 176, 0.25);
 
   --color-history-active-bg: rgba(122, 163, 202, 0.12);
   --color-history-active-bg-hover: rgba(122, 163, 202, 0.2);
-  --color-history-section-bg: #2a2723;
 
   --color-page-view-bg: #1f1d1a;
   --color-page-view-text: #d8d3c8;
-  --color-notebook-rule: rgba(216, 211, 200, 0.09);
   --color-tooltip-bg: #2d2a25;
 
   --color-book-editor-bg: #1f1d1a;
@@ -520,5 +499,4 @@
 
   --figpal-bg-mix:     30%;
   --figpal-text-mix:   72%;
-  --figpal-border-mix: 55%;
 }

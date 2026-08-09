@@ -1,0 +1,131 @@
+<!-- Tabellen-Dialog des Notebook-Editors: Gitter aus Zellenfeldern, Beschriftung,
+     Spaltenausrichtung. Lebt im Scope von editorToolbarCard (Methoden in
+     public/js/editor/notebook/toolbar/table.js) — darum `x-ref` + showModal()
+     statt des modal()-Primitivs, und `@close` ist der einzige Aufräumpunkt
+     (ESC, Backdrop und Abbrechen laufen alle durch dlg.close()).
+
+     Die Zellenfelder tragen `data-spellcheck="spelling"`: im Manuskript ist die
+     Tabelle atomar und aus dem LanguageTool-Stream geschnitten, geprüft wird
+     hier — wo man den Fehler auch beheben kann (harte Regel „LanguageTool auf
+     Prosatextfeldern Pflicht"). -->
+<dialog class="editor-dialog table-dialog" x-ref="tableDlg" @close="onTableDialogClose()"
+        @click.self="closeTableDialog()">
+  <div class="editor-dialog__inner">
+    <div class="editor-dialog__head">
+      <span class="editor-dialog__title"
+            x-text="$app.t(tableEditing ? 'editor.table.titleEdit' : 'editor.table.titleNew')"></span>
+      <button type="button" class="icon-btn icon-btn--ghost" @click="closeTableDialog()"
+              :data-tip="$app.t('common.close')" :aria-label="$app.t('common.close')">
+        <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#x"/></svg>
+      </button>
+    </div>
+
+    <template x-if="tableModelState">
+      <div class="table-dialog-body">
+        <div class="table-dialog-caption-row">
+          <label class="table-dialog-caption-label" for="table-caption-input"
+                 x-text="$app.t('editor.table.caption')"></label>
+          <input type="text" id="table-caption-input" class="table-caption-input"
+                 x-ref="tableCaptionInput" x-model="tableModelState.caption"
+                 data-spellcheck="spelling" autocomplete="off"
+                 :placeholder="$app.t('editor.table.captionPlaceholder')">
+        </div>
+
+        <p class="table-dialog-warn" x-show="tableLossy"
+           x-text="$app.t('editor.table.lossy')"></p>
+
+        <div class="table-dialog-grid-wrap">
+          <table class="table-dialog-grid">
+            <thead>
+              <tr>
+                <th class="table-grid-corner"></th>
+                <template x-for="(a, c) in tableModelState.align" :key="'col' + c">
+                  <th class="table-grid-colhead">
+                    <div class="table-grid-colctl">
+                      <div class="table-grid-aligns" role="group"
+                           :aria-label="$app.t('editor.table.alignLabel')">
+                        <template x-for="opt in tableAlignOptions()" :key="opt.value">
+                          <button type="button" class="table-align-btn"
+                                  :class="{ 'is-active': tableModelState.align[c] === opt.value }"
+                                  :aria-pressed="tableModelState.align[c] === opt.value"
+                                  :data-tip="opt.label" :aria-label="opt.label"
+                                  @click="tableSetAlign(c, opt.value)"
+                                  x-text="opt.value === 'left' ? '⟵' : (opt.value === 'center' ? '↔' : '⟶')"></button>
+                        </template>
+                      </div>
+                      <button type="button" class="icon-btn icon-btn--ghost table-grid-del"
+                              :disabled="!tableCanRemoveCol()"
+                              @click="tableRemoveCol(c)"
+                              :data-tip="$app.t('editor.table.removeCol')"
+                              :aria-label="$app.t('editor.table.removeCol')">
+                        <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#x"/></svg>
+                      </button>
+                    </div>
+                  </th>
+                </template>
+              </tr>
+            </thead>
+            <tbody>
+              <tr x-show="tableHasHeader()" class="table-grid-headrow">
+                <th class="table-grid-rowhead" scope="row"
+                    x-text="$app.t('editor.table.headerRow')"></th>
+                <template x-for="(cell, c) in (tableModelState.header || [])" :key="'h' + c">
+                  <td>
+                    <input type="text" class="table-grid-input table-grid-input--head"
+                           :value="cell.text" @input="tableSetCell(cell, $event.target.value)"
+                           data-spellcheck="spelling" autocomplete="off"
+                           :aria-label="$app.t('editor.table.headerCellLabel', { col: c + 1 })">
+                  </td>
+                </template>
+              </tr>
+              <template x-for="(row, r) in tableModelState.rows" :key="'r' + r">
+                <tr>
+                  <th class="table-grid-rowhead" scope="row">
+                    <span x-text="r + 1"></span>
+                    <button type="button" class="icon-btn icon-btn--ghost table-grid-del"
+                            :disabled="!tableCanRemoveRow()"
+                            @click="tableRemoveRow(r)"
+                            :data-tip="$app.t('editor.table.removeRow')"
+                            :aria-label="$app.t('editor.table.removeRow')">
+                      <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#x"/></svg>
+                    </button>
+                  </th>
+                  <template x-for="(cell, c) in row" :key="'c' + c">
+                    <td>
+                      <input type="text" class="table-grid-input"
+                             :class="'is-align-' + tableModelState.align[c]"
+                             :value="cell.text" @input="tableSetCell(cell, $event.target.value)"
+                             data-spellcheck="spelling" autocomplete="off"
+                             :aria-label="$app.t('editor.table.cellLabel', { row: r + 1, col: c + 1 })">
+                    </td>
+                  </template>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="table-dialog-tools">
+          <button type="button" class="btn-compact" :disabled="!tableCanAddRow()"
+                  @click="tableAddRow()" x-text="$app.t('editor.table.addRow')"></button>
+          <button type="button" class="btn-compact" :disabled="!tableCanAddCol()"
+                  @click="tableAddCol()" x-text="$app.t('editor.table.addCol')"></button>
+          <button type="button" class="btn-compact" @click="tableToggleHeader()"
+                  :aria-pressed="tableHasHeader()"
+                  x-text="$app.t(tableHasHeader() ? 'editor.table.headerOff' : 'editor.table.headerOn')"></button>
+          <span class="table-dialog-hint" x-text="$app.t('editor.table.hint')"></span>
+        </div>
+      </div>
+    </template>
+
+    <div class="editor-dialog__actions">
+      <button type="button" class="danger" x-show="tableEditing"
+              @click="removeTable()" x-text="$app.t('editor.table.remove')"></button>
+      <span class="editor-dialog__spacer"></span>
+      <button type="button" @click="closeTableDialog()" x-text="$app.t('common.cancel')"></button>
+      <button type="button" class="primary" :disabled="tableIsEmpty()"
+              @click="applyTable()"
+              x-text="$app.t(tableEditing ? 'common.save' : 'editor.table.insert')"></button>
+    </div>
+  </div>
+</dialog>

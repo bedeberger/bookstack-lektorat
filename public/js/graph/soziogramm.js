@@ -1,16 +1,16 @@
-import { escHtml } from '../utils.js';
-import { DEFAULT_FONT, SCHICHT_COLOR, SCHICHT_LEVEL } from './constants.js';
+import { SCHICHT_COLOR, SCHICHT_LEVEL, DEFAULT_FONT } from './constants.js';
+import { graphPlaceholder, parseColor, rgba } from '../graph-kit.js';
 
 // Soziogramm: nach Sozialschicht gefärbt, Schicht-Rows, Machtpfeile.
-// innerHTML mit escHtml() — Escape-Invariante eingehalten.
 export const soziogrammMethods = {
   _renderSoziogramm(container) {
     const figuren = this._graphFiguren();
+    const theme = this._theme();
     // Guard: noch keine Sozialschichten vorhanden → Placeholder statt leerem Graph
     const hasSchicht = figuren.some(f => f.sozialschicht && f.sozialschicht !== 'andere');
     if (!hasSchicht) {
       if (this._figurenNetwork) { this._figurenNetwork.destroy(); this._figurenNetwork = null; }
-      container.innerHTML = `<span class="muted-msg soziogramm-placeholder">${escHtml(window.__app.t('graph.empty.sozialschicht'))}</span>`;
+      graphPlaceholder(container, window.__app.t('graph.empty.sozialschicht'), 'muted-msg soziogramm-placeholder');
       return;
     }
 
@@ -50,11 +50,10 @@ export const soziogrammMethods = {
 
     const nodes = new vis.DataSet(figuren.map(f => {
       const { x, y } = posById.get(f.id);
-      const schichtStyle = SCHICHT_COLOR[f.sozialschicht] || SCHICHT_COLOR.andere;
       return {
         ...this._baseNode(f),
-        color: { background: schichtStyle.background, border: schichtStyle.border, highlight: schichtStyle.highlight },
-        font: schichtStyle.font || DEFAULT_FONT,
+        color: this._schichtNodeColor(f.sozialschicht),
+        font: this._schichtNodeFont(f.sozialschicht),
         x, y,
         fixed: { x: false, y: true }, // Schicht-Zeile fixieren; horizontal löst Physics Überlappungen
       };
@@ -89,15 +88,25 @@ export const soziogrammMethods = {
     const BAND_EXTENT = 9000;
     const network     = this._figurenNetwork;
 
+    // Band-Streifen: die Palette hält den hellen Wasch für hellen Grund. Auf dunklem
+    // Grund wäre er ein Leuchtbalken — dort stattdessen die gesättigte Schicht-Border
+    // schwach eingeblendet (gleiche Farbfamilie, passende Richtung).
+    const bandFill = (schicht) => {
+      const style = SCHICHT_COLOR[schicht] || SCHICHT_COLOR.andere;
+      if (!theme.dark) return style.band;
+      const rgb = parseColor(style.border);
+      return rgb ? rgba(rgb, 0.18) : style.band;
+    };
+
     network.on('beforeDrawing', (ctx) => {
       // 1) Farbige Streifen + Trennlinien in Netzwerk-Koordinaten
       ctx.save();
       for (const [levStr, schicht] of Object.entries(levelToSchicht)) {
         const y = Number(levStr) * LEVEL_Y_GAP;
-        ctx.fillStyle = (SCHICHT_COLOR[schicht] || SCHICHT_COLOR.andere).band;
+        ctx.fillStyle = bandFill(schicht);
         ctx.fillRect(-BAND_EXTENT, y - BAND_HALF, BAND_EXTENT * 2, BAND_H);
         // Trennlinie unten
-        ctx.strokeStyle = 'rgba(0,0,0,0.07)';
+        ctx.strokeStyle = theme.bandLine;
         ctx.lineWidth = 1;
         ctx.setLineDash([5, 5]);
         ctx.beginPath();
@@ -126,7 +135,7 @@ export const soziogrammMethods = {
         const tw    = ctx.measureText(label).width;
         const cY = domY * dpr;
         const px = 6 * dpr, py = cY - padY, pw = tw + 12 * dpr, ph = pillH, pr = 4 * dpr;
-        ctx.fillStyle = 'rgba(255,255,255,0.80)';
+        ctx.fillStyle = theme.pillBg;
         ctx.beginPath();
         if (ctx.roundRect) {
           ctx.roundRect(px, py, pw, ph, pr);
@@ -139,7 +148,7 @@ export const soziogrammMethods = {
           ctx.closePath();
         }
         ctx.fill();
-        ctx.fillStyle = (SCHICHT_COLOR[schicht] || SCHICHT_COLOR.andere).label;
+        ctx.fillStyle = theme.ink((SCHICHT_COLOR[schicht] || SCHICHT_COLOR.andere).label);
         ctx.fillText(label, 12 * dpr, cY);
       }
       ctx.restore();

@@ -87,6 +87,17 @@ export function registerEditorToolbarCard() {
     _diagramEditEl: null,
     _diagramPreviewTimer: null,
     _diagramPreviewRun: 0,
+    // Tabellen-Dialog (siehe editor/notebook/toolbar/table.js).
+    // `tableModelState` ist das Gitter-Modell im Dialog (Form: tableModel() aus
+    // table/table-html.js), `_tableEditEl` die angeklickte Tabelle (null =
+    // Einfügen), `_tableBlock` der leere Trigger-Block des Slash-Menüs.
+    // `tableLossy` warnt vor dem Speichern, wenn das Quell-Markup verbundene
+    // Zellen oder Blockinhalt trug — beides kann der Dialog nicht darstellen.
+    tableModelState: null,
+    tableEditing: false,
+    tableLossy: false,
+    _tableBlock: null,
+    _tableEditEl: null,
     _toolbarAbort: null,
 
     init() {
@@ -209,6 +220,20 @@ export function registerEditorToolbarCard() {
         const pre = e.target?.closest?.('pre.mermaid');
         if (!pre || !editEl.contains(pre)) return;
         this.openDiagramForEl(pre);
+      }, { signal });
+
+      // Klick auf eine Tabelle öffnet den Gitter-Dialog — dieselbe Begründung
+      // wie beim Diagramm: der Block ist `contenteditable="false"`
+      // (markTablesAtomic), ohne diesen Weg gäbe es keine Möglichkeit, eine
+      // gesetzte Tabelle zu ändern oder zu löschen. Ebenfalls notebook-only.
+      document.addEventListener('click', (e) => {
+        const app = window.__app;
+        if (!app?.editMode || app.focusActive) return;
+        const editEl = e.target?.closest?.('.page-content-view--editing');
+        if (!editEl) return;
+        const table = e.target?.closest?.('table');
+        if (!table || !editEl.contains(table)) return;
+        this.openTableForEl(table);
       }, { signal });
 
       // <hr> ist ein void-Element ohne Caret-Slot — per Klick als

@@ -7,7 +7,7 @@
 
 .overview-tile-value {
   font-size: var(--font-size-lg);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--color-text);
   line-height: 1.2;
 }

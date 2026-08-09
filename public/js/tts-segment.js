@@ -142,7 +142,19 @@ export const TTS_SKIP_SEL = 'span.cite[data-src]';
 // public/js/diagram/mermaid-html.js — dieses Modul muss pre-auth ladbar bleiben
 // (der Share-Reader importiert es) und darf nichts aus dem App-Bundle ziehen.
 // Gegen Drift gesichert durch tests/unit/mermaid-drift.test.mjs.
-export const TTS_SKIP_BLOCK_SEL = 'pre.mermaid, .mermaid-render';
+//
+// Eine TABELLE faellt aus demselben Grund weg: vorgelesen waere sie eine Folge
+// von Zellen ohne Satzbau („Jahr zweitausenddreiundzwanzig eins Punkt zwei
+// Millionen vier Komma eins Prozent"), und der Zusammenhang, den die Spalten
+// tragen, entsteht beim Hoeren nicht. Der Zweck des Vorlesens ist das
+// Korrekturhoeren der Prosa; eine Zahlenkolonne prueft man mit den Augen.
+// Die Beschriftung faellt mit weg: `<caption>` liegt INNERHALB der Tabelle, ein
+// Block-Skip nimmt den ganzen Teilbaum. Das ist hier die richtige Wahl — eine
+// vorgelesene Beschriftung ohne die Tabelle dahinter kuendigt etwas an, das
+// nicht kommt.
+// Kopie von public/js/table/table-html.js#TABLE_SEL, gegated durch
+// tests/unit/table-drift.test.mjs.
+export const TTS_SKIP_BLOCK_SEL = 'pre.mermaid, .mermaid-render, table';
 
 /** Ist `el` ein Block, der komplett uebersprungen wird? */
 export function isTtsSkippedBlock(el) {

@@ -2,14 +2,12 @@
 /* === Layout-Pattern: Header-Zeile ===
    Verwenden für jede Listen-/Karten-Sektion mit horizontalem Header
    (Titel + Aktionen). Mobile: bricht auf Spalte.
-   Modifier: --between (space-between), --wrap (flex-wrap). */
+*/
 .list-header {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
 }
-.list-header--between { justify-content: space-between; }
-.list-header--wrap { flex-wrap: wrap; }
 @media (max-width: 600px) {
   .list-header {
     flex-direction: column;
@@ -45,7 +43,6 @@
 
 /* === Utility-Klassen === */
 .display-contents { display: contents; }
-.editor-section { margin-top: 1rem; }
 .stilbox--spaced { margin-top: var(--space-md); }
 .stilbox--review-summary { margin-bottom: var(--space-14); }
 .fazit--review { margin-top: var(--space-lg); }
@@ -79,7 +76,7 @@
 }
 .job-queue-label {
   color: var(--color-muted);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   white-space: nowrap;
   margin-right: var(--space-2xs);
 }
@@ -109,7 +106,7 @@
 }
 .job-queue-pill-label {
   color: var(--color-queue-pill-text);
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
@@ -128,7 +125,7 @@
 .job-queue-pill-progress {
   color: var(--color-running);
   font-size: var(--font-size-xs);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 .job-queue-cancel-btn {
   display: inline-flex;
@@ -155,7 +152,7 @@
   color: var(--color-muted);
   cursor: pointer;
   font-size: var(--font-size-micro);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   line-height: 1;
   padding: var(--space-2xs) 6px;
   white-space: nowrap;

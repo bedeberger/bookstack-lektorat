@@ -10854,6 +10854,204 @@ function _runMigrationsLocked() {
     logger.info('DB-Migration auf Version 270 abgeschlossen (Interview-Transkription).');
   }
 
+  if (version < 271) {
+    // KI-Profile: benannte Modell-Konfigurationen, einem User zuweisbar.
+    //
+    // Vorher trug `app_users.ai_provider_override` genau EINEN von drei
+    // Provider-Namen — die konkreten Parameter (Modell, Host, Kontextfenster,
+    // Key) lagen global in `ai.<provider>.*`. Damit gab es pro Provider genau
+    // ein Modell fuer die ganze Instanz: zwei openai-compat-Endpunkte
+    // nebeneinander (ein lokales llama.cpp und ein gehostetes Frontier-Modell)
+    // waren nicht darstellbar, obwohl beide denselben Provider-Code nutzen.
+    //
+    // Das Profil ist darum die neue Zuweisungs-Achse und ERSETZT die alte
+    // Spalte, statt daneben zu stehen: zwei Achsen (Provider hier, Profil dort)
+    // haetten an jeder Aufloesung eine Vorrangfrage erzeugt.
+    //
+    // JEDE Spalte ausser provider ist NULLBAR und bedeutet dann „nimm den
+    // globalen Wert `ai.<provider>.<key>`". Das haelt ein Profil klein (oft nur
+    // provider + model) und laesst instanzweite Aenderungen (z.B. ein neues
+    // Kontextfenster) weiter auf alle Profile durchschlagen, die es nicht
+    // ausdruecklich anders wollen. Aufloesung: lib/ai/profile.js#aiSetting.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS ai_profiles (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        name           TEXT    NOT NULL UNIQUE,
+        provider       TEXT    NOT NULL
+                         CHECK(provider IN ('claude','ollama','openai-compat')),
+        model          TEXT,
+        host           TEXT,
+        api_key        TEXT,
+        cloud          INTEGER CHECK(cloud IN (0,1) OR cloud IS NULL),
+        temperature    REAL,
+        context_window INTEGER,
+        max_tokens_out INTEGER,
+        repeat_penalty REAL,
+        think          INTEGER CHECK(think IN (0,1) OR think IS NULL),
+        max_parallel   INTEGER,
+        notes          TEXT,
+        created_by     TEXT    REFERENCES app_users(email) ON DELETE SET NULL,
+        created_at     TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        updated_at     TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_ai_profiles_provider ON ai_profiles(provider);
+      CREATE INDEX IF NOT EXISTS idx_ai_profiles_created_by ON ai_profiles(created_by);
+    `);
+
+    // Bestehende Overrides verlustfrei ueberfuehren: ein Profil je vorkommendem
+    // Provider, ALLE Parameter-Spalten NULL. Damit verhaelt sich der betroffene
+    // User exakt wie vorher (Provider-Wechsel, Parameter global) — die Migration
+    // aendert kein Laufzeitverhalten, sie verschiebt nur die Achse.
+    const usedProviders = db.prepare(`
+      SELECT DISTINCT ai_provider_override AS p
+        FROM app_users
+       WHERE ai_provider_override IS NOT NULL
+    `).all().map(r => r.p).filter(p => ['claude', 'ollama', 'openai-compat'].includes(p));
+    const insProfile = db.prepare(`
+      INSERT INTO ai_profiles (name, provider, notes)
+      VALUES (?, ?, 'Aus ai_provider_override uebernommen (nutzt die globalen ai.<provider>.*-Werte).')
+    `);
+    const profileIdByProvider = {};
+    for (const p of usedProviders) {
+      profileIdByProvider[p] = insProfile.run(p, p).lastInsertRowid;
+    }
+
+    // app_users neu aufbauen: ai_provider_override raus (CHECK auf der Spalte —
+    // ALTER TABLE DROP COLUMN scheitert daran), ai_profile_id rein.
+    db.pragma('foreign_keys = OFF');
+    db.exec('DROP TABLE IF EXISTS app_users_new');
+    db.exec(`
+      CREATE TABLE app_users_new (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        email            TEXT NOT NULL UNIQUE,
+        display_name     TEXT,
+        avatar_url       TEXT,
+        global_role      TEXT NOT NULL DEFAULT 'user'
+                              CHECK(global_role IN ('admin','user')),
+        status           TEXT NOT NULL DEFAULT 'active'
+                              CHECK(status IN ('invited','active','suspended','deleted')),
+        language         TEXT DEFAULT 'de',
+        model_override   TEXT,
+        can_invite_users INTEGER NOT NULL DEFAULT 1,
+        first_seen_at    TEXT,
+        last_seen_at     TEXT,
+        invited_by       TEXT,
+        invited_at       TEXT,
+        created_at       TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        monthly_budget_usd REAL,
+        budget_mode      TEXT NOT NULL DEFAULT 'none'
+                              CHECK(budget_mode IN ('none','soft','hard')),
+        ai_profile_id    INTEGER REFERENCES ai_profiles(id) ON DELETE SET NULL,
+        last_login_at    TEXT,
+        theme            TEXT,
+        default_buchtyp  TEXT,
+        default_language TEXT,
+        default_region   TEXT,
+        focus_granularity TEXT,
+        daily_goal_minutes INTEGER,
+        onboarding_state TEXT
+      )
+    `);
+    db.exec(`
+      INSERT INTO app_users_new (id, email, display_name, avatar_url, global_role, status,
+                                 language, model_override, can_invite_users, first_seen_at,
+                                 last_seen_at, invited_by, invited_at, created_at,
+                                 monthly_budget_usd, budget_mode, ai_profile_id,
+                                 last_login_at, theme, default_buchtyp, default_language,
+                                 default_region, focus_granularity, daily_goal_minutes,
+                                 onboarding_state)
+      SELECT id, email, display_name, avatar_url, global_role, status,
+             language, model_override, can_invite_users, first_seen_at,
+             last_seen_at, invited_by, invited_at, created_at,
+             monthly_budget_usd, budget_mode,
+             (SELECT p.id FROM ai_profiles p WHERE p.name = app_users.ai_provider_override),
+             last_login_at, theme, default_buchtyp, default_language,
+             default_region, focus_granularity, daily_goal_minutes,
+             onboarding_state
+        FROM app_users
+    `);
+    db.exec('DROP TABLE app_users');
+    db.exec('ALTER TABLE app_users_new RENAME TO app_users');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_app_users_ai_profile ON app_users(ai_profile_id)');
+    db.pragma('foreign_keys = ON');
+
+    const fkErrors271 = db.pragma('foreign_key_check');
+    if (fkErrors271.length) {
+      throw new Error(`Migration 271: foreign_key_check meldet ${fkErrors271.length} Verstoesse.`);
+    }
+    db.prepare('UPDATE schema_version SET version = 271').run();
+    logger.info(`DB-Migration auf Version 271 abgeschlossen (KI-Profile; ${usedProviders.length} Override(s) ueberfuehrt).`);
+  }
+
+  if (version < 272) {
+    // Tabellen als Verweis-ZIEL. Bisher kannten `xref_anchors` und `xref_links`
+    // nur den Typ 'figure' — die CHECK-Constraints haben jeden Tabellen-Anker
+    // abgelehnt, und zwar hart (SQLITE_CONSTRAINT_CHECK beim Seiten-Write).
+    //
+    // Abbildung und Tabelle zaehlen GETRENNT (public/js/xrefs/xref-number.js):
+    // „Abb. 3.1" und „Tab. 3.1" stehen im Fachbuch nebeneinander. Der Typ gehoert
+    // darum in die Daten und nicht in eine Konvention ueber `bid`-Praefixe.
+    //
+    // Dazu `book_settings.table_numbering` als Spiegel von `figure_numbering`:
+    // ob nummeriert wird, ist eine Aussage ueber das Werk (buchweit), nicht ueber
+    // ein Exportprofil.
+    db.pragma('foreign_keys = OFF');
+
+    db.exec('DROP TABLE IF EXISTS xref_anchors_new');
+    db.exec(`
+      CREATE TABLE xref_anchors_new (
+        page_id INTEGER NOT NULL REFERENCES pages(page_id) ON DELETE CASCADE,
+        kind    TEXT    NOT NULL CHECK(kind IN ('figure','table')),
+        bid     TEXT    NOT NULL,
+        ord     INTEGER NOT NULL DEFAULT 0,
+        caption TEXT,
+        PRIMARY KEY (page_id, kind, bid)
+      )
+    `);
+    db.exec('INSERT INTO xref_anchors_new SELECT page_id, kind, bid, ord, caption FROM xref_anchors');
+    db.exec('DROP TABLE xref_anchors');
+    db.exec('ALTER TABLE xref_anchors_new RENAME TO xref_anchors');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_xref_anchors_page ON xref_anchors(page_id, ord)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_xref_anchors_bid ON xref_anchors(bid)');
+
+    db.exec('DROP TABLE IF EXISTS xref_links_new');
+    db.exec(`
+      CREATE TABLE xref_links_new (
+        page_id      INTEGER NOT NULL REFERENCES pages(page_id)       ON DELETE CASCADE,
+        kind         TEXT    NOT NULL CHECK(kind IN ('chapter','figure','table')),
+        chapter_id   INTEGER          REFERENCES chapters(chapter_id) ON DELETE CASCADE,
+        anchor_bid   TEXT,
+        count        INTEGER NOT NULL DEFAULT 0,
+        first_offset INTEGER,
+        CHECK (
+          (kind = 'chapter' AND chapter_id IS NOT NULL AND anchor_bid IS NULL) OR
+          (kind IN ('figure','table') AND anchor_bid IS NOT NULL AND chapter_id IS NULL)
+        )
+      )
+    `);
+    db.exec(`INSERT INTO xref_links_new
+             SELECT page_id, kind, chapter_id, anchor_bid, count, first_offset FROM xref_links`);
+    db.exec('DROP TABLE xref_links');
+    db.exec('ALTER TABLE xref_links_new RENAME TO xref_links');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_xref_links_page ON xref_links(page_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_xref_links_chapter ON xref_links(chapter_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_xref_links_anchor ON xref_links(anchor_bid)');
+
+    db.pragma('foreign_keys = ON');
+
+    const bsCols272 = db.pragma('table_info(book_settings)').map(c => c.name);
+    if (!bsCols272.includes('table_numbering')) {
+      db.exec('ALTER TABLE book_settings ADD COLUMN table_numbering INTEGER NOT NULL DEFAULT 0');
+    }
+
+    const fkErrors272 = db.pragma('foreign_key_check');
+    if (fkErrors272.length) {
+      throw new Error(`Migration 272: foreign_key_check meldet ${fkErrors272.length} Verstoesse.`);
+    }
+    db.prepare('UPDATE schema_version SET version = 272').run();
+    logger.info('DB-Migration auf Version 272 abgeschlossen (Querverweise: Ziel-Typ table + book_settings.table_numbering).');
+  }
+
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);
   if (feColsCheck.length > 0 && !feColsCheck.includes('typ')) {

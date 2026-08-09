@@ -44,7 +44,7 @@
   font-size: var(--font-size-xs);
 }
 .overview-presence-col-head {
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--color-muted);
   font-size: var(--font-size-micro);
   text-align: center;
@@ -60,7 +60,7 @@
   min-width: 18px;
 }
 .overview-presence-row-head {
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--color-text);
   text-align: left;
   padding: 0 8px 0 4px;
@@ -110,7 +110,7 @@
   position: relative;
   z-index: var(--z-base);
   font-size: var(--font-size-micro);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--color-text);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;

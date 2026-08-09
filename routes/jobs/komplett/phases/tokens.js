@@ -1,6 +1,6 @@
 'use strict';
 const appSettings = require('../../../../lib/app-settings');
-const { getContextConfigFor } = require('../../../../lib/ai');
+const { getContextConfigFor, providerClass } = require('../../../../lib/ai');
 
 /**
  * Output-Cap für Komplettanalyse-Calls (Extraktion + Konsolidierung), provider-abhängig.
@@ -16,7 +16,7 @@ const { getContextConfigFor } = require('../../../../lib/ai');
  */
 function komplettMaxTokens(provider) {
   const ceiling = getContextConfigFor(provider).maxTokensOut;
-  if (provider === 'claude') return ceiling;
+  if (providerClass(provider) === 'cloud') return ceiling;
   const base = Math.max(1024, parseInt(appSettings.get('ai.komplett.extract_max_tokens'), 10) || 16000);
   return Math.min(base, ceiling);
 }

@@ -54,7 +54,7 @@
   padding: 0.25rem 0.4rem;
   border-radius: var(--radius-sm);
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   font-variant-numeric: tabular-nums;
 }
 
@@ -112,7 +112,7 @@
 .redundanz-figs-title {
   margin: 0 0 0.25rem;
   font-size: var(--font-size-md);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--color-text);
 }
 

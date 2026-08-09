@@ -27,7 +27,7 @@
 }
 .edit-bubble-btn:hover { background: var(--color-hover); }
 .edit-bubble-btn:active { background: var(--color-hover-strong); }
-.edit-bubble-btn--bold   { font-weight: 700; }
+.edit-bubble-btn--bold   { font-weight: var(--fw-bold); }
 .edit-bubble-btn--italic { font-style: italic; }
 .edit-bubble-btn--syn    { font-size: var(--font-size-mini); padding-inline: var(--space-sm); border-left: 1px solid var(--color-border); }
 .edit-bubble-btn--link   { display: inline-flex; align-items: center; padding-inline: var(--space-sm); border-left: 1px solid var(--color-border); }
@@ -267,12 +267,12 @@
 /* Typografische Vorschau: jeder Eintrag sieht aus wie sein Ergebnis. */
 .edit-slash-item--h2 .edit-slash-label {
   font-size: var(--font-size-lg);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   line-height: 1.2;
 }
 .edit-slash-item--h3 .edit-slash-label {
   font-size: var(--font-size-md);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   line-height: 1.2;
 }
 .edit-slash-item--blockquote .edit-slash-label {

@@ -45,7 +45,7 @@
   gap: var(--space-sm);
 }
 .szene-titel {
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   font-size: var(--font-size-sm);
 }
 .szene-kommentar {
@@ -106,7 +106,7 @@
 .bewertung-section { margin-top: var(--space-14); }
 
 .bewertung-section-title {
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   font-size: var(--font-size-sm);
   color: var(--color-muted);
   margin-bottom: var(--space-6);
@@ -148,7 +148,7 @@
   grid-row: 1;
   align-self: center;
   font-size: var(--font-size-micro);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--color-muted);
@@ -168,7 +168,7 @@
 .zitat-item--schwaeche { border-left-color: var(--color-err-border); }
 .zitat-label {
   font-size: var(--font-size-micro);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--color-muted);
@@ -189,27 +189,10 @@
 /* === Section headings (in JS-generated output) === */
 .section-heading {
   font-family: var(--font-serif);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   font-size: var(--font-size-md);
   letter-spacing: -0.005em;
   margin-bottom: var(--space-sm);
-}
-
-.section-heading-top {
-  font-family: var(--font-serif);
-  font-weight: 500;
-  font-size: var(--font-size-md);
-  letter-spacing: -0.005em;
-  margin: var(--space-14) 0 8px;
-}
-
-.section-heading-sub {
-  font-weight: 600;
-  font-size: var(--font-size-sm);
-  color: var(--color-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin: var(--space-md) 0 6px;
 }
 
 .finding-header {

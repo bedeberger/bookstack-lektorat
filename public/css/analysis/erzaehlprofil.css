@@ -1,3 +1,4 @@
+@layer components {
 /* Kapitel-Erzählprofil-Karte: POV/Erzählzeit pro Kapitel (+ Abweichung),
    Spannungskurve (Intensität 1–5) und Themen-/Motiv-Verteilung.
    Akzentfarbe über var(--card-accent) (Mapping in card-accents.css). */
@@ -18,7 +19,7 @@
 .erzaehlprofil-deviation-note {
   color: var(--card-accent);
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .erzaehlprofil-section {
@@ -29,7 +30,7 @@
 
 .erzaehlprofil-section-head {
   font-size: var(--font-size-mini);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--color-muted);
@@ -134,7 +135,7 @@
 .erzaehlprofil-pov-tag--deviation {
   background: color-mix(in srgb, var(--card-accent) 18%, transparent);
   color: var(--card-accent);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .erzaehlprofil-narrator { font-style: italic; }
@@ -154,7 +155,7 @@
 
 .erzaehlprofil-konfidenz--low {
   color: var(--card-accent);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 /* POV-Beleg: wörtliches Zitat, das die Perspektiv-Einordnung stützt. */
@@ -169,7 +170,7 @@
 .erzaehlprofil-deviation-badge {
   margin-left: auto;
   font-size: var(--font-size-xs);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   text-transform: uppercase;
   letter-spacing: 0.03em;
   color: var(--card-accent);
@@ -222,7 +223,7 @@
 
 .erzaehlprofil-thema-chip[data-typ="symbol"] {
   background: color-mix(in srgb, var(--card-accent) 16%, transparent);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 /* ── Themen-Verteilung ──────────────────────────────────────────────────── */
@@ -317,7 +318,7 @@
   color: var(--color-muted);
 }
 
-.erzaehlprofil-befund-titel { font-weight: 600; }
+.erzaehlprofil-befund-titel { font-weight: var(--fw-semibold); }
 
 .erzaehlprofil-befund-text {
   margin: 0;
@@ -342,7 +343,7 @@
 
 .erzaehlprofil-befund-group-head {
   font-size: var(--font-size-mini);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--color-muted);
 }
 
@@ -354,7 +355,7 @@
   padding: var(--space-6) 0;
 }
 
-.erzaehlprofil-befund-row--strong { font-weight: 600; }
+.erzaehlprofil-befund-row--strong { font-weight: var(--fw-semibold); }
 
 .erzaehlprofil-befund-detail {
   font-size: var(--font-size-sm);
@@ -389,7 +390,7 @@
   padding: var(--pad-badge);
   border-radius: var(--radius-sm);
   font-size: var(--font-size-mini);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--card-accent);
   background: color-mix(in srgb, var(--card-accent) 12%, transparent);
 }
@@ -446,4 +447,5 @@
 
 @media (max-width: 640px) {
   .erzaehlprofil-band-name { min-width: var(--space-14); max-width: var(--space-14); }
+}
 }

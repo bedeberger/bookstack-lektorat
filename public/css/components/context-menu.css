@@ -1,3 +1,4 @@
+@layer components {
 /* Generic Context-Menu (Rechtsklick-Popover).
    Konsumenten: .pagetree-context-menu (Sidebar). State + Position vom
    Konsumenten via Inline-Style (left/top). z-index muss über card-Layer liegen.
@@ -33,7 +34,7 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--color-muted);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   border-bottom: var(--border-thin) solid var(--color-border);
   max-width: 100%;
   overflow-wrap: anywhere;
@@ -129,4 +130,5 @@
     min-width: 0;
     max-width: min(280px, calc(100vw - 2 * var(--space-md)));
   }
+}
 }

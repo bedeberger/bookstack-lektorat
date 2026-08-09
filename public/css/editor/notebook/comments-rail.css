@@ -83,7 +83,7 @@
   justify-content: space-between;
   gap: var(--space-sm);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--color-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -111,7 +111,7 @@
 }
 .comment-rail__section-title {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--color-muted);
@@ -151,14 +151,14 @@
    eine durchgezogene Linie. CSS Custom Highlight Registry — paint-only, keine
    DOM-Mutation. */
 ::highlight(comment-rail-anchor) {
-  background: color-mix(in srgb, var(--card-accent-share, #5a4a8e) 16%, transparent);
-  text-decoration: underline dotted color-mix(in srgb, var(--card-accent-share, #5a4a8e) 60%, transparent);
+  background: color-mix(in srgb, var(--card-accent-share) 16%, transparent);
+  text-decoration: underline dotted color-mix(in srgb, var(--card-accent-share) 60%, transparent);
   text-decoration-thickness: 2px;
   text-underline-offset: 3px;
 }
 ::highlight(comment-rail-anchor-active) {
-  background: color-mix(in srgb, var(--card-accent-share, #5a4a8e) 42%, transparent);
-  text-decoration: underline solid var(--card-accent-share, #5a4a8e);
+  background: color-mix(in srgb, var(--card-accent-share) 42%, transparent);
+  text-decoration: underline solid var(--card-accent-share);
   text-decoration-thickness: 2px;
   text-underline-offset: 3px;
 }

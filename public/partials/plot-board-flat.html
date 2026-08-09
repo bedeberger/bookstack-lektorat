@@ -11,20 +11,20 @@
       <!-- Spalten-Kopf -->
       <div class="plot-column-header">
         <!-- Akt-Farbe: Swatch öffnet ein Palette-Popover -->
-        <div class="plot-color-swatch-wrap" x-show="editingActId !== act.id">
-          <button type="button" class="plot-color-swatch"
+        <div class="color-picker" x-show="editingActId !== act.id">
+          <button type="button" class="color-picker__swatch"
                   @click.stop="toggleActColorPicker(act.id)"
                   :data-tip="$app.t('plot.act.color')" :aria-label="$app.t('plot.act.color')"></button>
-          <div class="plot-color-popover" x-show="actColorPickerId === act.id" x-cloak
+          <div class="color-picker__popover" x-show="actColorPickerId === act.id" x-cloak
                @click.outside="actColorPickerId === act.id && (actColorPickerId = null)">
-            <button type="button" class="plot-color-opt plot-color-opt--none"
-                    :class="{ 'plot-color-opt--on': !act.farbe }"
+            <button type="button" class="color-picker__opt color-picker__opt--none"
+                    :class="{ 'color-picker__opt--on': !act.farbe }"
                     @click="setActColor(act, null)"
                     :data-tip="$app.t('plot.act.colorNone')" :aria-label="$app.t('plot.act.colorNone')"></button>
             <template x-for="key in actPalette()" :key="key">
-              <button type="button" class="plot-color-opt"
+              <button type="button" class="color-picker__opt"
                       :style="{ '--col-accent': 'var(--palette-' + key + ')' }"
-                      :class="{ 'plot-color-opt--on': act.farbe === key }"
+                      :class="{ 'color-picker__opt--on': act.farbe === key }"
                       @click="setActColor(act, key)" :aria-label="key"></button>
             </template>
           </div>

@@ -22,7 +22,7 @@
     align-items: center;
     gap: var(--space-2xs);
     font-size: var(--font-size-mini);
-    font-weight: 600;
+    font-weight: var(--fw-semibold);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: var(--color-err-text);
@@ -63,7 +63,7 @@
   .danger-zone-btn {
     padding: var(--space-6) 12px;
     font-size: var(--font-size-mini);
-    font-weight: 500;
+    font-weight: var(--fw-medium);
     white-space: nowrap;
     border: 1px solid var(--color-err-text);
     border-radius: var(--radius-sm);

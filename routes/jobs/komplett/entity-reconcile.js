@@ -29,6 +29,7 @@ const appSettings = require('../../../lib/app-settings');
 const { updateJob } = require('../shared');
 const { locationHintKey, figureHintKey, sceneHintKey } = require('../../../lib/entity-match');
 const { komplettMaxTokens } = require('./phases/tokens');
+const { providerClass } = require('../../../lib/ai');
 
 // Deckel auf die vorgelegten Paare. Der Graubereich ist normalerweise klein (einstellig
 // bis wenige Dutzend); ist er gross, ist meist die Extraktion instabil — dann hilft ein
@@ -37,7 +38,7 @@ const { komplettMaxTokens } = require('./phases/tokens');
 const JUDGE_PAIR_CAP = 24;
 
 function isJudgeEnabled(effectiveProvider) {
-  if (effectiveProvider !== 'claude') return false;
+  if (providerClass(effectiveProvider) !== 'cloud') return false;
   const v = appSettings.get('ai.komplett.entity_match_judge');
   return v === undefined || v === null || v === '' ? true : v === true || v === 'true' || v === 1 || v === '1';
 }

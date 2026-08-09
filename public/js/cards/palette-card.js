@@ -162,7 +162,7 @@ export function registerPaletteCard() {
         pages: Alpine.store('nav').pages,
         bookRole: root.currentBookRole || null,
         buchtyp: (typeof root.currentBuchtyp === 'function' ? root.currentBuchtyp() : null) || null,
-        claudeEffective: (Alpine.store('config')?.effectiveProvider || 'claude') === 'claude',
+        cloudModelEffective: (Alpine.store('config')?.effectiveProviderClass || 'cloud') === 'cloud',
       };
     },
 
@@ -204,10 +204,10 @@ export function registerPaletteCard() {
       // FEATURES unverändert lassen — Cards mit `requiresBook` sind dann eh
       // disabled.
       const visibleFeatures = ctx.bookRole
-        ? featuresVisibleFor(FEATURES, ctx.bookRole, ctx.buchtyp, ctx.claudeEffective)
+        ? featuresVisibleFor(FEATURES, ctx.bookRole, ctx.buchtyp, ctx.cloudModelEffective)
         : FEATURES.filter(f => matchesRequiredBuchtyp(f, ctx.buchtyp)
             && !hiddenForBuchtyp(f, ctx.buchtyp)
-            && (!f.requiresClaude || ctx.claudeEffective));
+            && (!f.requiresCloudModel || ctx.cloudModelEffective));
 
       // Provider-Modus: nur dieser eine Provider.
       if (parsed.mode === 'provider') {

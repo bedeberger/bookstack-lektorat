@@ -31,7 +31,7 @@
 }
 .komplett-status-title {
   font-size: var(--font-size-xs);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--color-muted);
   text-transform: uppercase;
   letter-spacing: 0.07em;
@@ -79,7 +79,7 @@
 }
 .komplett-phase-item.is-active {
   color: var(--color-text);
-  font-weight: 400;
+  font-weight: var(--fw-regular);
 }
 .komplett-phase-icon {
   width: 14px;

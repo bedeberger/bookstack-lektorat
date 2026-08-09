@@ -30,7 +30,7 @@
   display: flex;
   flex-direction: column;
 }
-.research-dialog::backdrop { background: rgba(0, 0, 0, 0.5); }
+.research-dialog::backdrop { background: var(--color-overlay); }
 
 /* Anlegen braucht keine 56rem: das Formular ist eine Spalte kurzer Felder, in
    voller Panelbreite stehen Titel- und URL-Zeilen unangenehm weit auseinander. */
@@ -59,7 +59,7 @@ html:has(.research-dialog[open]) { overflow: hidden; }
 .research-dialog__title {
   margin: 0;
   font-size: var(--font-size-lg);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   min-width: 0;
   word-break: break-word;
 }
@@ -205,7 +205,7 @@ textarea.recherche-input--tall { min-height: 40vh; }
   margin-bottom: var(--space-xs);
 }
 .research-transcript__head .icon { width: 1em; height: 1em; }
-.research-transcript__title { font-weight: 600; }
+.research-transcript__title { font-weight: var(--fw-semibold); }
 .research-transcript__meta {
   margin-inline-start: auto;
   font-variant-numeric: tabular-nums;
@@ -237,7 +237,7 @@ textarea.recherche-input--tall { min-height: 40vh; }
 
 .research-transcript__subhead {
   display: block;
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   font-size: var(--size-compact-font-size);
   margin-bottom: var(--space-2xs);
 }
@@ -279,7 +279,7 @@ textarea.recherche-input--tall { min-height: 40vh; }
   cursor: pointer;
 }
 .research-transcript__who {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   font-size: var(--size-compact-font-size);
 }
 .research-transcript__text { overflow-wrap: anywhere; }

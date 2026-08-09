@@ -145,8 +145,8 @@ export const statsMethods = {
       const first = data[0];
       const last = data[data.length - 1];
       const deltaPct = first > 0 ? Math.round(((last - first) / first) * 100) : 0;
-      const color = deltaPct > 0 ? 'var(--color-success, #4caf50)'
-                  : deltaPct < 0 ? 'var(--color-danger, #d32f2f)'
+      const color = deltaPct > 0 ? 'var(--color-success)'
+                  : deltaPct < 0 ? 'var(--color-err-border)'
                   :                'var(--color-accent)';
       const endX = pts[pts.length - 1][0];
       const endY = pts[pts.length - 1][1];

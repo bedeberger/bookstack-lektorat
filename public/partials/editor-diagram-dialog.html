@@ -6,11 +6,11 @@
 
      Der Vorschau-Knoten wird von JS befüllt (mermaid-SVG), nicht per x-html —
      er steht deshalb bewusst leer im Markup. -->
-<dialog class="diagram-dialog" x-ref="diagramDlg" @close="onDiagramDialogClose()"
+<dialog class="editor-dialog diagram-dialog" x-ref="diagramDlg" @close="onDiagramDialogClose()"
         @click.self="closeDiagramDialog()">
-  <div class="diagram-dialog-inner">
-    <div class="diagram-dialog-head">
-      <span class="diagram-dialog-title"
+  <div class="editor-dialog__inner">
+    <div class="editor-dialog__head">
+      <span class="editor-dialog__title"
             x-text="$app.t(diagramEditing ? 'editor.diagram.titleEdit' : 'editor.diagram.titleNew')"></span>
       <button type="button" class="icon-btn icon-btn--ghost" @click="closeDiagramDialog()"
               :data-tip="$app.t('common.close')" :aria-label="$app.t('common.close')">
@@ -44,10 +44,10 @@
       </div>
     </div>
 
-    <div class="diagram-dialog-actions">
+    <div class="editor-dialog__actions">
       <button type="button" class="danger" x-show="diagramEditing"
               @click="removeDiagram()" x-text="$app.t('editor.diagram.remove')"></button>
-      <span class="diagram-dialog-spacer"></span>
+      <span class="editor-dialog__spacer"></span>
       <button type="button" @click="closeDiagramDialog()" x-text="$app.t('common.cancel')"></button>
       <button type="button" class="primary" :disabled="!diagramSource.trim()"
               @click="applyDiagram()"
