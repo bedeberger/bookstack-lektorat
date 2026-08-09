@@ -105,6 +105,7 @@ Läuft vollständig auf der vorhandenen Querverweis-Maschinerie — der Anker is
 - **Anker:** `collectAnchors` ([xref-anchor.js](../public/js/xrefs/xref-anchor.js)) liefert Abbildungen und Tabellen in **einem** Durchlauf — nur so stimmt `ord` mit der Leserichtung, wenn beide auf einer Seite gemischt stehen.
 - **Nummern:** `buildXrefNumbers` ([xref-number.js](../public/js/xrefs/xref-number.js)) zählt **getrennt**. „Abb. 3.1" und „Tab. 3.1" stehen im Fachbuch nebeneinander; ein gemeinsamer Zähler machte aus der ersten Tabelle eines Kapitels „Tab. 3.4", nur weil davor drei Abbildungen stehen. Auch die Rückfallebene auf buchweite Zählung fällt **pro Typ**.
 - **Schalter:** `book_settings.table_numbering` (0/1), Spiegel von `figure_numbering`. Buchweit, nicht pro Exportprofil — ob ein Werk nummeriert, ist eine Aussage über das Werk. Ohne Nummerierung fällt der Verweis auf die Beschriftung zurück („vgl. „Umsatz nach Jahr""), statt eine Zahl zu nennen, die nirgends steht.
+- **Die beiden Schalter sind unabhängig, und der Vorab-Test in [applyXrefsInHtml](../lib/xref-render.js) prüft sie getrennt** (`wantFigCaptions` / `wantTableCaptions`, je mit eigenem Billig-Test auf `<figure>` bzw. `<table>` im HTML). Ein gemeinsamer Gate über `figureNumbering` **und** `<figure>` lässt zwei Fälle still durchfallen: das Fachbuch, das Tabellen nummeriert und Abbildungen nicht, und die Seite, die ausschliesslich Tabellen trägt. Beide Male bleibt die Beschriftung ohne Nummer, während [anchor-directory.js](../lib/anchor-directory.js) — die nur an `number` hängt — im Verzeichnis schon „Tab. 3.1" ausweist. Mutationsgeprüft in [xref-render.test.js](../tests/unit/xref-render.test.js).
 - **Ziel-Typ:** `data-xref="table"` ([xref-html.js](../public/js/xrefs/xref-html.js)); der Buch-Guard in [db/xrefs.js](../db/xrefs.js) prüft **Typ und Buch** — ein `table`-Verweis auf das `data-bid` einer Abbildung bekommt keine Zeile.
 - **Verzeichnis:** [lib/anchor-directory.js](../lib/anchor-directory.js), Quelle ist der Xref-Kontext (kein zweiter Zählautomat). In HTML, Markdown, TXT und DOCX; Sichtbarkeit wie beim Quellenverzeichnis — **nur beim ganzen Buch**.
 
@@ -119,10 +120,11 @@ Läuft vollständig auf der vorhandenen Querverweis-Maschinerie — der Anker is
 3. Ausrichtung hat **einen** Träger: `data-align` an der Zelle, Kopfzelle autoritativ.
 4. Eingabe ist **notebook-only**. Die anderen zwei Editoren stellen dar.
 5. `contenteditable` steht **nie** in der Persistenz (Editor setzt beim Mount, [html-clean.js](../lib/html-clean.js) strippt beim Speichern).
-6. Der PDF-Satz bricht Zeilen, die höher als die Seite sind — sonst Endlosschleife.
-7. Der WordPress-Pull entpackt `figure.wp-block-table` **vor** der „Figuren ohne Bild"-Regel.
-8. Ein neuer Blocktyp im geteilten Walker braucht einen Zweig in **jedem** Konsumenten (PDF, DOCX, Markdown, Substack).
-9. Die vier bewussten Selektor-Kopien (`stripTableBlocks` ×2, `TTS_SKIP_BLOCK_SEL`, `TABLE_SKIP_SEL` im LanguageTool-Mapping) dürfen existieren, aber nicht driften — gegated durch [tests/unit/table-drift.test.mjs](../tests/unit/table-drift.test.mjs).
+6. Abbildungs- und Tabellen-Nummerierung werden **getrennt gegated** — je eigener Schalter, je eigener Vorab-Test auf das Markup. Kein gemeinsamer `figureNumbering`-Gate.
+7. Der PDF-Satz bricht Zeilen, die höher als die Seite sind — sonst Endlosschleife.
+8. Der WordPress-Pull entpackt `figure.wp-block-table` **vor** der „Figuren ohne Bild"-Regel.
+9. Ein neuer Blocktyp im geteilten Walker braucht einen Zweig in **jedem** Konsumenten (PDF, DOCX, Markdown, Substack).
+10. Die vier bewussten Selektor-Kopien (`stripTableBlocks` ×2, `TTS_SKIP_BLOCK_SEL`, `TABLE_SKIP_SEL` im LanguageTool-Mapping) dürfen existieren, aber nicht driften — gegated durch [tests/unit/table-drift.test.mjs](../tests/unit/table-drift.test.mjs).
 
 ---
 

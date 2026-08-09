@@ -216,12 +216,6 @@ export function collectTables(root) {
   return Array.from(root.querySelectorAll(TABLE_SEL)).map(el => ({ el, model: tableModel(el) }));
 }
 
-/** Zeilen/Spalten einer Tabelle — fuer Plakette und Kurzform im Prompt. */
-export function tableSize(el) {
-  const m = tableModel(el);
-  return { cols: m.align.length, rows: m.rows.length + (m.header ? 1 : 0) };
-}
-
 // ── Erzeugen ────────────────────────────────────────────────────────────────
 
 // Letzte Reissleine gegen aktive Inhalte in durchgereichtem Zell-HTML. Die

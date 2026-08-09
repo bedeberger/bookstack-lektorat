@@ -12,7 +12,7 @@ import { parseHTML } from 'linkedom';
 import {
   TABLE_SEL, TABLE_ALIGNS, TABLE_MAX_COLS, TABLE_MAX_ROWS,
   isTableEl, closestTableEl, tableModel, buildTableHtml, collectTables,
-  tableSize, emptyTableModel, markTablesAtomic,
+  emptyTableModel, markTablesAtomic,
 } from '../../public/js/table/table-html.js';
 
 function root(html) {
@@ -207,10 +207,6 @@ test('collectTables liefert Dokumentreihenfolge', () => {
   const r = root('<table><caption>eins</caption><tr><td>a</td></tr></table>'
     + '<table><caption>zwei</caption><tr><td>b</td></tr></table>');
   assert.deepEqual(collectTables(r).map(t => t.model.caption), ['eins', 'zwei']);
-});
-
-test('tableSize zaehlt die Kopfzeile mit', () => {
-  assert.deepEqual(tableSize(tableEl(SIMPLE)), { cols: 2, rows: 3 });
 });
 
 test('markTablesAtomic setzt contenteditable=false', () => {

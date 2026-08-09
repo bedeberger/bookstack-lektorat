@@ -24,8 +24,14 @@
 //
 // Modul ist DOM-agnostisch (Browser-DOM wie linkedom), Muster wie xref-html.js.
 
-export const FIGURE_SEL = 'figure[data-bid]';
-export const TABLE_SEL = 'table[data-bid]';
+// ANKER-Selektoren, nicht Block-Selektoren: sie verlangen zusaetzlich das
+// `data-bid`, denn ohne Anker gibt es nichts zu nummerieren und nichts, worauf
+// ein Verweis zeigen koennte. Der Name traegt das `_ANCHOR_` deshalb bewusst —
+// `TABLE_SEL` heisst in der Markup-SSoT (public/js/table/table-html.js) schlicht
+// `'table'`, und zwei gleichnamige Konstanten mit verschiedener Menge sind
+// dieselbe Falle, gegen die die `BLOCK_SEL`-Regel in CLAUDE.md steht.
+export const FIGURE_ANCHOR_SEL = 'figure[data-bid]';
+export const TABLE_ANCHOR_SEL = 'table[data-bid]';
 
 // Anker-Typen, die IM HTML leben (Kapitel brauchen keinen — siehe oben).
 export const ANCHOR_KINDS = ['figure', 'table'];
@@ -64,7 +70,7 @@ export function collectAnchors(root) {
   const out = [];
   if (!root || typeof root.querySelectorAll !== 'function') return out;
   let ord = 0;
-  for (const el of Array.from(root.querySelectorAll(`${FIGURE_SEL}, ${TABLE_SEL}`))) {
+  for (const el of Array.from(root.querySelectorAll(`${FIGURE_ANCHOR_SEL}, ${TABLE_ANCHOR_SEL}`))) {
     const bid = String(el.getAttribute('data-bid') || '').trim().toLowerCase();
     if (!/^[0-9a-f]{8,32}$/.test(bid)) continue;
     const isTable = el.tagName === 'TABLE';

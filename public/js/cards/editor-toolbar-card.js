@@ -13,6 +13,7 @@ import { toolbarCardMethods } from '../editor/notebook/toolbar.js';
 import { TODO_LIST_SEL } from '../editor/shared/todo-html.js';
 import { invalidateSourceCache } from '../sources/source-cache.js';
 import { closestCiteEl } from '../sources/cite-html.js';
+import { closestTableEl } from '../table/table-html.js';
 import { invalidateXrefTargetCache } from '../editor/notebook/toolbar/xref.js';
 import { EVT } from '../events.js';
 
@@ -231,8 +232,8 @@ export function registerEditorToolbarCard() {
         if (!app?.editMode || app.focusActive) return;
         const editEl = e.target?.closest?.('.page-content-view--editing');
         if (!editEl) return;
-        const table = e.target?.closest?.('table');
-        if (!table || !editEl.contains(table)) return;
+        const table = closestTableEl(e.target, editEl);
+        if (!table) return;
         this.openTableForEl(table);
       }, { signal });
 

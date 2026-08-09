@@ -18,6 +18,9 @@ db.prepare(`INSERT INTO chapters (chapter_id, book_id, chapter_name, position)
 
 const FIG = (bid, cap) =>
   `<figure data-bid="${bid}"><img src="x.png"><figcaption>${cap}</figcaption></figure>`;
+const TBL = (bid, cap) =>
+  `<table data-bid="${bid}"><caption>${cap}</caption>`
+  + '<thead><tr><th scope="col">Jahr</th></tr></thead><tbody><tr><td>2023</td></tr></tbody></table>';
 const REF = (kind, id, text, fmt) =>
   `<span class="xref" data-xref="${kind}" data-xref-id="${id}"${fmt ? ` data-xref-fmt="${fmt}"` : ''}>${text}</span>`;
 
@@ -26,7 +29,13 @@ const GROUPS = [
   {
     chapterId: 7110,
     chapter: { id: 7110, chapter_name: 'Anfang', parent_chapter_id: null },
-    pages: [{ p: { id: 8110 }, pd: { html: `<p>Los.</p>${FIG('aaaaaaaaaaaaaaaa', 'Der Kaefer')}` } }],
+    pages: [{
+      p: { id: 8110 },
+      pd: {
+        html: `<p>Los.</p>${FIG('aaaaaaaaaaaaaaaa', 'Der Kaefer')}`
+          + TBL('cccccccccccccccc', 'Umsatz nach Jahr'),
+      },
+    }],
   },
   {
     chapterId: 7111,
@@ -35,8 +44,11 @@ const GROUPS = [
   },
 ];
 
-async function ctxWith({ figureNumbering = 1, chapterLabels = null } = {}) {
-  schema.setBookXrefSettings(BOOK, { figure_numbering: figureNumbering });
+async function ctxWith({ figureNumbering = 1, tableNumbering = 0, chapterLabels = null } = {}) {
+  schema.setBookXrefSettings(BOOK, {
+    figure_numbering: figureNumbering,
+    table_numbering: tableNumbering,
+  });
   return buildXrefContext({ bookId: BOOK, groups: GROUPS, chapterLabels });
 }
 
@@ -115,6 +127,44 @@ test('ohne Legenden-Nummerierung nennt auch der Verweis keine Zahl', async () =>
   const res = await applyXrefsInHtml(`<p>${REF('figure', 'aaaaaaaaaaaaaaaa', 'Abb. 1.1')}</p>`, ctx);
   assert.match(res.html, />„Der Kaefer“</);
   assert.doesNotMatch(res.html, /Abb\. 1\.1<\/span>/);
+});
+
+// ── Tabellenbeschriftung: eigener Schalter, eigener Gate ────────────────────
+// Der Vorab-Test in applyXrefsInHtml hing frueher an `figureNumbering` UND am
+// Vorkommen von `<figure>`. Beides ist fuer Tabellen falsch: ein Fachbuch
+// nummeriert oft Tabellen und keine Abbildungen, und eine Seite kann
+// ausschliesslich Tabellen fuehren. Die drei Faelle unten sind die Mutationen,
+// die den alten Gate rot machen.
+
+test('Beschriftung wird nummeriert, wenn NUR die Tabellen-Einstellung an ist', async () => {
+  const ctx = await ctxWith({ figureNumbering: 0, tableNumbering: 1 });
+  const res = await applyXrefsInHtml(TBL('cccccccccccccccc', 'Umsatz nach Jahr'), ctx);
+  assert.match(res.html, /<caption>Tab\. 1\.1: Umsatz nach Jahr<\/caption>/);
+});
+
+test('Tabelle ohne Abbildung auf der Seite bekommt trotzdem ihre Nummer', async () => {
+  // Der alte Gate testete auf `<figure>` im HTML — eine reine Tabellenseite
+  // fiel damit still durch, obwohl beide Schalter an waren.
+  const ctx = await ctxWith({ figureNumbering: 1, tableNumbering: 1 });
+  const res = await applyXrefsInHtml(TBL('cccccccccccccccc', 'Umsatz nach Jahr'), ctx);
+  assert.match(res.html, /<caption>Tab\. 1\.1: Umsatz nach Jahr<\/caption>/);
+});
+
+test('ein ausgeschalteter Schalter zieht den anderen Typ nicht mit', async () => {
+  const html = FIG('aaaaaaaaaaaaaaaa', 'Der Kaefer') + TBL('cccccccccccccccc', 'Umsatz nach Jahr');
+  const nurTab = await applyXrefsInHtml(html, await ctxWith({ figureNumbering: 0, tableNumbering: 1 }));
+  assert.match(nurTab.html, /<caption>Tab\. 1\.1: /);
+  assert.match(nurTab.html, /<figcaption>Der Kaefer<\/figcaption>/, 'Abbildung bleibt ohne Nummer');
+  const nurAbb = await applyXrefsInHtml(html, await ctxWith({ figureNumbering: 1, tableNumbering: 0 }));
+  assert.match(nurAbb.html, /<figcaption>Abb\. 1\.1: /);
+  assert.match(nurAbb.html, /<caption>Umsatz nach Jahr<\/caption>/, 'Tabelle bleibt ohne Nummer');
+});
+
+test('Tabellen-Beschriftung ist ebenfalls idempotent', async () => {
+  const ctx = await ctxWith({ tableNumbering: 1 });
+  const once = await applyXrefsInHtml(TBL('cccccccccccccccc', 'Umsatz nach Jahr'), ctx);
+  const twice = await applyXrefsInHtml(once.html, ctx);
+  assert.strictEqual(twice.html, once.html);
 });
 
 test('applyXrefsInGroups mutiert die Eingabe nicht und sammelt Verwaiste', async () => {
