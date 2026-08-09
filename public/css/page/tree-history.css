@@ -226,7 +226,11 @@
   border: 0.5px solid var(--color-border);
   border-top: none;
   border-radius: 0;
-  padding: var(--space-lg) var(--space-lg) var(--space-lg);
+  /* Links um die Marginalien-Schiene breiter: die Akzent-Ticks der Gruppen- und
+     Sektionstitel haengen per negativem Rand nach links aus dem Textfluss
+     ([entities/figuren.css](../entities/figuren.css)) und brauchen dieses
+     Polster, sonst stehen die Titel links neben der Textspalte. */
+  padding: var(--space-lg) var(--space-lg) var(--space-lg) calc(var(--space-lg) + var(--figur-rail));
   margin-bottom: var(--space-6);
   background: var(--color-bg);
 }

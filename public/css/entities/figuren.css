@@ -110,14 +110,19 @@
 .figur-praesenz-randfigur    { --badge-hue: var(--palette-gray); }
 
 /* === Figuren: Detail-Gruppen (Steckbrief / Charakter / Im Buch) === */
-.figur-group {
-  /* Marginalien-Schiene: JEDER Akzent-Balken der Gruppe (Gruppen-Tick,
-     Sektions-Tick, Zitat-Bar) haengt mit seiner LINKEN Kante hier, der zugehoerige
-     Text bleibt buendig mit dem uebrigen Fliesstext. Balken sind darum gleich
-     breit — Hierarchie kommt ueber Hoehe und Farbe, nicht ueber die Breite
-     (unterschiedliche Breiten bei gleicher rechter Kante = versetzte Schiene). */
+/* Marginalien-Schiene: JEDER Akzent-Balken im Detail (Gruppen-Tick,
+   Sektions-Tick, Zitat-Bar) haengt mit seiner LINKEN Kante hier, der zugehoerige
+   Text bleibt buendig mit dem uebrigen Fliesstext. Balken sind darum gleich
+   breit — Hierarchie kommt ueber Hoehe und Farbe, nicht ueber die Breite
+   (unterschiedliche Breiten bei gleicher rechter Kante = versetzte Schiene).
+   Die Schiene liegt am Detail-Container, weil dessen linkes Innen-Padding sie
+   aufnehmen muss ([page/tree-history.css](../page/tree-history.css)) — sonst
+   ragen alle Titel um die Schienenbreite aus der Textspalte nach links heraus. */
+.figur-detail {
   --figur-rail-w: 3px;
   --figur-rail: calc(var(--figur-rail-w) + var(--space-xs));
+}
+.figur-group {
   margin-top: var(--space-lg);
   padding-top: var(--space-md);
   border-top: 0.5px solid var(--color-border);
