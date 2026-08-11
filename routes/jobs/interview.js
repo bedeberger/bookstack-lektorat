@@ -32,7 +32,7 @@ const searchIndex = require('../../lib/search');
 const { enqueueEmbedIndexJob } = require('./embed-index');
 const { toIntId } = require('../../lib/validate');
 const { setContext } = require('../../lib/log-context');
-const { requireBookAccess, sendACLError } = require('../../lib/acl');
+const { requireBookAccess, sendACLError, sessionEmail } = require('../../lib/acl');
 const logger = require('../../logger');
 
 const interviewRouter = express.Router();
@@ -129,7 +129,7 @@ interviewRouter.post('/interview-transcribe', jsonBody, (req, res) => {
   if (!head) return res.status(404).json({ error_code: 'TRANSCRIPT_NOT_FOUND' });
   if (!head.has_audio) return res.status(400).json({ error_code: 'TRANSCRIPT_NO_AUDIO' });
 
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const entityId = `i${itemId}`;
   const existing = findActiveJobId('interview-transcribe', entityId, userEmail);
   if (existing) return res.json({ jobId: existing, existing: true });

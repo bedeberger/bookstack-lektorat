@@ -7,7 +7,7 @@ const appUsers = require('../db/app-users');
 const bookAccess = require('../db/book-access');
 const bookCategories = require('../db/book-categories');
 const books = require('../db/books');
-const { aclParamGuard, requireBookAccess, ACLError, sendACLError } = require('../lib/acl');
+const { ACLError, aclParamGuard, requireBookAccess, sendACLError, sessionEmail } = require('../lib/acl');
 const { resolvePageBookId } = require('../lib/content-ownership');
 const { db } = require('../db/connection');
 const { NOW_ISO_SQL } = require('../db/now');
@@ -21,7 +21,6 @@ const jsonBody = express.json({ limit: '64kb' });
 const VALID_SHARE_ROLES = ['editor', 'lektor', 'viewer'];
 
 function _normEmail(e) { return (e || '').toString().trim().toLowerCase(); }
-function _userEmail(req) { return req.session?.user?.email || null; }
 
 function _notifyBookShared({ target, granter, bookId, role }) {
   try {
@@ -75,7 +74,7 @@ router.post('/:book_id/share', aclParamGuard('owner'), jsonBody, (req, res) => {
   if (currentRole === 'owner') {
     return res.status(409).json({ error_code: 'CANNOT_DOWNGRADE_OWNER' });
   }
-  const granter = _userEmail(req);
+  const granter = sessionEmail(req);
   try {
     db.transaction(() => {
       bookAccess.grantAccess(req.bookId, target, role, granter);
@@ -118,8 +117,8 @@ router.put('/:book_id/access/:email', aclParamGuard('owner'), jsonBody, (req, re
   if (current === 'owner') {
     return res.status(409).json({ error_code: 'OWNER_NOT_DOWNGRADABLE', detail: 'Use /transfer-ownership instead' });
   }
-  bookAccess.grantAccess(req.bookId, target, role, _userEmail(req));
-  logger.info(`Buch-Rolle geaendert: book=${req.bookId} ${target} ${current}→${role} by ${_userEmail(req)}`);
+  bookAccess.grantAccess(req.bookId, target, role, sessionEmail(req));
+  logger.info(`Buch-Rolle geaendert: book=${req.bookId} ${target} ${current}→${role} by ${sessionEmail(req)}`);
   res.json({ ok: true, email: target, role });
 });
 
@@ -134,7 +133,7 @@ router.delete('/:book_id/access/:email', aclParamGuard('owner'), (req, res) => {
     return res.status(409).json({ error_code: 'CANNOT_REVOKE_OWNER' });
   }
   bookAccess.revokeAccess(req.bookId, target);
-  logger.info(`Buch-Zugriff entzogen: book=${req.bookId} ${target} (was ${current}) by ${_userEmail(req)}`);
+  logger.info(`Buch-Zugriff entzogen: book=${req.bookId} ${target} (was ${current}) by ${sessionEmail(req)}`);
   res.json({ ok: true });
 });
 
@@ -143,11 +142,11 @@ router.delete('/:book_id/access/:email', aclParamGuard('owner'), (req, res) => {
 router.post('/:book_id/transfer-ownership', aclParamGuard('owner'), jsonBody, (req, res) => {
   const target = _normEmail(req.body?.email);
   if (!target) return res.status(400).json({ error_code: 'EMAIL_REQUIRED' });
-  if (target === _normEmail(_userEmail(req))) {
+  if (target === _normEmail(sessionEmail(req))) {
     return res.status(400).json({ error_code: 'CANNOT_TRANSFER_TO_SELF' });
   }
   try {
-    const { previousOwner, newOwner } = bookAccess.transferOwnership(req.bookId, target, _userEmail(req));
+    const { previousOwner, newOwner } = bookAccess.transferOwnership(req.bookId, target, sessionEmail(req));
     logger.info(`Ownership-Transfer: book=${req.bookId} ${previousOwner}→${newOwner}`);
     res.json({ ok: true, previous_owner: previousOwner, new_owner: newOwner });
   } catch (e) {
@@ -216,7 +215,7 @@ const _VALID_LOCK_REASONS = new Set(['lektorat', 'edit']);
 router.post('/pages/:page_id/lock', jsonBody, (req, res) => {
   const pageId = parseInt(req.params.page_id, 10);
   if (!Number.isInteger(pageId) || pageId <= 0) return res.status(400).json({ error_code: 'INVALID_PAGE_ID' });
-  const email = _userEmail(req);
+  const email = sessionEmail(req);
   if (!email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
   // reason aus Body, Default 'lektorat' (Backwards-Compat). 'edit' braucht
   // nur 'editor'-Rolle, 'lektorat' braucht 'lektor'-Rolle.
@@ -248,7 +247,7 @@ router.post('/pages/:page_id/lock', jsonBody, (req, res) => {
 router.post('/pages/:page_id/lock/heartbeat', (req, res) => {
   const pageId = parseInt(req.params.page_id, 10);
   if (!Number.isInteger(pageId) || pageId <= 0) return res.status(400).json({ error_code: 'INVALID_PAGE_ID' });
-  const email = _userEmail(req);
+  const email = sessionEmail(req);
   try {
     const lock = bookAccess.heartbeatLock(pageId, email);
     if (!lock) return res.status(404).json({ error_code: 'LOCK_NOT_FOUND' });
@@ -268,7 +267,7 @@ router.post('/pages/:page_id/lock/heartbeat', (req, res) => {
 router.delete('/pages/:page_id/lock', (req, res) => {
   const pageId = parseInt(req.params.page_id, 10);
   if (!Number.isInteger(pageId) || pageId <= 0) return res.status(400).json({ error_code: 'INVALID_PAGE_ID' });
-  const email = _userEmail(req);
+  const email = sessionEmail(req);
   const force = req.query?.force === 'true' || req.query?.force === '1';
   let bookId, role;
   try {

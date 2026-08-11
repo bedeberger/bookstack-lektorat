@@ -13,6 +13,7 @@ const bookAccess = require('../db/book-access');
 const { db } = require('../db/connection');
 const { toIntId } = require('../lib/validate');
 const logger = require('../logger');
+const { sessionEmail } = require('../lib/acl');
 
 const router = express.Router();
 router.use(requireAdmin);
@@ -151,7 +152,7 @@ router.post('/:book_id/assign-owner', express.json({ limit: '4kb' }), (req, res)
     return res.status(400).json({ error_code: 'USER_NOT_ACTIVE', detail: { status: user.status } });
   }
 
-  const performedBy = req.session?.user?.email || 'admin';
+  const performedBy = sessionEmail(req) || 'admin';
   try {
     db.transaction(() => {
       db.prepare('UPDATE books SET owner_email = ? WHERE book_id = ?').run(target, bookId);

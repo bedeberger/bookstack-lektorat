@@ -23,6 +23,7 @@ const { getBookLocale } = require('../db/schema');
 const { chunkText, adjustMatches, CHUNK_MAX } = require('../lib/languagetool-chunk');
 const ltCache = require('../db/languagetool-cache');
 const dict = require('../db/user-dictionary');
+const { sessionEmail } = require('../lib/acl');
 
 const router = express.Router();
 const TEXT_MAX = 500_000;
@@ -45,7 +46,7 @@ router.post('/check', express.json({ limit: '600kb' }), async (req, res) => {
 
   const bookId = toIntId(body.bookId);
   if (bookId) setContext({ book: bookId });
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
 
   // Book ist SSoT fuer Locale: bookId vorhanden -> getBookLocale gewinnt.
   // Body.language nur als Fallback (Aufrufe ohne Buchscope).

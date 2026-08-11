@@ -13,7 +13,7 @@
 
 const express = require('express');
 const { toIntId } = require('../lib/validate');
-const { requireBookAccess, sendACLError } = require('../lib/acl');
+const { requireBookAccess, sendACLError, sessionEmail } = require('../lib/acl');
 const { setContext } = require('../lib/log-context');
 const bookAccess = require('../db/book-access');
 const searchIndex = require('../lib/search');
@@ -29,10 +29,6 @@ const DEFAULT_KINDS = ['page', 'chapter'];
 // Kinds, für die ein Embedding-Index existiert (semantische Suche).
 const SEMANTIC_KINDS = ['page', 'scene', 'figure', 'research'];
 
-function _userEmail(req) {
-  return req.session?.user?.email || null;
-}
-
 function _parseKinds(raw) {
   if (raw == null) return DEFAULT_KINDS;
   const s = String(raw).trim();
@@ -43,7 +39,7 @@ function _parseKinds(raw) {
 }
 
 router.get('/', (req, res) => {
-  const email = _userEmail(req);
+  const email = sessionEmail(req);
   if (!email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
 
   const q = (req.query.q || '').toString().trim();
@@ -120,7 +116,7 @@ function _resolveSemanticHits(hits) {
 }
 
 router.get('/semantic', async (req, res) => {
-  const email = _userEmail(req);
+  const email = sessionEmail(req);
   if (!email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
   if (!embed.isEnabled()) return res.status(400).json({ error_code: 'EMBED_DISABLED' });
 
@@ -163,7 +159,7 @@ router.get('/semantic', async (req, res) => {
 // Embedding-Index zuletzt gebaut wurde und wie viele Einträge seither geändert
 // wurden (→ „Index veraltet, neu bauen"). Reiner Lese-Status, kein Embedding-Call.
 router.get('/semantic/status', (req, res) => {
-  const email = _userEmail(req);
+  const email = sessionEmail(req);
   if (!email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
   if (!embed.isEnabled()) return res.json({ enabled: false });
 
@@ -193,7 +189,7 @@ router.get('/semantic/status', (req, res) => {
 // darum ueber x-html geht. Wer den Sink hier auf x-html umstellt, muss das
 // Escaping mit umstellen.
 router.get('/sources-semantic', async (req, res) => {
-  const email = _userEmail(req);
+  const email = sessionEmail(req);
   if (!email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
   if (!embed.isEnabled()) return res.status(400).json({ error_code: 'EMBED_DISABLED' });
 

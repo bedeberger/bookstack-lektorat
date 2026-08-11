@@ -10,8 +10,7 @@ const embed = require('../lib/embed');
 const appSettings = require('../lib/app-settings');
 const semanticChunks = require('../db/semantic-chunks');
 const { toIntId } = require('../lib/validate');
-const { setContext } = require('../lib/log-context');
-const { requireBookAccess, sendACLError } = require('../lib/acl');
+const { guardBook, sessionEmail } = require('../lib/acl');
 const logger = require('../logger');
 
 const router = express.Router();
@@ -23,25 +22,15 @@ const MAX_TYP = 60;
 const MAX_TERM = 80;
 const MAX_TERMS = 40;
 
-function userEmailOrNull(req) {
-  return req.session?.user?.email || null;
-}
-
-function _guard(req, res, bookId, minRole = 'editor') {
-  setContext({ book: bookId });
-  try { requireBookAccess(req, bookId, minRole); return true; }
-  catch (e) { return !sendACLError(res, e); }
-}
-
 // Entity per :id laden + Owner (user_email) + Buch-ACL prüfen. SSoT für :id-Handler.
 function _loadOwned(req, res, getFn, notFoundCode) {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   if (!userEmail) { res.status(401).json({ error_code: 'LOGIN_REQ' }); return null; }
   const id = toIntId(req.params.id);
   if (!id) { res.status(400).json({ error_code: 'INVALID_ID' }); return null; }
   const row = getFn(id);
   if (!row || row.user_email !== userEmail) { res.status(404).json({ error_code: notFoundCode }); return null; }
-  if (!_guard(req, res, row.book_id)) return null;
+  if (!guardBook(req, res, row.book_id, 'editor')) return null;
   return row;
 }
 
@@ -84,11 +73,11 @@ function _motifFloor() {
 // ── Graph-Payload (Themen + Motive mit Soll-Links & Ist-Count + Beziehungen) ──
 
 router.get('/', (req, res) => {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   const bookId = toIntId(req.query.book_id);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
-  if (!_guard(req, res, bookId, 'viewer')) return;
+  if (!guardBook(req, res, bookId, 'viewer')) return;
   const graph = motifsDb.getGraph(bookId, userEmail, _motifFloor());
   graph.embedIndex = _embedIndexInfo(bookId);
   res.json(graph);
@@ -115,11 +104,11 @@ function _validPositions(raw) {
 }
 
 router.put('/layout', jsonBody, (req, res) => {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   const bookId = toIntId(req.body?.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'BOOKID_REQ' });
-  if (!_guard(req, res, bookId)) return;
+  if (!guardBook(req, res, bookId, 'editor')) return;
   motifsDb.saveLayout(bookId, userEmail, _validPositions(req.body?.positions));
   res.json({ ok: true });
 });
@@ -127,13 +116,13 @@ router.put('/layout', jsonBody, (req, res) => {
 // ── Themen ─────────────────────────────────────────────────────────────────
 
 router.post('/themes', jsonBody, (req, res) => {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   const bookId = toIntId(req.body?.book_id);
   const name = _str(req.body?.name, MAX_NAME);
   if (!bookId) return res.status(400).json({ error_code: 'BOOKID_REQ' });
   if (!name) return res.status(400).json({ error_code: 'NAME_REQ' });
-  if (!_guard(req, res, bookId)) return;
+  if (!guardBook(req, res, bookId, 'editor')) return;
   const theme = motifsDb.createTheme(bookId, userEmail, {
     name, beschreibung: _optStr(req.body?.beschreibung, MAX_BESCHREIBUNG), farbe: _colorOrNull(req.body?.farbe),
   });
@@ -160,12 +149,12 @@ router.delete('/themes/:id', (req, res) => {
 });
 
 router.put('/themes/order', jsonBody, (req, res) => {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   const bookId = toIntId(req.body?.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'BOOKID_REQ' });
   if (!Array.isArray(req.body?.order)) return res.status(400).json({ error_code: 'ORDER_REQ' });
-  if (!_guard(req, res, bookId)) return;
+  if (!guardBook(req, res, bookId, 'editor')) return;
   motifsDb.reorderThemes(bookId, userEmail, req.body.order);
   res.json({ ok: true });
 });
@@ -174,7 +163,7 @@ router.put('/themes/order', jsonBody, (req, res) => {
 // Vor /:id registriert (zweisegmentig, kollidiert nicht mit /:id).
 
 router.post('/relations', jsonBody, (req, res) => {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   const fromId = toIntId(req.body?.from_motif_id);
   const toId = toIntId(req.body?.to_motif_id);
@@ -187,19 +176,19 @@ router.post('/relations', jsonBody, (req, res) => {
   if (!from || !to || from.user_email !== userEmail || to.user_email !== userEmail || from.book_id !== to.book_id) {
     return res.status(404).json({ error_code: 'MOTIF_NOT_FOUND' });
   }
-  if (!_guard(req, res, from.book_id)) return;
+  if (!guardBook(req, res, from.book_id, 'editor')) return;
   const id = motifsDb.createRelation(fromId, toId, typ);
   res.json({ id, from_motif_id: fromId, to_motif_id: toId, typ });
 });
 
 router.delete('/relations/:id', (req, res) => {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   const id = toIntId(req.params.id);
   if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
   const owner = motifsDb.getRelationOwner(id);
   if (!owner || owner.user_email !== userEmail) return res.status(404).json({ error_code: 'RELATION_NOT_FOUND' });
-  if (!_guard(req, res, owner.book_id)) return;
+  if (!guardBook(req, res, owner.book_id, 'editor')) return;
   motifsDb.deleteRelation(id);
   res.json({ ok: true });
 });
@@ -210,11 +199,11 @@ router.delete('/relations/:id', (req, res) => {
 // einsegmentigen /:id-Motiv-Routen; trotzdem vor ihnen registriert (Konvention).
 
 router.get('/brainstorm-runs', (req, res) => {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   const bookId = toIntId(req.query.book_id);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
-  if (!_guard(req, res, bookId, 'viewer')) return;
+  if (!guardBook(req, res, bookId, 'viewer')) return;
   res.json(motifsDb.listBrainstormRuns(bookId, userEmail));
 });
 
@@ -225,13 +214,13 @@ router.get('/brainstorm-runs/:id', (req, res) => {
 });
 
 router.delete('/brainstorm-runs/:id', (req, res) => {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   const id = toIntId(req.params.id);
   if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
   const run = motifsDb.getBrainstormRun(id);
   if (!run || run.user_email !== userEmail) return res.status(404).json({ error_code: 'RUN_NOT_FOUND' });
-  if (!_guard(req, res, run.book_id)) return;
+  if (!guardBook(req, res, run.book_id, 'editor')) return;
   motifsDb.deleteBrainstormRun(id, userEmail);
   res.json({ ok: true });
 });
@@ -239,13 +228,13 @@ router.delete('/brainstorm-runs/:id', (req, res) => {
 // ── Motive ───────────────────────────────────────────────────────────────
 
 router.post('/', jsonBody, (req, res) => {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   const bookId = toIntId(req.body?.book_id);
   const name = _str(req.body?.name, MAX_NAME);
   if (!bookId) return res.status(400).json({ error_code: 'BOOKID_REQ' });
   if (!name) return res.status(400).json({ error_code: 'NAME_REQ' });
-  if (!_guard(req, res, bookId)) return;
+  if (!guardBook(req, res, bookId, 'editor')) return;
   // theme_id (falls gesetzt) muss dem User im selben Buch gehören.
   let themeId = toIntId(req.body?.theme_id);
   if (themeId) {
@@ -263,12 +252,12 @@ router.post('/', jsonBody, (req, res) => {
 });
 
 router.put('/order', jsonBody, (req, res) => {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   const bookId = toIntId(req.body?.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'BOOKID_REQ' });
   if (!Array.isArray(req.body?.order)) return res.status(400).json({ error_code: 'ORDER_REQ' });
-  if (!_guard(req, res, bookId)) return;
+  if (!guardBook(req, res, bookId, 'editor')) return;
   motifsDb.reorderMotifs(bookId, userEmail, req.body.order);
   res.json({ ok: true });
 });

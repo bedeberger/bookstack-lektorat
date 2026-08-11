@@ -25,6 +25,7 @@ const appSettings = require('../lib/app-settings');
 const { toIntId } = require('../lib/validate');
 const { setContext } = require('../lib/log-context');
 const { getBookLocale } = require('../db/schema');
+const { sessionEmail } = require('../lib/acl');
 
 const router = express.Router();
 const AUDIO_MAX = 5 * 1024 * 1024; // 5 MB — kurze VAD-Segmente
@@ -73,7 +74,7 @@ router.post('/transcribe', rawAudioBody, async (req, res) => {
   const bookId = toIntId(req.query.bookId);
   const pageId = toIntId(req.query.pageId);
   if (bookId) setContext({ book: bookId });
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const mime = baseMime(req.headers['content-type']);
   const log = logger.child({ job: 'stt', user: userEmail || '-', book: bookId || '-' });
   const ctx = `page=${pageId || '-'} mime=${mime || '-'} bytes=${Buffer.isBuffer(req.body) ? req.body.length : 0}`;

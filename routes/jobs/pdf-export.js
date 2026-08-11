@@ -37,6 +37,7 @@ const { resolveSlug } = require('../../lib/export-builders/shared');
 const { toIntId } = require('../../lib/validate');
 const { setContext } = require('../../lib/log-context');
 const logger = require('../../logger');
+const { sessionEmail } = require('../../lib/acl');
 
 const router = express.Router();
 
@@ -267,7 +268,7 @@ async function runPdfExportJob(jobId, { scope, entityId, profileId, includeSubch
 }
 
 router.post('/pdf-export', jsonBody, async (req, res) => {
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const userToken = null;
 
   // Fassungs-Export: snapshotId gesetzt → immer ganzes Buch, Innenteil.
@@ -333,7 +334,7 @@ router.post('/pdf-export', jsonBody, async (req, res) => {
 });
 
 router.get('/pdf-export/:id/file', (req, res) => {
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const job = jobs.get(req.params.id);
   if (!job) return res.status(404).json({ error_code: 'JOB_NOT_FOUND' });
   if (job.userEmail !== userEmail) return res.status(403).json({ error_code: 'FORBIDDEN' });

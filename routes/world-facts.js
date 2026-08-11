@@ -2,7 +2,7 @@
 const express = require('express');
 const { db } = require('../db/schema');
 const { toIntId, inClause } = require('../lib/validate');
-const { aclParamGuard } = require('../lib/acl');
+const { aclParamGuard, sessionEmail } = require('../lib/acl');
 
 const router = express.Router();
 router.param('book_id', aclParamGuard('editor'));
@@ -11,7 +11,7 @@ router.param('book_id', aclParamGuard('editor'));
 router.get('/:book_id', (req, res) => {
   const bookId = toIntId(req.params.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
 
   const rows = db.prepare(`
     SELECT id, kategorie, subjekt, fakt, seite_label, updated_at

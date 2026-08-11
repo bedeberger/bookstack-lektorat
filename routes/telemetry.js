@@ -7,6 +7,7 @@ const express = require('express');
 const { bumpMergeCounter } = require('../db/merge-telemetry');
 const { insertJsError } = require('../db/js-errors');
 const logger = require('../logger');
+const { sessionEmail } = require('../lib/acl');
 
 const router = express.Router();
 const jsonBody = express.json();
@@ -27,7 +28,7 @@ const ALLOWED_EVENTS = new Set([
 const RESOLVE_CHOICES = ['local', 'remote', 'both'];
 
 router.post('/merge', jsonBody, (req, res) => {
-  if (!req.session?.user?.email) return res.status(401).json({ error_code: 'LOGIN_REQ' });
+  if (!sessionEmail(req)) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   const event = (req.body?.event || '').toString();
   if (!ALLOWED_EVENTS.has(event)) {
     return res.status(400).json({ error_code: 'INVALID_EVENT' });
@@ -54,7 +55,7 @@ router.post('/merge', jsonBody, (req, res) => {
 // (Mount nach Auth-Guard). Felder werden in db/js-errors.js gekappt; hier nur
 // Pflichtfeld + Enum pruefen. Best-effort: DB-Fehler werden geschluckt.
 router.post('/js-error', jsonBody, (req, res) => {
-  if (!req.session?.user?.email) return res.status(401).json({ error_code: 'LOGIN_REQ' });
+  if (!sessionEmail(req)) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   const message = (req.body?.message || '').toString().trim();
   if (!message) return res.status(400).json({ error_code: 'NO_MESSAGE' });
   const kind = JS_ERROR_KINDS.has(req.body?.kind) ? req.body.kind : 'error';
@@ -85,7 +86,7 @@ router.post('/js-error', jsonBody, (req, res) => {
 // Logger wie routes/tts.js, mit [client]-Marker. Session-authed, best-effort.
 const TTS_LOG_MAX = 500;
 router.post('/tts-log', jsonBody, (req, res) => {
-  const userEmail = req.session?.user?.email;
+  const userEmail = sessionEmail(req);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   const msg = (req.body?.msg || '').toString().trim().slice(0, TTS_LOG_MAX);
   if (!msg) return res.status(400).json({ error_code: 'NO_MESSAGE' });

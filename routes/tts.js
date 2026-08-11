@@ -24,6 +24,7 @@ const { toIntId } = require('../lib/validate');
 const { setContext } = require('../lib/log-context');
 const { getBookLocale } = require('../db/schema');
 const tts = require('../lib/tts-synth');
+const { sessionEmail } = require('../lib/acl');
 
 const router = express.Router();
 
@@ -31,7 +32,7 @@ router.post('/speak', express.json({ limit: tts.TEXT_MAX + 2048 }), async (req, 
   const bookId = toIntId(req.query.bookId);
   const pageId = toIntId(req.query.pageId);
   if (bookId) setContext({ book: bookId });
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const log = logger.child({ job: 'tts', user: userEmail || '-', book: bookId || '-' });
 
   // Stimme locale-aware: die Buch-Locale gewinnt (SSoT wie bei STT die Sprache).

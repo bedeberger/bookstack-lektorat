@@ -22,6 +22,7 @@ const { buildDialogSamples } = require('./samples/dialog');
 const { buildCorrectionSamples } = require('./samples/correction');
 const { buildAuthorChatSamples } = require('./samples/author-chat');
 const { buildAiAugmentSamples } = require('./samples/ai-augment');
+const { sessionEmail } = require('../../../lib/acl');
 
 const finetuneExportRouter = express.Router();
 
@@ -217,7 +218,7 @@ finetuneExportRouter.post('/finetune-export', jsonBody, (req, res) => {
   if (!Object.values(opts.types).some(v => v)) {
     return res.status(400).json({ error_code: 'FINETUNE_NO_TYPES' });
   }
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const userToken = null;
   const existing = findActiveJobId('finetune-export', book_id, userEmail);
   if (existing) return res.json({ jobId: existing, existing: true });
@@ -229,7 +230,7 @@ finetuneExportRouter.post('/finetune-export', jsonBody, (req, res) => {
 });
 
 finetuneExportRouter.get('/finetune-export/:id/:kind.jsonl', (req, res) => {
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const job = jobs.get(req.params.id);
   if (!job) return res.status(404).json({ error_code: 'JOB_NOT_FOUND' });
   if (job.userEmail !== userEmail) return res.status(403).json({ error_code: 'FORBIDDEN' });

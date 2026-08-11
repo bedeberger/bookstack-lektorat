@@ -22,7 +22,7 @@ const { semanticQuery } = require('../../lib/semantic-retrieval');
 const searchIndex = require('../../lib/search');
 const { toIntId } = require('../../lib/validate');
 const { setContext } = require('../../lib/log-context');
-const { requireBookAccess, sendACLError } = require('../../lib/acl');
+const { requireBookAccess, sendACLError, sessionEmail } = require('../../lib/acl');
 const logger = require('../../logger');
 
 const beatAnchorRouter = express.Router();
@@ -152,7 +152,7 @@ beatAnchorRouter.post('/beat-anchor', jsonBody, (req, res) => {
   setContext({ book: book_id });
   try { requireBookAccess(req, book_id, 'editor'); }
   catch (e) { if (sendACLError(res, e)) return; throw e; }
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   const existing = findActiveJobId('beat-anchor', book_id, userEmail);
   if (existing) return res.json({ jobId: existing, existing: true });

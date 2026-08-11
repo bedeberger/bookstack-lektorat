@@ -12,6 +12,7 @@ const {
 const { defaultConfig, validateConfig, FONT_FAMILIES } = require('../lib/docx-export-defaults');
 const { toIntId } = require('../lib/validate');
 const logger = require('../logger');
+const { sessionEmail } = require('../lib/acl');
 
 const router = express.Router();
 const jsonBody = express.json({ limit: '256kb' });
@@ -19,7 +20,7 @@ const jsonBody = express.json({ limit: '256kb' });
 const NAME_MAX = 80;
 const PROFILE_MAX = 20;
 
-function _user(req) { return req.session?.user?.email || null; }
+function _user(req) { return sessionEmail(req); }
 
 function _ownedOr404(profile, userEmail) {
   if (!profile) return { error_code: 'PROFILE_NOT_FOUND', status: 404 };

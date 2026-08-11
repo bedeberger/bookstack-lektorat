@@ -16,6 +16,7 @@ const { toIntId } = require('../../lib/validate');
 const { setContext } = require('../../lib/log-context');
 const appSettings = require('../../lib/app-settings');
 const { resolveProvider } = require('../../lib/ai');
+const { sessionEmail } = require('../../lib/acl');
 
 const synonymeRouter = express.Router();
 
@@ -93,7 +94,7 @@ synonymeRouter.post('/synonym', jsonBody, (req, res) => {
     try { requireBookAccess(req, book_id, 'lektor'); }
     catch (e) { if (sendACLError(res, e)) return; throw e; }
   }
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const entityKey = `${book_id || 0}|${wort.trim().toLowerCase()}|${satz.trim().slice(0, 60)}`;
   const existing = findActiveJobId('synonym', entityKey, userEmail);
   if (existing) return res.json({ jobId: existing, existing: true });

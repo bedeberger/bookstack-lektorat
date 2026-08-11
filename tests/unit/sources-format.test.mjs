@@ -46,9 +46,10 @@ const KAFKA = src({
 // ── Enum-Deckung (Drift-Gate) ────────────────────────────────────────────────
 
 test('CITATION_STYLES deckt VALID_CITATION_STYLES der DB-Schicht', () => {
-  const schema = readFileSync(resolve(ROOT, 'db', 'schema.js'), 'utf8');
+  // Deklariert in db/book-settings.js (db/schema.js reicht es nur durch).
+  const schema = readFileSync(resolve(ROOT, 'db', 'book-settings.js'), 'utf8');
   const m = /VALID_CITATION_STYLES\s*=\s*\[([^\]]+)\]/.exec(schema);
-  assert.ok(m, 'VALID_CITATION_STYLES in db/schema.js nicht gefunden');
+  assert.ok(m, 'VALID_CITATION_STYLES in db/book-settings.js nicht gefunden');
   const dbStyles = m[1].split(',').map(s => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean);
   // Laufen die auseinander, formatiert der Renderer stumm im Default-Stil,
   // waehrend die DB einen Stil speichert, den der Formatter nicht kennt.

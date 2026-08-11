@@ -3,6 +3,7 @@ const express = require('express');
 const { db } = require('../../../db/schema');
 const { toIntId, inClause } = require('../../../lib/validate');
 const { jobs, jobQueue } = require('./state');
+const { sessionEmail } = require('../../../lib/acl');
 const {
   cancelJob, findActiveJobId, fmtTok, fmtDuration,
   JOB_TYPE_LABELS, STATS_EXCLUDED_TYPES,
@@ -14,7 +15,7 @@ const {
 const sharedRouter = express.Router();
 
 sharedRouter.get('/queue', (req, res) => {
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const result = [];
   for (const [, job] of jobs) {
     if (job.userEmail !== userEmail) continue;
@@ -48,7 +49,7 @@ sharedRouter.get('/queue', (req, res) => {
 });
 
 sharedRouter.get('/stats', (req, res) => {
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const { sql: excludedSql, values: excludedVals } = inClause(STATS_EXCLUDED_TYPES);
   const bookId = toIntId(req.query.book_id);
   const bookClause = bookId ? ' AND book_id = ?' : '';
@@ -91,7 +92,7 @@ sharedRouter.get('/last-run', (req, res) => {
   const { type } = req.query;
   const bookId = toIntId(req.query.book_id);
   if (!type || !bookId) return res.status(400).json({ error_code: 'TYPE_BOOKID_REQUIRED' });
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const row = db.prepare(`
     SELECT ended_at FROM job_runs
     WHERE type = ? AND book_id = ? AND user_email = ? AND status = 'done'
@@ -103,7 +104,7 @@ sharedRouter.get('/last-run', (req, res) => {
 // Einzelne Job-Läufe pro Typ — für Drill-Down in jobStats-Tabelle.
 // Liefert die letzten N Runs (default 20) für (user, book, type).
 sharedRouter.get('/runs', (req, res) => {
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const bookId = toIntId(req.query.book_id);
   const type = req.query.type;
   if (!type || !bookId) return res.status(400).json({ error_code: 'TYPE_BOOKID_REQUIRED' });
@@ -144,7 +145,7 @@ sharedRouter.get('/active', (req, res) => {
   const { type, book_id, page_id } = req.query;
   const entityId = page_id || book_id;
   if (!type || !entityId) return res.status(400).json({ error_code: 'TYPE_ENTITY_REQUIRED' });
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const jobId = findActiveJobId(type, entityId, userEmail);
   if (!jobId) return res.json({ jobId: null });
   const job = jobs.get(jobId);
@@ -152,7 +153,7 @@ sharedRouter.get('/active', (req, res) => {
 });
 
 sharedRouter.delete('/:id', (req, res) => {
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const job = jobs.get(req.params.id);
   if (!job) return res.status(404).json({ error_code: 'JOB_NOT_FOUND' });
   const ok = cancelJob(req.params.id, userEmail);

@@ -39,7 +39,7 @@ function _pageHasCitations(pageId) {
 }
 const { toIntId } = require('../../lib/validate');
 const { setContext } = require('../../lib/log-context');
-const { requireBookAccess, sendACLError } = require('../../lib/acl');
+const { requireBookAccess, sendACLError, sessionEmail } = require('../../lib/acl');
 const { resolvePageBookId } = require('../../lib/content-ownership');
 const appSettings = require('../../lib/app-settings');
 const { resolveProvider, effectiveProviderClass } = require('../../lib/ai');
@@ -573,7 +573,7 @@ lektoratRouter.post('/check', jsonBody, (req, res) => {
   setContext({ book: book_id });
   try { requireBookAccess(req, book_id, 'lektor'); }
   catch (e) { if (sendACLError(res, e)) return; throw e; }
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const userToken = null;
   const existing = findActiveJobId('check', page_id, userEmail);
   if (existing) return res.json({ jobId: existing, existing: true });
@@ -591,7 +591,7 @@ lektoratRouter.post('/batch-check', jsonBody, (req, res) => {
   setContext({ book: book_id });
   try { requireBookAccess(req, book_id, 'lektor'); }
   catch (e) { if (sendACLError(res, e)) return; throw e; }
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const userToken = null;
   const existing = findActiveJobId('batch-check', book_id, userEmail);
   if (existing) return res.json({ jobId: existing, existing: true });

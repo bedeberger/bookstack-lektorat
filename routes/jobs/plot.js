@@ -12,7 +12,7 @@ const {
 } = require('./shared');
 const { toIntId } = require('../../lib/validate');
 const { setContext } = require('../../lib/log-context');
-const { requireBookAccess, sendACLError } = require('../../lib/acl');
+const { requireBookAccess, sendACLError, sessionEmail } = require('../../lib/acl');
 const { getContextConfigFor, resolveProvider } = require('../../lib/ai');
 const { db } = require('../../db/connection');
 const plotDb = require('../../db/plot');
@@ -508,7 +508,7 @@ plotRouter.post('/plot-brainstorm', jsonBody, (req, res) => {
   const actId = toIntId(req.body?.act_id);
   if (!bookId) return res.status(400).json({ error_code: 'BOOK_ID_REQUIRED' });
   if (!actId)  return res.status(400).json({ error_code: 'ACT_ID_REQUIRED' });
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   if (!userEmail) return res.status(401).json({ error_code: 'UNAUTHORIZED' });
 
   setContext({ book: bookId });
@@ -534,7 +534,7 @@ plotRouter.post('/plot-brainstorm', jsonBody, (req, res) => {
 plotRouter.post('/plot-consistency', jsonBody, (req, res) => {
   const bookId = toIntId(req.body?.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'BOOK_ID_REQUIRED' });
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   if (!userEmail) return res.status(401).json({ error_code: 'UNAUTHORIZED' });
 
   setContext({ book: bookId });

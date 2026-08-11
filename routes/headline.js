@@ -11,7 +11,7 @@
 // gespeichert.
 
 const express = require('express');
-const { aclParamGuard, requireBookAccess, sendACLError } = require('../lib/acl');
+const { aclParamGuard, requireBookAccess, sendACLError, sessionEmail } = require('../lib/acl');
 const {
   HEADLINE_FIELDS, isValidHeadlineField,
   getHeadline, listBookHeadlines, setHeadline,
@@ -63,7 +63,7 @@ router.put('/page/:page_id', jsonBody, (req, res) => {
   if (!Object.keys(patch).length) {
     return res.status(400).json({ error_code: 'NO_FIELDS' });
   }
-  const row = setHeadline(g.pageId, g.bookId, patch, req.session?.user?.email || null);
+  const row = setHeadline(g.pageId, g.bookId, patch, sessionEmail(req));
   res.json({ ok: true, page_id: g.pageId, headline: row });
 });
 
@@ -77,7 +77,7 @@ router.post('/page/:page_id/variants', jsonBody, (req, res) => {
   }
   const v = addVariant(g.pageId, g.bookId, {
     feld, text: req.body?.text, herkunft: 'user',
-    userEmail: req.session?.user?.email || null,
+    userEmail: sessionEmail(req),
   });
   if (!v) return res.status(400).json({ error_code: 'EMPTY_TEXT' });
   res.json({ ok: true, variant: v, varianten: listVariants(g.pageId) });
@@ -107,7 +107,7 @@ router.post('/variants/:id/promote', (req, res) => {
   setContext({ book: v.book_id });
   try { requireBookAccess(req, v.book_id, 'editor'); }
   catch (e) { if (sendACLError(res, e)) return; throw e; }
-  const row = promoteVariant(id, req.session?.user?.email || null);
+  const row = promoteVariant(id, sessionEmail(req));
   res.json({ ok: true, page_id: v.page_id, headline: row, varianten: listVariants(v.page_id) });
 });
 

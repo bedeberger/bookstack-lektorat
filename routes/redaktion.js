@@ -13,7 +13,7 @@
 // Fehlerpfad laufen, nur weil der User gerade einen Roman offen hat.
 
 const express = require('express');
-const { aclParamGuard } = require('../lib/acl');
+const { aclParamGuard, sessionEmail } = require('../lib/acl');
 const {
   REDAKTION_STATUS, listBookStatus, setPageStatus, statusCounts, isValidRedaktionStatus,
 } = require('../db/redaktion');
@@ -53,7 +53,7 @@ router.put('/page/:page_id', jsonBody, (req, res) => {
   const row = setPageStatus(pageId, bookId, {
     status,
     note: req.body?.note ?? null,
-    userEmail: req.session?.user?.email || null,
+    userEmail: sessionEmail(req),
   });
   res.json({ ok: true, page_id: pageId, entry: row, counts: statusCounts(bookId) });
 });

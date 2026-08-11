@@ -9,6 +9,7 @@ const altcha = require('../lib/altcha');
 const avatarCache = require('../lib/avatar-cache');
 const demoUser = require('../lib/demo-user');
 const { tServer } = require('../lib/i18n-server');
+const { sessionEmail } = require('../lib/acl');
 
 const router = express.Router();
 
@@ -560,7 +561,7 @@ router.get('/auth/avatar', async (req, res) => {
     res.set('Content-Type', contentType);
     res.send(buffer);
   } catch (err) {
-    logger.warn('Avatar-Proxy fehlgeschlagen: ' + err.message, { user: req.session?.user?.email });
+    logger.warn('Avatar-Proxy fehlgeschlagen: ' + err.message, { user: sessionEmail(req) });
     res.status(404).end();
   }
 });

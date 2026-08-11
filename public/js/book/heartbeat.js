@@ -18,8 +18,10 @@
 //    dieselbe Wall-Clock doppelt. Das Lease lässt pro Tracker nur einen Tab
 //    zählen; die anderen laufen weiter, senden aber nicht.
 
-// Muss zum HEARTBEAT_MS der Tracker passen (alle drei: 15 s).
-const HEARTBEAT_MS = 15000;
+// Heartbeat-Intervall aller drei Tracker. Der Tick-Clamp leitet sich daraus ab,
+// darum steht die Zahl hier und wird von heartbeat-tracker.js importiert statt
+// dort ein zweites Mal gepflegt.
+export const HEARTBEAT_MS = 15000;
 const MAX_TICK_SECONDS = (HEARTBEAT_MS / 1000) * 2;
 
 // Lease-Laufzeit: knapp über zwei Intervalle. Der Halter erneuert alle 15 s.

@@ -16,6 +16,7 @@ const { _handleChatPost, bookPageCache, invalidateBookPageCache } = require('./c
 const { runChatJob } = require('./chat/page-chat');
 const { runBookChatJobDispatch } = require('./chat/book-chat');
 const { runResearchChatJob } = require('./research-chat');
+const { sessionEmail } = require('../../lib/acl');
 
 const chatRouter = express.Router();
 
@@ -64,7 +65,7 @@ chatRouter.delete('/book-chat-cache', (req, res) => {
   const { requireBookAccess, sendACLError } = require('../../lib/acl');
   try { requireBookAccess(req, book_id, 'editor'); }
   catch (e) { if (sendACLError(res, e)) return; throw e; }
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const key = `${book_id}:${userEmail}`;
   bookPageCache.delete(key);
   res.json({ ok: true });

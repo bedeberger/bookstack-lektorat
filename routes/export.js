@@ -15,6 +15,7 @@ const { buildExportFilename } = require('../lib/filenames');
 const { toIntId } = require('../lib/validate');
 const { setContext } = require('../lib/log-context');
 const { buildExportMeta, sendExportBuffer } = require('../lib/export-send');
+const { sessionEmail } = require('../lib/acl');
 
 const router = express.Router();
 
@@ -54,7 +55,7 @@ router.get('/:scope/:id/:fmt', async (req, res) => {
     // Buch-Scope numeriert ueber das ganze Buch, Kapitel-/Seiten-Scope nur ueber
     // die exportierte Einheit (lib/bibliography.js).
     pageIds: scope === 'book' ? null : pageIdsFromGroups(bundle.groups),
-    userEmail: req.session?.user?.email || null,
+    userEmail: sessionEmail(req),
   });
 
   let buf;

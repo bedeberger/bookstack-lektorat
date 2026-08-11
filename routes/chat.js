@@ -4,7 +4,7 @@ const logger = require('../logger');
 const { toIntId } = require('../lib/validate');
 const contentStore = require('../lib/content-store');
 const { setContext } = require('../lib/log-context');
-const { aclParamGuard, requireBookAccess, sendACLError } = require('../lib/acl');
+const { aclParamGuard, requireBookAccess, sendACLError, sessionEmail } = require('../lib/acl');
 const { htmlToText } = require('./jobs/shared');
 
 const router = express.Router();
@@ -30,7 +30,7 @@ router.post('/session', jsonBody, async (req, res) => {
   const { book_name } = req.body;
   const book_id = toIntId(req.body?.book_id);
   const page_id = toIntId(req.body?.page_id);
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   if (!book_id || !page_id || !userEmail) {
     return res.status(400).json({ error_code: 'BOOKID_PAGEID_LOGIN_REQ' });
   }
@@ -83,7 +83,7 @@ router.post('/session', jsonBody, async (req, res) => {
 function createBookScopedSession(req, res, { kind, minRole }) {
   const { book_name } = req.body;
   const book_id = toIntId(req.body?.book_id);
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   if (!book_id || !userEmail) return res.status(400).json({ error_code: 'BOOKID_LOGIN_REQ' });
   setContext({ book: book_id });
   try { requireBookAccess(req, book_id, minRole(book_id)); }
@@ -110,7 +110,7 @@ function createBookScopedSession(req, res, { kind, minRole }) {
 // (ohne Nachrichten) werden ausgefiltert — sie entstehen beim Öffnen der Karte
 // (auto-`startNewSession`) und sollen erst auftauchen, wenn der User schreibt.
 function listBookScopedSessions(req, res, { kind }) {
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const bookId = toIntId(req.params.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
   const rows = db.prepare(`
@@ -150,7 +150,7 @@ router.get('/sessions/research/:book_id', (req, res) => listBookScopedSessions(r
 /** Alle Sessions einer Seite (neueste zuerst, max. 20).
  *  Siehe Kommentar oben — leere Sessions werden ausgefiltert. */
 router.get('/sessions/:page_id', (req, res) => {
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const pageId = toIntId(req.params.page_id);
   if (!pageId) return res.status(400).json({ error_code: 'INVALID_ID' });
   const rows = db.prepare(`
@@ -168,7 +168,7 @@ router.get('/sessions/:page_id', (req, res) => {
 
 /** Session mit allen Nachrichten laden */
 router.get('/session/:id', (req, res) => {
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const id = toIntId(req.params.id);
   if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
   const session = db.prepare(`
@@ -197,7 +197,7 @@ router.get('/session/:id', (req, res) => {
 /** Im Buch-Chat generiertes Bild streamen (Owner-Scope via Session-Join).
  *  ?download=1 erzwingt den Attachment-Disposition (Speichern-Dialog). */
 router.get('/image/:id', (req, res) => {
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const id = toIntId(req.params.id);
   if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
   const { getChatImage } = require('../db/chat-images');
@@ -225,7 +225,7 @@ router.get('/image/:id', (req, res) => {
 
 /** Session löschen */
 router.delete('/session/:id', (req, res) => {
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const id = toIntId(req.params.id);
   if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
   db.prepare('DELETE FROM chat_sessions WHERE id = ? AND user_email = ?')
@@ -235,7 +235,7 @@ router.delete('/session/:id', (req, res) => {
 
 /** Einzelnen Vorschlag einer Assistant-Nachricht als übernommen markieren (oder zurücksetzen) */
 router.patch('/message/:id/vorschlag/:idx/applied', jsonBody, (req, res) => {
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const msgId = toIntId(req.params.id);
   // idx kann 0 sein → toIntId reicht nicht (lehnt 0 ab). Eigene Prüfung auf nicht-negativen Integer.
   const idx = /^(0|[1-9][0-9]*)$/.test(String(req.params.idx ?? '')) ? Number(req.params.idx) : null;

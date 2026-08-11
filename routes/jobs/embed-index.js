@@ -25,7 +25,7 @@ const semanticChunks = require('../../db/semantic-chunks');
 const contentStore = require('../../lib/content-store');
 const { toIntId } = require('../../lib/validate');
 const { setContext } = require('../../lib/log-context');
-const { requireBookAccess, sendACLError } = require('../../lib/acl');
+const { requireBookAccess, sendACLError, sessionEmail } = require('../../lib/acl');
 const logger = require('../../logger');
 
 const embedIndexRouter = express.Router();
@@ -217,7 +217,7 @@ embedIndexRouter.post('/embed-index', jsonBody, (req, res) => {
   try { requireBookAccess(req, book_id, 'lektor'); }
   catch (e) { if (sendACLError(res, e)) return; throw e; }
   if (!embed.isEnabled()) return res.status(400).json({ error_code: 'EMBED_DISABLED' });
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const existing = findActiveJobId('embed-index', book_id, userEmail);
   if (existing) return res.json({ jobId: existing, existing: true });
   const jobId = createJob('embed-index', book_id, userEmail, 'job.label.embedIndex', null, book_id);

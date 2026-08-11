@@ -8,6 +8,7 @@ const { stripTrailingEmptyJson } = require('../agentic-chat');
 const { toIntId } = require('../../../lib/validate');
 const { setContext } = require('../../../lib/log-context');
 const { db } = require('../../../db/schema');
+const { sessionEmail } = require('../../../lib/acl');
 const {
   jobs, runningJobs, createJob, enqueueJob, jobKey, findActiveJobId,
 } = require('../shared');
@@ -75,7 +76,7 @@ function _handleChatPost(req, res, { jobType, sessionSelect, labelFn, runFn }) {
     ? req.body.client_msg_id
     : null;
   if (!session_id || !message?.trim()) return res.status(400).json({ error_code: 'SESSION_ID_MSG_REQUIRED' });
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   if (!userEmail) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
 
   // Idempotency: gleicher client_msg_id in selber Session → bestehende jobId zurück,

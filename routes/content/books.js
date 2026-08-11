@@ -12,10 +12,10 @@ const { db } = require('../../db/connection');
 const { toIntId } = require('../../lib/validate');
 const { setContext } = require('../../lib/log-context');
 const { resolvePageBookId } = require('../../lib/content-ownership');
-const { aclParamGuard, requireBookAccess, sendACLError } = require('../../lib/acl');
+const { aclParamGuard, requireBookAccess, sendACLError, sessionEmail } = require('../../lib/acl');
 const { localIsoDaysAgo } = require('../../lib/local-date');
 const logger = require('../../logger');
-const { jsonBody, NAME_MAX, _validDeviceId, _userEmail, _fail } = require('./shared');
+const { jsonBody, NAME_MAX, _validDeviceId, _fail } = require('./shared');
 
 const SYNC_PAGE_LIMIT = 200;
 
@@ -24,7 +24,7 @@ function register(router) {
   // Buecher. Strikt gefiltert: Admin ohne Share-Row sieht leeres Array.
   // Jedes Buch traegt `role` (eigene Buch-Rolle) und `owner_email` als Hint.
   router.get('/books', async (req, res) => {
-    const email = _userEmail(req);
+    const email = sessionEmail(req);
     if (!email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
     const accessRows = bookAccess.listBookIdsForUser(email);
     if (accessRows.length === 0) return res.json([]);
@@ -81,7 +81,7 @@ function register(router) {
   // `device_label` des schreibenden Geraets, damit der Client Multi-Device-Edits
   // nicht als Fremd-Edits formuliert.
   router.get('/books/:book_id/changes', aclParamGuard('viewer'), (req, res) => {
-    const email = _userEmail(req);
+    const email = sessionEmail(req);
     const sinceRaw = (req.query?.since || '').toString().trim();
     const nowIso = new Date().toISOString();
     if (!sinceRaw) return res.json({ now: nowIso, changes: [] });
@@ -185,7 +185,7 @@ function register(router) {
   // Row gegen DB-Stand reconcilen (neue/geloeschte Items).
   router.get('/books/:book_id/order', aclParamGuard('viewer'), (req, res) => {
     try {
-      const data = bookOrder.ensureTree(req.bookId, _userEmail(req));
+      const data = bookOrder.ensureTree(req.bookId, sessionEmail(req));
       res.json(data);
     } catch (e) { _fail(res, e, 'GET /content/books/:id/order'); }
   });
@@ -200,7 +200,7 @@ function register(router) {
       return res.status(400).json({ error_code: 'INVALID_BODY', detail: 'order_json must be array' });
     }
     try {
-      const saved = bookOrder.putOrder(req.bookId, tree, _userEmail(req));
+      const saved = bookOrder.putOrder(req.bookId, tree, sessionEmail(req));
       res.json(saved);
     } catch (e) {
       if (e instanceof bookOrder.TreeValidationError) {
@@ -220,7 +220,7 @@ function register(router) {
   // bei Einzel-Owner-Buechern sichtbar, selbst wenn es eine ANDERE Seite editiert.
   // Min-Role viewer.
   router.post('/books/:book_id/device-ping', aclParamGuard('viewer'), jsonBody, (req, res) => {
-    const email = _userEmail(req);
+    const email = sessionEmail(req);
     if (!email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
     const deviceId = req.body?.device_id;
     if (!_validDeviceId(deviceId)) return res.status(400).json({ error_code: 'INVALID_DEVICE_ID' });
@@ -245,7 +245,7 @@ function register(router) {
   // Optional (Stale-Filter raeumt eh nach 90s), aber gibt der Erkennung sofortige
   // Korrektheit. device_id auch als Query — keepalive/sendBeacon verschluckt Body.
   router.delete('/books/:book_id/device-ping', aclParamGuard('viewer'), jsonBody, (req, res) => {
-    const email = _userEmail(req);
+    const email = sessionEmail(req);
     if (!email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
     const deviceId = req.body?.device_id || req.query?.device_id;
     if (!_validDeviceId(deviceId)) return res.status(400).json({ error_code: 'INVALID_DEVICE_ID' });
@@ -259,7 +259,7 @@ function register(router) {
   // desselben Users auf anderen Geraeten bleiben sichtbar (`is_self: true`), damit
   // der User sein eigenes Multi-Device sehen kann.
   router.get('/books/:book_id/presence', aclParamGuard('viewer'), (req, res) => {
-    const email = _userEmail(req);
+    const email = sessionEmail(req);
     const selfDevice = (req.query?.device_id || '').toString();
     let rows;
     try { rows = pagePresence.listForBook(req.bookId); }
@@ -322,7 +322,7 @@ function register(router) {
       try { requireBookAccess(req, bookId, 'viewer'); }
       catch (e) { if (sendACLError(res, e)) return; throw e; }
     }
-    const email = _userEmail(req);
+    const email = sessionEmail(req);
     const allowedIds = new Set(bookAccess.listBookIdsForUser(email).map(r => r.book_id));
     try {
       const hits = await contentStore.searchPages(query, { bookId, count }, req);
@@ -334,7 +334,7 @@ function register(router) {
   // POST /content/books — Neues Buch anlegen. Anleger wird automatisch Owner
   // via book_access-Row.
   router.post('/books', jsonBody, async (req, res) => {
-    const email = _userEmail(req);
+    const email = sessionEmail(req);
     if (!email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
     const name = (req.body?.name || '').toString().trim();
     const description = (req.body?.description || '').toString().trim();

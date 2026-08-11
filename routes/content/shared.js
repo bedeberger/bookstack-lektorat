@@ -7,7 +7,7 @@ const express = require('express');
 const logger = require('../../logger');
 const { setContext } = require('../../lib/log-context');
 const { resolvePageBookId, resolveChapterBookId } = require('../../lib/content-ownership');
-const { requireBookAccess, sendACLError } = require('../../lib/acl');
+const { requireBookAccess, sendACLError, sessionEmail } = require('../../lib/acl');
 const deviceTokens = require('../../db/device-tokens');
 
 const jsonBody = express.json({ limit: '10mb' });
@@ -15,7 +15,6 @@ const NAME_MAX = 255;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function _validDeviceId(s) { return typeof s === 'string' && UUID_RE.test(s); }
 
-function _userEmail(req) { return req.session?.user?.email || null; }
 
 // Beschreibt den anfragenden Client fuer Logs. Bei Device-Token-Auth (nativer
 // Mac-Client) loest es Geraetename + Plattform aus dem Token auf, sonst "session".
@@ -70,6 +69,6 @@ function _fail(res, e, opName) {
 
 module.exports = {
   jsonBody, NAME_MAX, UUID_RE, _validDeviceId,
-  _userEmail, _clientLabel, _deviceTokenLabel,
+  _clientLabel, _deviceTokenLabel,
   _guardPage, _guardChapter, _fail,
 };

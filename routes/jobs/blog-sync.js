@@ -19,7 +19,7 @@ const { makeImageResolver } = require('../../lib/wp-media');
 const { classifyPull } = require('../../lib/blog-merge');
 const { assertBlogBook } = require('../../lib/buchtyp');
 const { getHeadline } = require('../../db/headline');
-const { requireBookAccess, sendACLError } = require('../../lib/acl');
+const { requireBookAccess, sendACLError, sessionEmail } = require('../../lib/acl');
 const { toIntId } = require('../../lib/validate');
 const { setContext } = require('../../lib/log-context');
 const { db } = require('../../db/connection');
@@ -519,7 +519,7 @@ blogSyncRouter.post('/blog-import', jsonBody, (req, res) => {
   if (!book_id) return res.status(400).json({ error_code: 'BOOK_ID_REQUIRED' });
   setContext({ book: book_id });
   if (!_aclEditor(req, res, book_id)) return;
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   try { _requireBlogBook(book_id, userEmail); }
   catch (e) { return res.status(400).json({ error_code: e.code }); }
   const existing = findActiveJobId('blog-import', book_id, userEmail);
@@ -534,7 +534,7 @@ blogSyncRouter.post('/blog-pull', jsonBody, (req, res) => {
   if (!book_id) return res.status(400).json({ error_code: 'BOOK_ID_REQUIRED' });
   setContext({ book: book_id });
   if (!_aclEditor(req, res, book_id)) return;
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   try { _requireBlogBook(book_id, userEmail); }
   catch (e) { return res.status(400).json({ error_code: e.code }); }
   const existing = findActiveJobId('blog-pull', book_id, userEmail);
@@ -549,7 +549,7 @@ blogSyncRouter.post('/blog-reconcile', jsonBody, (req, res) => {
   if (!book_id) return res.status(400).json({ error_code: 'BOOK_ID_REQUIRED' });
   setContext({ book: book_id });
   if (!_aclEditor(req, res, book_id)) return;
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   try { _requireBlogBook(book_id, userEmail); }
   catch (e) { return res.status(400).json({ error_code: e.code }); }
   const existing = findActiveJobId('blog-reconcile', book_id, userEmail);
@@ -564,7 +564,7 @@ blogSyncRouter.post('/blog-push', jsonBody, (req, res) => {
   if (!book_id) return res.status(400).json({ error_code: 'BOOK_ID_REQUIRED' });
   setContext({ book: book_id });
   if (!_aclEditor(req, res, book_id)) return;
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   try { _requireBlogBook(book_id, userEmail); }
   catch (e) { return res.status(400).json({ error_code: e.code }); }
   const pageIds = Array.isArray(req.body?.page_ids) ? req.body.page_ids : [];

@@ -23,7 +23,8 @@ const {
 } = require('../db/schema');
 const { toIntId } = require('../lib/validate');
 const { rawPdfBody, readDocUpload, sendDoc } = require('../lib/pdf-attachment');
-const { userEmail, canReadById, isOwner } = require('./sources-acl');
+const { canReadById, isOwner } = require('./sources-acl');
+const { sessionEmail } = require('../lib/acl');
 const { enqueueSourceEmbedIndexJob } = require('./jobs/source-embed-index');
 const sourceSemanticChunks = require('../db/source-semantic-chunks');
 const logger = require('../logger');
@@ -33,7 +34,7 @@ const router = express.Router();
 /** Gemeinsamer Vorspann der Schreibpfade: eingeloggt + Quelle da + Besitzer.
  *  Liefert die Quelle oder null (Antwort ist dann schon raus). */
 function _ownedSource(req, res) {
-  if (!userEmail(req)) { res.status(401).json({ error_code: 'NOT_LOGGED_IN' }); return null; }
+  if (!sessionEmail(req)) { res.status(401).json({ error_code: 'NOT_LOGGED_IN' }); return null; }
   const id = toIntId(req.params.id);
   if (!id) { res.status(400).json({ error_code: 'INVALID_ID' }); return null; }
   const src = getSource(id);
@@ -65,7 +66,7 @@ router.post('/:id/doc', rawPdfBody(), async (req, res) => {
   setSourceDoc(src.id, doc);
   logger.info(`[quellen] Dokument-Upload id=${src.id} pages=${doc.pages} chars=${doc.chars}${doc.truncated ? ' (gedeckelt)' : ''}`);
   let jobId = null;
-  try { jobId = enqueueSourceEmbedIndexJob(userEmail(req)); }
+  try { jobId = enqueueSourceEmbedIndexJob(sessionEmail(req)); }
   catch (e) { logger.warn(`[quellen] embed-index enqueue fehlgeschlagen: ${e.message}`); }
   res.json({ ...getSource(src.id), index_job_id: jobId });
 });
@@ -74,7 +75,7 @@ router.post('/:id/doc', rawPdfBody(), async (req, res) => {
 router.get('/:id/doc', (req, res) => {
   const id = toIntId(req.params.id);
   if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const email = userEmail(req);
+  const email = sessionEmail(req);
   if (!email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
   // Meta-Zeile OHNE BLOB: die ACL-Entscheidung darf keine 25 MB durch den
   // Prozess ziehen, nur um danach 403 zu antworten.

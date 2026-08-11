@@ -11,7 +11,7 @@ const {
   getFigureWithDetails, db,
 } = require('../db/schema');
 const { toIntId } = require('../lib/validate');
-const { aclParamGuard } = require('../lib/acl');
+const { aclParamGuard, sessionEmail } = require('../lib/acl');
 const logger = require('../logger');
 
 const router = express.Router();
@@ -24,10 +24,6 @@ const jsonBody = express.json({ limit: '1mb' });
 const MAX_NAME_LEN = 200;
 const MAX_NOTES_LEN = 8000;
 const MAX_MINDMAP_BYTES = 256 * 1024;
-
-function userEmailOrNull(req) {
-  return req.session?.user?.email || null;
-}
 
 function defaultMindmap(name) {
   return {
@@ -78,7 +74,7 @@ function _validateMindmap(obj) {
 // Liste ohne result_json (spart bei vielen Einträgen); Detail liefert vollen
 // JSON. Owner-Check via user_email auf draft (List) bzw. run (Get/Delete).
 router.get('/by-id/:id/runs', (req, res) => {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   const id = toIntId(req.params.id);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   if (!id)        return res.status(400).json({ error_code: 'INVALID_ID' });
@@ -89,7 +85,7 @@ router.get('/by-id/:id/runs', (req, res) => {
 });
 
 router.get('/runs/:run_id', (req, res) => {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   const id = toIntId(req.params.run_id);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   if (!id)        return res.status(400).json({ error_code: 'INVALID_ID' });
@@ -100,7 +96,7 @@ router.get('/runs/:run_id', (req, res) => {
 });
 
 router.delete('/runs/:run_id', (req, res) => {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   const id = toIntId(req.params.run_id);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   if (!id)        return res.status(400).json({ error_code: 'INVALID_ID' });
@@ -111,7 +107,7 @@ router.delete('/runs/:run_id', (req, res) => {
 
 // Liste aller Werkstatt-Figuren eines Buchs (per User).
 router.get('/:book_id', (req, res) => {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   const bookId = toIntId(req.params.book_id);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   if (!bookId)    return res.status(400).json({ error_code: 'INVALID_ID' });
@@ -120,7 +116,7 @@ router.get('/:book_id', (req, res) => {
 
 // Einzelne Werkstatt-Figur per id.
 router.get('/by-id/:id', (req, res) => {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   const id = toIntId(req.params.id);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   if (!id)        return res.status(400).json({ error_code: 'INVALID_ID' });
@@ -133,7 +129,7 @@ router.get('/by-id/:id', (req, res) => {
 // Neue Werkstatt-Figur. Body: { name, archetype?, notes?, mindmap? }.
 // Ohne mindmap → Default-Tree (Steckbrief + Stimme + Subtext + Eigene Aspekte).
 router.post('/:book_id', jsonBody, (req, res) => {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   const bookId = toIntId(req.params.book_id);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   if (!bookId)    return res.status(400).json({ error_code: 'INVALID_ID' });
@@ -154,7 +150,7 @@ router.post('/:book_id', jsonBody, (req, res) => {
 
 // Update. Body: { name?, archetype?, mindmap?, notes? }.
 router.put('/:id', jsonBody, (req, res) => {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   const id = toIntId(req.params.id);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   if (!id)        return res.status(400).json({ error_code: 'INVALID_ID' });
@@ -194,7 +190,7 @@ router.put('/:id', jsonBody, (req, res) => {
 // Tie-Break längere Beschreibung, dann höchste id = neuere Extraktion), damit
 // dieselbe Figur nicht doppelt erscheint.
 router.get('/:book_id/importable', (req, res) => {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   const bookId = toIntId(req.params.book_id);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   if (!bookId)    return res.status(400).json({ error_code: 'INVALID_ID' });
@@ -241,7 +237,7 @@ function _figureRicher(a, b) {
 // source_figure_id → 409 mit existingDraftId, damit das Frontend dorthin
 // navigieren kann statt einen zweiten Draft anzulegen.
 router.post('/:book_id/import', jsonBody, (req, res) => {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   const bookId = toIntId(req.params.book_id);
   const figureId = toIntId(req.body?.figureId);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
@@ -281,7 +277,7 @@ router.post('/:book_id/import', jsonBody, (req, res) => {
 });
 
 router.delete('/:id', (req, res) => {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   const id = toIntId(req.params.id);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   if (!id)        return res.status(400).json({ error_code: 'INVALID_ID' });

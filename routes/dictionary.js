@@ -13,18 +13,19 @@ const logger = require('../logger');
 const dict = require('../db/user-dictionary');
 const { toIntId } = require('../lib/validate');
 const { setContext } = require('../lib/log-context');
+const { sessionEmail } = require('../lib/acl');
 
 const router = express.Router();
 const WORD_MAX = 80;
 
 router.get('/', (req, res) => {
-  const userEmail = req.session?.user?.email;
+  const userEmail = sessionEmail(req);
   if (!userEmail) return res.status(401).json({ error: 'unauthorized' });
   res.json({ entries: dict.listForUser(userEmail) });
 });
 
 router.post('/', express.json({ limit: '4kb' }), (req, res) => {
-  const userEmail = req.session?.user?.email;
+  const userEmail = sessionEmail(req);
   if (!userEmail) return res.status(401).json({ error: 'unauthorized' });
   const body = req.body || {};
   const word = typeof body.word === 'string' ? body.word.trim() : '';
@@ -46,7 +47,7 @@ router.post('/', express.json({ limit: '4kb' }), (req, res) => {
 });
 
 router.delete('/', express.json({ limit: '4kb' }), (req, res) => {
-  const userEmail = req.session?.user?.email;
+  const userEmail = sessionEmail(req);
   if (!userEmail) return res.status(401).json({ error: 'unauthorized' });
   const body = req.body || {};
   const word = typeof body.word === 'string' ? body.word.trim() : '';

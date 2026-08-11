@@ -12,7 +12,7 @@ const plotDb = require('../db/plot');
 const { toIntId } = require('../lib/validate');
 const { resolveChapterBookId } = require('../lib/content-ownership');
 const { setContext } = require('../lib/log-context');
-const { requireBookAccess, sendACLError } = require('../lib/acl');
+const { requireBookAccess, sendACLError, sessionEmail } = require('../lib/acl');
 const appSettings = require('../lib/app-settings');
 const logger = require('../logger');
 
@@ -27,10 +27,6 @@ const MAX_BESCHREIBUNG = 4000;
 const MAX_ACT_NAME = 120;
 const MAX_THREAD_NAME = 120;
 
-function userEmailOrNull(req) {
-  return req.session?.user?.email || null;
-}
-
 function _guard(req, res, bookId, minRole = 'editor') {
   setContext({ book: bookId });
   try { requireBookAccess(req, bookId, minRole); return true; }
@@ -42,7 +38,7 @@ function _guard(req, res, bookId, minRole = 'editor') {
 // SSoT für die sonst in jedem :id-Handler (Akt/Beat/Thread/Run) wiederholte
 // Login-/ID-/Owner-/Guard-Kette.
 function _loadOwned(req, res, getFn, notFoundCode) {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   if (!userEmail) { res.status(401).json({ error_code: 'LOGIN_REQ' }); return null; }
   const id = toIntId(req.params.id);
   if (!id) { res.status(400).json({ error_code: 'INVALID_ID' }); return null; }
@@ -59,7 +55,7 @@ function _loadOwned(req, res, getFn, notFoundCode) {
 // Login-/book_id-/Guard-Kette. Der Guard läuft VOR handler-spezifischen
 // Zusatz-Validierungen (z.B. draft_id) — kein Leak an nicht-autorisierte Aufrufer.
 function _requireBook(req, res) {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   if (!userEmail) { res.status(401).json({ error_code: 'LOGIN_REQ' }); return null; }
   const bookId = toIntId(req.query.book_id);
   if (!bookId) { res.status(400).json({ error_code: 'INVALID_ID' }); return null; }
@@ -170,7 +166,7 @@ router.get('/chapter-beat-counts', (req, res) => {
 
 // ── Akte ─────────────────────────────────────────────────────────────────────
 router.post('/acts', jsonBody, (req, res) => {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   const bookId = toIntId(req.body?.book_id);
   const name = (req.body?.name || '').toString().trim();
@@ -208,7 +204,7 @@ router.delete('/acts/:id', (req, res) => {
 });
 
 router.put('/acts/order', jsonBody, (req, res) => {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   const bookId = toIntId(req.body?.book_id);
   const order = Array.isArray(req.body?.order) ? req.body.order : null;
@@ -221,7 +217,7 @@ router.put('/acts/order', jsonBody, (req, res) => {
 
 // ── Handlungsstränge (Swimlanes) ───────────────────────────────────────────
 router.post('/threads', jsonBody, (req, res) => {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   const bookId = toIntId(req.body?.book_id);
   const name = (req.body?.name || '').toString().trim();
@@ -274,7 +270,7 @@ router.delete('/threads/:id', (req, res) => {
 });
 
 router.put('/threads/order', jsonBody, (req, res) => {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   const bookId = toIntId(req.body?.book_id);
   const order = Array.isArray(req.body?.order) ? req.body.order : null;
@@ -313,7 +309,7 @@ router.delete('/threads/:id/fork-acts', (req, res) => {
 
 // ── Beats ──────────────────────────────────────────────────────────────────
 router.post('/beats', jsonBody, (req, res) => {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   const bookId = toIntId(req.body?.book_id);
   const actId = toIntId(req.body?.act_id);
@@ -420,7 +416,7 @@ router.delete('/beats/:id', (req, res) => {
 });
 
 router.put('/beats/order', jsonBody, (req, res) => {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   const bookId = toIntId(req.body?.book_id);
   const order = Array.isArray(req.body?.order) ? req.body.order : null;
@@ -436,7 +432,7 @@ router.put('/beats/order', jsonBody, (req, res) => {
 // (Buch, User)-Subset validiert; Selbst-Kanten + Fremd-Verweise sind unmöglich.
 const _REL_ERR = { SELF_RELATION: 'SELF_RELATION', BEAT_MISMATCH: 'BEAT_MISMATCH', BEAT_REQUIRED: 'BEAT_REQUIRED', TYP_REQUIRED: 'TYP_REQUIRED' };
 router.post('/beat-relations', jsonBody, (req, res) => {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   const bookId = toIntId(req.body?.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'BOOKID_REQ' });

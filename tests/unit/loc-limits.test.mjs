@@ -66,9 +66,7 @@ const CATEGORIES = [
     ext: '.html',
     cap: 250,
     allow: {
-      'public/partials/buchorganizer.html': 516,
       'public/partials/admin-usage.html': 452,
-      'public/partials/editor-notebook.html': 232,
       'public/partials/figur-werkstatt.html': 406,
       'public/partials/figuren.html': 377,
       'public/partials/book-editor.html': 358,
@@ -105,12 +103,10 @@ const CATEGORIES = [
       'db/migrations.js',
     ],
     allow: {
-      'lib/app-settings.js': 922,
       'lib/export-builders/docx.js': 813,
       'lib/page-index.js': 692,
       'lib/content-store/backends/localdb.js': 635,
       'lib/mailer-templates.js': 626,
-      'routes/history.js': 938,
       'routes/jobs/komplett/phases/extraktion.js': 922,
       'routes/jobs/book-chat-tools/tools-catalog.js': 716,
       'routes/figures.js': 715,
@@ -119,7 +115,6 @@ const CATEGORIES = [
       'routes/jobs/book-chat-tools/tools-text.js': 636,
       'routes/share/reader.js': 619,
       'routes/jobs/lektorat.js': 605,
-      'db/schema.js': 1839,
       'db/plot.js': 930,
     },
   },
@@ -143,6 +138,17 @@ for (const cat of CATEGORIES) {
           violations.push(
             `${r}: ${n} LOC > gepinntes Ceiling ${ceiling} — Altlast darf nur schrumpfen. ` +
               `Datei splitten (Eintrag dann streichen) oder kuerzen.`,
+          );
+        } else if (n <= cat.cap) {
+          // Regel 3 fuer die haeufigste Form: die Datei liegt noch da, ist aber
+          // unter den Cap geschrumpft. Ohne diesen Zweig griff die Regel nur bei
+          // GELOESCHTEN Dateien (die Stale-Schleife unten sieht gewalkte Dateien
+          // nie) — ein erfolgreicher Split liess seinen Eintrag also still
+          // stehen, und die Datei durfte danach unbemerkt bis zum alten Ceiling
+          // zurueckwachsen.
+          violations.push(
+            `${r}: nur noch ${n} LOC (<= ${cat.cap}-Cap) — Allowlist-Eintrag entfernen, ` +
+              `damit die Datei den normalen Cap nicht mehr ueberschreiten darf.`,
           );
         }
       } else if (n > cat.cap) {

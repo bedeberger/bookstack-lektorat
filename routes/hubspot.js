@@ -12,7 +12,7 @@
 // Logging-Context book-Slot via router.param + bookParamHandler.
 
 const express = require('express');
-const { aclParamGuard } = require('../lib/acl');
+const { aclParamGuard, sessionEmail } = require('../lib/acl');
 const { bookParamHandler } = require('../lib/log-context');
 const { getBookSettings } = require('../db/schema');
 const { isBlogBook, requireBlogTypeRoute } = require('../lib/buchtyp');
@@ -50,7 +50,7 @@ function _mapHubspotError(res, e) {
 
 router.get('/:book_id/status', aclParamGuard('viewer'), (req, res) => {
   const bookId = req.bookId;
-  const settings = getBookSettings(bookId, req.session?.user?.email || null);
+  const settings = getBookSettings(bookId, sessionEmail(req));
   const isBlogType = isBlogBook(settings);
   const conn = hubspot.getConnectionPublic(bookId);
   res.json({

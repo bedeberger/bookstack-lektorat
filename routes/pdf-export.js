@@ -18,6 +18,7 @@ const { prepareCover, MAX_INPUT_BYTES } = require('../lib/cover-prepare');
 const { listFonts, isAllowed: isFontAllowed, fetchFont } = require('../lib/font-fetch');
 const { toIntId } = require('../lib/validate');
 const logger = require('../logger');
+const { sessionEmail } = require('../lib/acl');
 
 const router = express.Router();
 const jsonBody = express.json({ limit: '1mb' });
@@ -26,7 +27,7 @@ const rawCoverBody = express.raw({ type: ['image/*', 'application/octet-stream']
 const NAME_MAX = 80;
 const PROFILE_MAX_PER_SCOPE = 20;
 
-function _user(req) { return req.session?.user?.email || null; }
+function _user(req) { return sessionEmail(req); }
 
 function _ownedOr404(profile, userEmail) {
   if (!profile) return { error_code: 'PROFILE_NOT_FOUND', status: 404 };

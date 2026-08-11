@@ -21,7 +21,7 @@ const { buildExportMeta, sendExportBuffer } = require('../lib/export-send');
 const { buildExportFilename } = require('../lib/filenames');
 const { toIntId } = require('../lib/validate');
 const { setContext } = require('../lib/log-context');
-const { requireBookAccess, sendACLError } = require('../lib/acl');
+const { requireBookAccess, sendACLError, sessionEmail } = require('../lib/acl');
 const bookOrder = require('../db/book-order');
 const snapshots = require('../db/book-snapshots');
 const pagePresence = require('../db/page-presence');
@@ -374,7 +374,7 @@ router.get('/:bookId/:id/export/:fmt', async (req, res) => {
   let buf;
   try {
     buf = await spec.build(bundle, await buildExportMeta(bookId, fmt, {
-      publication, citations, userEmail: req.session?.user?.email || null,
+      publication, citations, userEmail: sessionEmail(req),
     }));
   } catch (e) {
     logger.error(`Fassungs-Export-Build fehlgeschlagen (book=${bookId}, id=${id}, fmt=${fmt}): ${e.message}`);
@@ -410,7 +410,7 @@ router.post('/:bookId', express.json({ limit: '1mb' }), async (req, res) => {
     return res.status(502).json({ error_code: 'CAPTURE_FAILED' });
   }
 
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   let created;
   try {
     created = snapshots.createSnapshot({
@@ -466,7 +466,7 @@ router.post('/:bookId/:id/restore', express.json({ limit: '1mb' }), async (req, 
     return res.status(422).json({ error_code: 'CORRUPT_SNAPSHOT' });
   }
 
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
 
   // 0) Lock: ein Voll-Restore ersetzt das GANZE Buch. Editiert gerade ein
   //    ANDERER User am Buch (Live-Presence, stale-gefiltert >90s), gehen seine

@@ -6,7 +6,7 @@ const {
   setBookXrefSettings, setBookTextsorte,
 } = require('../db/schema');
 const { isValidTextsorte } = require('../db/textsorte');
-const { aclParamGuard } = require('../lib/acl');
+const { aclParamGuard, sessionEmail } = require('../lib/acl');
 const logger = require('../logger');
 const { captureSnapshot } = require('./snapshots');
 
@@ -41,7 +41,7 @@ const BIBLIOGRAPHY_TITLE_MAX = 200;
 /** Gibt Sprache, Region, Buchtyp und Buchkontext für ein Buch zurück. */
 router.get('/:book_id', aclParamGuard('viewer'), (req, res) => {
   const bookId = req.bookId;
-  const settings = getBookSettings(bookId, req.session?.user?.email || null);
+  const settings = getBookSettings(bookId, sessionEmail(req));
   res.json(settings);
 });
 
@@ -119,7 +119,7 @@ router.put('/:book_id', aclParamGuard('editor'), jsonBody, (req, res) => {
   const excludeStats = exclude_from_stats ? 1 : 0;
 
   // Vorheriger Fertig-Status fuer die Auto-Fassung beim 0→1-Uebergang.
-  const wasFinished = getBookSettings(bookId, req.session?.user?.email || null)?.is_finished ? 1 : 0;
+  const wasFinished = getBookSettings(bookId, sessionEmail(req))?.is_finished ? 1 : 0;
 
   saveBookSettings(bookId, language, region, buchtyp || null, buch_kontext || null, erzaehlperspektive || null, erzaehlzeit || null, finished, lektorBookChat, dailyGoal, orteReal, schauplatzLand, goalTarget, goalDeadline, stilprofil || null, zeitlinieReal, excludeStats, weltfaktenRealPruefen);
 
@@ -129,7 +129,7 @@ router.put('/:book_id', aclParamGuard('editor'), jsonBody, (req, res) => {
   // fire-and-forget — blockiert das Settings-Speichern nicht und darf nie werfen.
   if (finished && !wasFinished) {
     captureSnapshot(bookId, req, {
-      label: AUTO_FINISH_LABEL, dedup: true, userEmail: req.session?.user?.email || null,
+      label: AUTO_FINISH_LABEL, dedup: true, userEmail: sessionEmail(req),
     }).catch((e) => logger.warn(`Auto-Fassung beim Fertig-Markieren fehlgeschlagen (book=${bookId}): ${e.message}`));
   }
 
@@ -185,7 +185,7 @@ router.put('/:book_id/citation', aclParamGuard('editor'), jsonBody, (req, res) =
 
   // Vorwerte als Basis: der Tab darf einzelne Felder patchen, ohne die uebrigen
   // auf ihren Default zurueckzusetzen.
-  const cur = getBookSettings(bookId, req.session?.user?.email || null);
+  const cur = getBookSettings(bookId, sessionEmail(req));
   setBookCitationSettings(bookId, {
     citation_style:       b.citation_style       !== undefined ? b.citation_style       : cur.citation_style,
     bibliography_enabled: b.bibliography_enabled !== undefined ? b.bibliography_enabled : cur.bibliography_enabled,
@@ -195,7 +195,7 @@ router.put('/:book_id/citation', aclParamGuard('editor'), jsonBody, (req, res) =
     citation_notes:       b.citation_notes       !== undefined ? b.citation_notes       : cur.citation_notes,
   });
 
-  const next = getBookSettings(bookId, req.session?.user?.email || null);
+  const next = getBookSettings(bookId, sessionEmail(req));
   logger.info(`[quellen] settings book=${bookId} stil=${next.citation_style} verzeichnis=${next.bibliography_enabled} scope=${next.bibliography_scope} blog=${next.bibliography_in_blog} noten=${next.citation_notes}`);
   res.json({
     ok: true,
@@ -214,7 +214,7 @@ router.put('/:book_id/citation', aclParamGuard('editor'), jsonBody, (req, res) =
 router.put('/:book_id/xrefs', aclParamGuard('editor'), jsonBody, (req, res) => {
   const bookId = req.bookId;
   const b = req.body || {};
-  const cur = getBookSettings(bookId, req.session?.user?.email || null);
+  const cur = getBookSettings(bookId, sessionEmail(req));
 
   // Teil-PUT: nicht uebergebene Felder behalten ihren Stand. Abbildungen und
   // Tabellen haben getrennte Schalter — ein Werk kann Tabellen nummerieren und
@@ -224,7 +224,7 @@ router.put('/:book_id/xrefs', aclParamGuard('editor'), jsonBody, (req, res) => {
     table_numbering: b.table_numbering !== undefined ? b.table_numbering : cur.table_numbering,
   });
 
-  const next = getBookSettings(bookId, req.session?.user?.email || null);
+  const next = getBookSettings(bookId, sessionEmail(req));
   logger.info(`[querverweise] settings book=${bookId} abbNummerierung=${next.figure_numbering} tabNummerierung=${next.table_numbering}`);
   res.json({ ok: true, figure_numbering: next.figure_numbering, table_numbering: next.table_numbering });
 });

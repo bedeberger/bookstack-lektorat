@@ -28,13 +28,13 @@ const {
   listBookCitations, listSourceCitations,
 } = require('../db/schema');
 const { toIntId } = require('../lib/validate');
-const { guardBook } = require('../lib/acl');
+const { guardBook, sessionEmail } = require('../lib/acl');
 const { BIB_FORMATS, parseBib } = require('../lib/bib-parse');
 const { validateSourceBody, hasSourceIdentity } = require('../lib/source-validate');
 const { normalizeUrl } = require('../lib/url-normalize');
 const { lookupDoi, lookupIsbn, normalizeDoi, normalizeIsbn } = require('../lib/source-lookup');
 const { localIsoDate } = require('../lib/local-date');
-const { userEmail, canRead, isOwner } = require('./sources-acl');
+const { canRead, isOwner } = require('./sources-acl');
 const sourcesDocRouter = require('./sources-doc');
 const logger = require('../logger');
 
@@ -78,7 +78,7 @@ function _applyTypeFilter(rows, query) {
 //
 // Steht VOR /:id, sonst faengt der Id-Handler 'pool' ab.
 router.get('/pool', (req, res) => {
-  const email = userEmail(req);
+  const email = sessionEmail(req);
   if (!email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
 
   // Das Ausschlussbuch ist ein Anzeigefilter, kein Zugriffsargument — trotzdem
@@ -162,7 +162,7 @@ router.get('/citations', (req, res) => {
 //
 // Steht VOR /:id, sonst faengt der Id-Handler 'import' ab.
 router.post('/import', importBody, (req, res) => {
-  const email = userEmail(req);
+  const email = sessionEmail(req);
   if (!email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
 
   const body = req.body || {};
@@ -259,7 +259,7 @@ router.get('/lookup', async (req, res) => {
 //
 // Steht VOR /:id, sonst faengt der Id-Handler 'by-url' ab.
 router.get('/by-url', (req, res) => {
-  const email = userEmail(req);
+  const email = sessionEmail(req);
   if (!email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
 
   const raw = String(req.query.url || '').trim();
@@ -299,7 +299,7 @@ router.get('/by-url', (req, res) => {
 //
 // Steht VOR /:id, sonst faengt der Id-Handler 'from-research' ab.
 router.post('/from-research', jsonBody, (req, res) => {
-  const email = userEmail(req);
+  const email = sessionEmail(req);
   if (!email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
 
   const itemId = toIntId(req.body?.item_id);
@@ -424,7 +424,7 @@ router.get('/:id/books', (req, res) => {
 // Legt im Pool des Users an. `book_id` ordnet gleich zu — der Normalfall aus der
 // Quellen-Karte heraus. Ohne `book_id` entsteht ein reiner Bibliothekseintrag.
 router.post('/', jsonBody, (req, res) => {
-  const email = userEmail(req);
+  const email = sessionEmail(req);
   if (!email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
 
   const body = req.body || {};
@@ -491,7 +491,7 @@ router.post('/:id/link', jsonBody, (req, res) => {
   if (!guardBook(req, res, bookId, 'editor')) return;
   if (!isOwner(req, src)) return res.status(403).json({ error_code: 'NOT_SOURCE_OWNER' });
 
-  const added = linkSource(bookId, id, userEmail(req));
+  const added = linkSource(bookId, id, sessionEmail(req));
   if (added) logger.info(`[quellen] link id=${id} book=${bookId}`);
   res.json({ ok: true, added, source: getSource(id, bookId) });
 });

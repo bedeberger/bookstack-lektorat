@@ -13,6 +13,7 @@ const {
 } = require('./shared');
 const { toIntId } = require('../../lib/validate');
 const { setContext } = require('../../lib/log-context');
+const { sessionEmail } = require('../../lib/acl');
 
 const researchLinkRouter = express.Router();
 const MAX_CANDIDATES = 200;
@@ -108,7 +109,7 @@ researchLinkRouter.post('/research-link', jsonBody, (req, res) => {
     try { requireBookAccess(req, book_id, 'editor'); }
     catch (e) { if (sendACLError(res, e)) return; throw e; }
   }
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const entityKey = `${book_id}|${item_id}`;
   const existing = findActiveJobId('research-link', entityKey, userEmail);
   if (existing) return res.json({ jobId: existing, existing: true });

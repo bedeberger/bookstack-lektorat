@@ -6,7 +6,7 @@
 const express = require('express');
 const { db } = require('../db/schema');
 const { setContext } = require('../lib/log-context');
-const { requireBookAccess, sendACLError } = require('../lib/acl');
+const { requireBookAccess, sendACLError, sessionEmail } = require('../lib/acl');
 const logger = require('../logger');
 
 const router = express.Router();
@@ -55,17 +55,13 @@ const ALLOWED_KEYS = new Set([
   'onboarding',
 ]);
 
-function userEmailOrNull(req) {
-  return req.session?.user?.email || null;
-}
-
 // Quellen für Source-Tag im Tracking-Log. Persistiert wird nur der Key —
 // der Source-Tag landet im Winston-Log (für spätere Auswertung „Palette vs.
 // Tile vs. Sidebar"), ohne Schema-Change.
 const KNOWN_SOURCES = new Set(['palette', 'tile', 'sidebar', 'shortcut']);
 
 router.post('/track', jsonBody, (req, res) => {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   const key = (req.body?.key || '').toString();
   if (!ALLOWED_KEYS.has(key)) {
@@ -97,7 +93,7 @@ router.post('/track', jsonBody, (req, res) => {
 });
 
 router.get('/recent', (req, res) => {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   const limit = Math.max(1, Math.min(20, parseInt(req.query.limit, 10) || 3));
   try {
@@ -118,7 +114,7 @@ router.get('/recent', (req, res) => {
 // Seiten-Tracking: pro (User, Seite) wird die zuletzt geöffnete Zeit + Counter
 // geführt. Frontend ruft das beim Öffnen einer Seite (selectPage) auf.
 router.post('/page/track', jsonBody, (req, res) => {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   const pageId = parseInt(req.body?.page_id, 10);
   const bookId = parseInt(req.body?.book_id, 10);
@@ -145,7 +141,7 @@ router.post('/page/track', jsonBody, (req, res) => {
 
 // Letzte N Seiten des aktuellen Buchs für Command-Palette-Sektion „Zuletzt".
 router.get('/page/recent', (req, res) => {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   const bookId = parseInt(req.query.book_id, 10);
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });

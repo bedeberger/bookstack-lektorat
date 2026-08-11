@@ -31,7 +31,7 @@ const { getBookSettings } = require('../../db/schema');
 const { effectiveTextsorte, saveStructureCheck, getStructureCheck } = require('../../db/textsorte');
 const { toIntId } = require('../../lib/validate');
 const { setContext } = require('../../lib/log-context');
-const { requireBookAccess, sendACLError } = require('../../lib/acl');
+const { requireBookAccess, sendACLError, sessionEmail } = require('../../lib/acl');
 const { pageBookGuard, journalisticBookSettings } = require('../../lib/page-guard');
 const { resolveProvider } = require('../../lib/ai');
 
@@ -214,7 +214,7 @@ strukturRouter.post('/struktur-check', jsonBody, (req, res) => {
     }
   }
 
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const entityId = page_id ? `p${page_id}` : String(book_id);
   const existing = findActiveJobId('struktur-check', entityId, userEmail);
   if (existing) return res.json({ jobId: existing, existing: true });

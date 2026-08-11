@@ -4,7 +4,7 @@ const { ensureTree } = require('../db/book-order');
 const { mergeFigures, mergeScenes } = require('../db/entity-merge');
 const { recomputeBookFigureMentions } = require('../lib/page-index');
 const { toIntId, inClause } = require('../lib/validate');
-const { aclParamGuard } = require('../lib/acl');
+const { aclParamGuard, sessionEmail } = require('../lib/acl');
 const { bookParamHandler } = require('../lib/log-context');
 const { parseDatum } = require('../lib/datum-parse');
 const searchIndex = require('../lib/search');
@@ -187,7 +187,7 @@ function _computeFigureYears(bookId, userEmail) {
 router.get('/zeitstrahl/:book_id', (req, res) => {
   const bookId = toIntId(req.params.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   // ORDER BY: strukturierte Datums-Felder zuerst (Year/Month/Day), Events ohne
   // Jahr ans Ende ("unbekannt"-Bucket via COALESCE-Sentinel 9999/99). sort_order
   // dient nur noch als Tiebreaker bei Datums-Gleichstand.
@@ -306,7 +306,7 @@ router.get('/zeitstrahl/:book_id', (req, res) => {
 router.get('/scenes/:book_id', (req, res) => {
   const bookId = toIntId(req.params.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
 
   const rows = db.prepare(`
     SELECT fs.id, c.chapter_name AS kapitel, p.page_name AS seite,
@@ -360,7 +360,7 @@ router.get('/chapter/:book_id/:chapter_id', (req, res) => {
   const bookId = toIntId(req.params.book_id);
   const chapterId = toIntId(req.params.chapter_id);
   if (!bookId || !chapterId) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const figuren = getChapterFigures(bookId, chapterId, userEmail);
   // Pro-Figur-Jahr/Alter anreichern (nur bei zeitlinie_real; sonst null-Map).
   const yearMap = _computeFigureYears(bookId, userEmail);
@@ -382,7 +382,7 @@ router.get('/chapter/:book_id/:chapter_id', (req, res) => {
 router.get('/:book_id', (req, res) => {
   const bookId = toIntId(req.params.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
 
   const figs = db.prepare(`
     SELECT * FROM figures
@@ -534,7 +534,7 @@ router.get('/:book_id', (req, res) => {
 
 // Figuren eines Buchs speichern (überschreibt)
 router.put('/:book_id', jsonBody, (req, res) => {
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const bookId = toIntId(req.params.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
   // Reconcile per fig_id (round-trippt stabil durch GET→PUT): behaltene Figuren
@@ -572,7 +572,7 @@ router.post('/:book_id/merge', jsonBody, (req, res) => {
   const tgt = String(req.body?.target || '').trim();
   if (!bookId || !src || !tgt) return res.status(400).json({ error_code: 'INVALID_ID' });
   if (src === tgt) return res.status(409).json({ error_code: 'SAME_ENTITY' });
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const emailCond = userEmail ? 'user_email = ?' : 'user_email IS NULL';
   const emailVal = userEmail ? [userEmail] : [];
   const get = db.prepare(`SELECT id FROM figures WHERE fig_id = ? AND book_id = ? AND ${emailCond}`);
@@ -610,7 +610,7 @@ router.post('/scenes/:book_id/merge', jsonBody, (req, res) => {
   const tgtId = toIntId(req.body?.target_id);
   if (!bookId || !srcId || !tgtId) return res.status(400).json({ error_code: 'INVALID_ID' });
   if (srcId === tgtId) return res.status(409).json({ error_code: 'SAME_ENTITY' });
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const emailCond = userEmail ? 'user_email = ?' : 'user_email IS NULL';
   const emailVal = userEmail ? [userEmail] : [];
   const get = db.prepare(`SELECT id FROM figure_scenes WHERE id = ? AND book_id = ? AND ${emailCond}`);
@@ -633,7 +633,7 @@ router.post('/scenes/:book_id/merge', jsonBody, (req, res) => {
 router.delete('/scenes/:book_id/stale', (req, res) => {
   const bookId = toIntId(req.params.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const emailCond = userEmail ? 'user_email = ?' : 'user_email IS NULL';
   const emailVal = userEmail ? [userEmail] : [];
   const ids = db.prepare(
@@ -654,7 +654,7 @@ router.delete('/scenes/:book_id/stale', (req, res) => {
 router.delete('/:book_id/stale', (req, res) => {
   const bookId = toIntId(req.params.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const emailCond = userEmail ? 'user_email = ?' : 'user_email IS NULL';
   const emailVal = userEmail ? [userEmail] : [];
   const ids = db.prepare(
@@ -675,7 +675,7 @@ router.delete('/scenes/:book_id/:id', (req, res) => {
   const bookId = toIntId(req.params.book_id);
   const id = toIntId(req.params.id);
   if (!bookId || !id) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const emailCond = userEmail ? 'user_email = ?' : 'user_email IS NULL';
   const row = db.prepare(
     `SELECT stale FROM figure_scenes WHERE id = ? AND book_id = ? AND ${emailCond}`
@@ -699,7 +699,7 @@ router.delete('/:book_id/:id', (req, res) => {
   const bookId = toIntId(req.params.book_id);
   const figId = String(req.params.id || '').trim();
   if (!bookId || !figId) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const emailCond = userEmail ? 'user_email = ?' : 'user_email IS NULL';
   const row = db.prepare(
     `SELECT id, stale FROM figures WHERE fig_id = ? AND book_id = ? AND ${emailCond}`

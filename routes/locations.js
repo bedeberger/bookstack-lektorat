@@ -4,7 +4,7 @@ const { db, saveOrteToDb, patchOrtCoords } = require('../db/schema');
 const { mergeLocations } = require('../db/entity-merge');
 const logger = require('../logger');
 const { toIntId, inClause } = require('../lib/validate');
-const { aclParamGuard } = require('../lib/acl');
+const { aclParamGuard, sessionEmail } = require('../lib/acl');
 const { bookParamHandler } = require('../lib/log-context');
 const searchIndex = require('../lib/search');
 
@@ -17,7 +17,7 @@ const jsonBody = express.json();
 router.get('/:book_id', (req, res) => {
   const bookId = toIntId(req.params.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
 
   const rows = db.prepare(`
     SELECT id, loc_id, name, typ, beschreibung, erste_erwaehnung, erste_erwaehnung_page_id, stimmung,
@@ -95,7 +95,7 @@ router.get('/:book_id', (req, res) => {
 router.put('/:book_id', jsonBody, (req, res) => {
   const bookId = toIntId(req.params.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   saveOrteToDb(bookId, req.body.orte || [], userEmail);
   // FTS-Index nachziehen — saveOrteToDb ist Full-Replace pro Buch.
   searchIndex.removeKindForBook('location', bookId);
@@ -111,7 +111,7 @@ router.put('/:book_id', jsonBody, (req, res) => {
 router.patch('/:book_id/coords', jsonBody, (req, res) => {
   const bookId = toIntId(req.params.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const patches = Array.isArray(req.body.patches) ? req.body.patches : [];
   const updated = patchOrtCoords(bookId, patches, userEmail);
   res.json({ ok: true, updated });
@@ -130,7 +130,7 @@ router.post('/:book_id/merge', jsonBody, (req, res) => {
   const tgt = String(req.body?.target || '').trim();
   if (!bookId || !src || !tgt) return res.status(400).json({ error_code: 'INVALID_ID' });
   if (src === tgt) return res.status(409).json({ error_code: 'SAME_ENTITY' });
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const emailCond = userEmail ? 'user_email = ?' : 'user_email IS NULL';
   const emailVal = userEmail ? [userEmail] : [];
   const get = db.prepare(`SELECT id FROM locations WHERE loc_id = ? AND book_id = ? AND ${emailCond}`);
@@ -154,7 +154,7 @@ router.post('/:book_id/merge', jsonBody, (req, res) => {
 router.delete('/:book_id/stale', (req, res) => {
   const bookId = toIntId(req.params.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const emailCond = userEmail ? 'user_email = ?' : 'user_email IS NULL';
   const emailVal = userEmail ? [userEmail] : [];
   const ids = db.prepare(
@@ -179,7 +179,7 @@ router.delete('/:book_id/:id', (req, res) => {
   const bookId = toIntId(req.params.book_id);
   const locId = String(req.params.id || '').trim();
   if (!bookId || !locId) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const emailCond = userEmail ? 'user_email = ?' : 'user_email IS NULL';
   const row = db.prepare(
     `SELECT id, stale FROM locations WHERE loc_id = ? AND book_id = ? AND ${emailCond}`

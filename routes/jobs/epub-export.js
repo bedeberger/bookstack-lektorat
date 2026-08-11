@@ -27,6 +27,7 @@ const { buildExportFilename } = require('../../lib/filenames');
 const { resolveSlug } = require('../../lib/export-builders/shared');
 const { toIntId } = require('../../lib/validate');
 const { setContext } = require('../../lib/log-context');
+const { sessionEmail } = require('../../lib/acl');
 
 const router = express.Router();
 const VALID_SCOPES = new Set(['book', 'chapter', 'page']);
@@ -164,7 +165,7 @@ async function runEpubExportJob(jobId, { scope, entityId, includeSubchapters, sn
 }
 
 router.post('/epub-export', jsonBody, async (req, res) => {
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
 
   // Fassungs-Export: snapshotId gesetzt → immer ganzes Buch.
   const snapshotId = toIntId(req.body?.snapshot_id || req.body?.snapshotId);
@@ -212,7 +213,7 @@ router.post('/epub-export', jsonBody, async (req, res) => {
 });
 
 router.get('/epub-export/:id/file', (req, res) => {
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const job = jobs.get(req.params.id);
   if (!job) return res.status(404).json({ error_code: 'JOB_NOT_FOUND' });
   if (job.userEmail !== userEmail) return res.status(403).json({ error_code: 'FORBIDDEN' });

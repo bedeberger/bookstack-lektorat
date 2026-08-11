@@ -11,7 +11,7 @@ const express = require('express');
 const { db } = require('../db/schema');
 const { toIntId } = require('../lib/validate');
 const { setContext } = require('../lib/log-context');
-const { requireBookAccess, sendACLError } = require('../lib/acl');
+const { requireBookAccess, sendACLError, sessionEmail } = require('../lib/acl');
 const { resolvePageBookId, resolveChapterBookId } = require('../lib/content-ownership');
 const searchIndex = require('../lib/search');
 const logger = require('../logger');
@@ -30,10 +30,6 @@ const SELECT_ROW = `
   LEFT JOIN chapters c ON c.chapter_id = i.chapter_id
 `;
 
-function userEmailOrNull(req) {
-  return req.session?.user?.email || null;
-}
-
 function _guard(req, res, bookId, minRole) {
   setContext({ book: bookId });
   try { requireBookAccess(req, bookId, minRole); return true; }
@@ -43,7 +39,7 @@ function _guard(req, res, bookId, minRole) {
 // Map page_id ODER chapter_id → Anzahl offener Ideen für ein Buch.
 // `kind=page` (Default) zaehlt Seiten-Ideen; `kind=chapter` zaehlt Kapitel-Ideen.
 router.get('/counts', (req, res) => {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   const bookId = toIntId(req.query.book_id);
   const kind = req.query.kind === 'chapter' ? 'chapter' : 'page';
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
@@ -65,7 +61,7 @@ router.get('/counts', (req, res) => {
 // Liste aller Ideen einer Seite ODER eines Kapitels (offen oben, dann erledigte;
 // je Block neueste zuerst). Genau ein Scope-Parameter ist erforderlich.
 router.get('/', (req, res) => {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   const pageId = toIntId(req.query.page_id);
   const chapterId = toIntId(req.query.chapter_id);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
@@ -99,7 +95,7 @@ router.get('/', (req, res) => {
 
 // Idee anlegen (XOR page_id / chapter_id).
 router.post('/', jsonBody, (req, res) => {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   const bookId = toIntId(req.body?.book_id);
   const pageId = toIntId(req.body?.page_id);
@@ -136,7 +132,7 @@ router.post('/', jsonBody, (req, res) => {
 // Move bleibt within-kind: Page-Idee kann nur auf andere Seite, Chapter-Idee
 // nur auf anderes Kapitel.
 router.patch('/:id', jsonBody, (req, res) => {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   const id = toIntId(req.params.id);
   if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
@@ -204,7 +200,7 @@ router.patch('/:id', jsonBody, (req, res) => {
 
 // Idee löschen.
 router.delete('/:id', (req, res) => {
-  const userEmail = userEmailOrNull(req);
+  const userEmail = sessionEmail(req);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   const id = toIntId(req.params.id);
   if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });

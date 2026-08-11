@@ -1,90 +1,58 @@
 // Lektoratszeit-Tracking: summiert die Sekunden, während der Prüfmodus
 // (`checkDone`) auf einer Seite aktiv ist und der Tab sichtbar ist.
-// Heartbeat alle 15 s, Flush bei visibilitychange, pagehide, Seitenwechsel
-// und State-Wechseln. Bei Seitenwechsel wird auf die alte Seite gebucht
-// und mit der neuen Seite neu gestartet, da Prüfmodus seitengebunden ist.
+// Timer-Lifecycle, Clamp, Tab-Lease und Senden kommen aus
+// [heartbeat-tracker.js](heartbeat-tracker.js).
+//
+// Seitengebunden: Buch UND Seite werden beim Start eingefroren, damit ein
+// Seitenwechsel den offenen Delta noch auf die ALTE Seite bucht (der `restart`-
+// Watcher stoppt zuerst, dann startet er neu).
 //
 // `this` zeigt auf die Alpine-Komponente (via spread in app.js).
 
-import { acquireTickLease, clampTickSeconds, releaseTickLease } from './heartbeat.js';
-
-const HEARTBEAT_MS = 15000;
+import { makeHeartbeatTracker } from './heartbeat-tracker.js';
 
 export const lektoratTimeMethods = {
-  _lektoratActiveSince: null,
   _lektoratActivePageId: null,
   _lektoratActiveBookId: null,
-  _lektoratHeartbeatTimer: null,
 
-  _lektoratTimeActive() {
-    return !!(this.checkDone
-      && this.$store.nav.selectedBookId
-      && this.currentPage?.id
-      && document.visibilityState === 'visible');
-  },
+  ...makeHeartbeatTracker({
+    name: 'lektorat',
+    url: '/history/lektorat-time',
+    methods: {
+      active: '_lektoratTimeActive',
+      setup: '_setupLektoratTime',
+      start: '_startLektoratHeartbeat',
+      stop: '_stopLektoratHeartbeat',
+      flush: '_flushLektoratTime',
+    },
+    spec: {
+      isActive: (ctx) => ctx.checkDone
+        && ctx.$store.nav.selectedBookId
+        && ctx.currentPage?.id
+        && document.visibilityState === 'visible',
 
-  _setupLektoratTime() {
-    const signal = this._abortCtrl?.signal;
-    const sync = () => {
-      if (this._lektoratTimeActive()) this._startLektoratHeartbeat();
-      else this._stopLektoratHeartbeat(false);
-    };
-    const restart = () => {
-      this._stopLektoratHeartbeat(false);
-      if (this._lektoratTimeActive()) this._startLektoratHeartbeat();
-    };
-    this.$watch('checkDone',         sync);
-    this.$watch(() => this.$store.nav.selectedBookId,    restart);
-    this.$watch(() => this.currentPage?.id, restart);
-    document.addEventListener('visibilitychange', sync, { signal });
-    window.addEventListener('pagehide', () => this._stopLektoratHeartbeat(true), { signal });
-    sync();
-  },
+      watch: [
+        { get: 'checkDone' },
+        { get: (ctx) => ctx.$store.nav.selectedBookId, restart: true },
+        { get: (ctx) => ctx.currentPage?.id, restart: true },
+      ],
 
-  _startLektoratHeartbeat() {
-    if (this._lektoratHeartbeatTimer) return;
-    this._lektoratActiveSince = Date.now();
-    this._lektoratActivePageId = this.currentPage?.id || null;
-    this._lektoratActiveBookId = this.$store.nav.selectedBookId || null;
-    this._lektoratHeartbeatTimer = setInterval(() => {
-      this._flushLektoratTime(false);
-    }, HEARTBEAT_MS);
-  },
+      onStart: (ctx) => {
+        ctx._lektoratActivePageId = ctx.currentPage?.id || null;
+        ctx._lektoratActiveBookId = ctx.$store.nav.selectedBookId || null;
+      },
+      onStop: (ctx) => {
+        ctx._lektoratActivePageId = null;
+        ctx._lektoratActiveBookId = null;
+      },
 
-  _stopLektoratHeartbeat(useBeacon) {
-    if (this._lektoratHeartbeatTimer) {
-      clearInterval(this._lektoratHeartbeatTimer);
-      this._lektoratHeartbeatTimer = null;
-    }
-    this._flushLektoratTime(useBeacon);
-    this._lektoratActiveSince = null;
-    this._lektoratActivePageId = null;
-    this._lektoratActiveBookId = null;
-    releaseTickLease('lektorat');
-  },
-
-  _flushLektoratTime(useBeacon) {
-    if (this._lektoratActiveSince == null) return;
-    const now = Date.now();
-    // Clamp gegen gestallte Timer, Lease gegen parallele Tabs — siehe heartbeat.js.
-    const seconds = clampTickSeconds((now - this._lektoratActiveSince) / 1000);
-    this._lektoratActiveSince = now;
-    if (seconds <= 0) return;
-    const bookId = this._lektoratActiveBookId;
-    const pageId = this._lektoratActivePageId;
-    if (!bookId || !pageId) return;
-    if (!acquireTickLease('lektorat', now)) return;
-    const payload = { book_id: Number(bookId), page_id: Number(pageId), seconds };
-    if (useBeacon && navigator.sendBeacon) {
-      const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
-      navigator.sendBeacon('/history/lektorat-time', blob);
-    } else {
-      fetch('/history/lektorat-time', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        keepalive: true,
-      }).catch(() => {});
-    }
-  },
+      payload: (ctx, seconds) => {
+        if (seconds <= 0) return null;
+        const bookId = ctx._lektoratActiveBookId;
+        const pageId = ctx._lektoratActivePageId;
+        if (!bookId || !pageId) return null;
+        return { book_id: Number(bookId), page_id: Number(pageId), seconds };
+      },
+    },
+  }),
 };

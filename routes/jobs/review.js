@@ -22,6 +22,7 @@ const { toIntId } = require('../../lib/validate');
 const { setContext } = require('../../lib/log-context');
 const appSettings = require('../../lib/app-settings');
 const { resolveProvider } = require('../../lib/ai');
+const { sessionEmail } = require('../../lib/acl');
 
 // Stabile, kurze Signatur für strukturierte Prompt-Vars (narrative,
 // reviewSchwerpunkt, komplettContext). Identischer Inhalt → identische Sig.
@@ -245,7 +246,7 @@ reviewRouter.post('/review', jsonBody, (req, res) => {
   const { requireBookAccess, sendACLError } = require('../../lib/acl');
   try { requireBookAccess(req, book_id, 'editor'); }
   catch (e) { if (sendACLError(res, e)) return; throw e; }
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const userToken = null;
   const existing = findActiveJobId('review', book_id, userEmail);
   if (existing) return res.json({ jobId: existing, existing: true });

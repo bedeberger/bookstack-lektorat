@@ -32,6 +32,7 @@ const sourceSemanticChunks = require('../../db/source-semantic-chunks');
 const { markSourceIndexed, getSourceDocText } = require('../../db/schema');
 const { setContext } = require('../../lib/log-context');
 const logger = require('../../logger');
+const { sessionEmail } = require('../../lib/acl');
 
 const sourceEmbedIndexRouter = express.Router();
 
@@ -180,7 +181,7 @@ function enqueueSourceEmbedIndexJob(userEmail) {
 }
 
 sourceEmbedIndexRouter.post('/source-embed-index', jsonBody, (req, res) => {
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   if (!userEmail) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
   setContext({ user: userEmail });
   if (!embed.isEnabled()) return res.status(400).json({ error_code: 'EMBED_DISABLED' });

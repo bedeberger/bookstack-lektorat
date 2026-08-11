@@ -14,17 +14,13 @@
 
 const { listSourceBooks } = require('../db/schema');
 const { hasMinRole } = require('../db/book-access');
-const { resolveBookRole } = require('../lib/acl');
-
-function userEmail(req) {
-  return req.session?.user?.email || null;
-}
+const { resolveBookRole, sessionEmail } = require('../lib/acl');
 
 /** Darf der User die Quelle sehen? Besitzer immer; sonst reicht Leserecht auf
  *  irgendeinem Buch, dem die Quelle zugeordnet ist — dort steht ihr Marker im
  *  Text und muss aufloesbar sein. */
 function canRead(req, src) {
-  const email = userEmail(req);
+  const email = sessionEmail(req);
   if (!email) return false;
   if (src.owner_email === email) return true;
   return canReadById(req, src.id);
@@ -39,8 +35,8 @@ function canReadById(req, sourceId) {
 }
 
 function isOwner(req, src) {
-  const email = userEmail(req);
+  const email = sessionEmail(req);
   return !!email && src.owner_email === email;
 }
 
-module.exports = { userEmail, canRead, canReadById, isOwner };
+module.exports = { canRead, canReadById, isOwner };

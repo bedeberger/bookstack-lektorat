@@ -20,6 +20,7 @@ const { setContext } = require('../../lib/log-context');
 const bookAccess = require('../../db/book-access');
 const { db } = require('../../db/connection');
 const logger = require('../../logger');
+const { sessionEmail } = require('../../lib/acl');
 
 const router = express.Router();
 
@@ -207,7 +208,7 @@ const rawZipBody = express.raw({
 });
 
 router.post('/book-import', rawZipBody, async (req, res) => {
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   if (!userEmail) return res.status(401).json({ error_code: 'UNAUTHENTICATED' });
 
   if (!req.body || !Buffer.isBuffer(req.body) || req.body.length === 0) {

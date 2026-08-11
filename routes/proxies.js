@@ -11,6 +11,7 @@ const { toIntId } = require('../lib/validate');
 const appSettings = require('../lib/app-settings');
 const { getVersion, getShellBuild } = require('../lib/version');
 const { MAX_INPUT_BYTES: PDF_MAX_BYTES } = require('../lib/pdf-attachment');
+const { sessionEmail } = require('../lib/acl');
 
 const router = express.Router();
 
@@ -259,9 +260,9 @@ async function fetchOpenThesaurus(word, budgetSignal) {
 router.get('/openthesaurus/synonyms', async (req, res) => {
   const word = (req.query.word || '').trim();
   const bookId = toIntId(req.query.book_id);
-  const log = logger.child({ job: 'thesaurus', user: req.session?.user?.email || '-', book: bookId || '-' });
+  const log = logger.child({ job: 'thesaurus', user: sessionEmail(req) || '-', book: bookId || '-' });
   if (!word) return res.json({ synonyme: [], disabled: false });
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const locale = bookId ? getBookLocale(bookId, userEmail) : 'de-CH';
   if (!locale || !locale.toLowerCase().startsWith('de')) {
     log.info(`word=«${word}» skipped (locale=${locale})`);

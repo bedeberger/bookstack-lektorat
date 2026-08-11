@@ -2,7 +2,7 @@
 const express = require('express');
 const { db, saveSongsToDb } = require('../db/schema');
 const { toIntId, inClause } = require('../lib/validate');
-const { aclParamGuard } = require('../lib/acl');
+const { aclParamGuard, sessionEmail } = require('../lib/acl');
 const searchIndex = require('../lib/search');
 
 const router = express.Router();
@@ -13,7 +13,7 @@ const jsonBody = express.json();
 router.get('/:book_id', (req, res) => {
   const bookId = toIntId(req.params.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
 
   const rows = db.prepare(`
     SELECT id, song_uid, titel, interpret, genre, kontext_typ, beschreibung,
@@ -75,7 +75,7 @@ router.get('/:book_id', (req, res) => {
 router.put('/:book_id', jsonBody, (req, res) => {
   const bookId = toIntId(req.params.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   saveSongsToDb(bookId, req.body.songs || [], userEmail);
   searchIndex.removeKindForBook('song', bookId);
   const songRows = db.prepare('SELECT id FROM songs WHERE book_id = ?').all(bookId);

@@ -12,8 +12,8 @@ const bookAccess = require('../../db/book-access');
 const { toIntId } = require('../../lib/validate');
 const { setContext } = require('../../lib/log-context');
 const { resolveChapterBookId } = require('../../lib/content-ownership');
-const { requireBookAccess, sendACLError } = require('../../lib/acl');
-const { jsonBody, _validDeviceId, _userEmail, _deviceTokenLabel, _guardPage, _fail } = require('./shared');
+const { requireBookAccess, sendACLError, sessionEmail } = require('../../lib/acl');
+const { jsonBody, _validDeviceId, _deviceTokenLabel, _guardPage, _fail } = require('./shared');
 
 function register(router) {
   // GET /content/pages/:page_id — Volltext + Metadaten.
@@ -32,7 +32,7 @@ function register(router) {
     if (!pageId) return res.status(400).json({ error_code: 'INVALID_PAGE_ID' });
     const bookId = _guardPage(req, res, pageId, 'editor');
     if (bookId == null) return;
-    const email = _userEmail(req);
+    const email = sessionEmail(req);
     const blocking = bookAccess.getBlockingLockFor(pageId, email);
     if (blocking) return res.status(423).json({
       error_code: 'PAGE_LOCKED',
@@ -92,7 +92,7 @@ function register(router) {
     if (!pageId) return res.status(400).json({ error_code: 'INVALID_PAGE_ID' });
     const bookId = _guardPage(req, res, pageId, 'editor');
     if (bookId == null) return;
-    const email = _userEmail(req);
+    const email = sessionEmail(req);
     if (!email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
     const deviceId = req.body?.device_id;
     if (!_validDeviceId(deviceId)) return res.status(400).json({ error_code: 'INVALID_DEVICE_ID' });
@@ -111,7 +111,7 @@ function register(router) {
     if (!pageId) return res.status(400).json({ error_code: 'INVALID_PAGE_ID' });
     const bookId = _guardPage(req, res, pageId, 'viewer');
     if (bookId == null) return;
-    const email = _userEmail(req);
+    const email = sessionEmail(req);
     if (!email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
     // Body wird bei sendBeacon/keepalive nicht immer geparst; Query als Fallback.
     const deviceId = req.body?.device_id || req.query?.device_id;
@@ -154,7 +154,7 @@ function register(router) {
     if (!pageId || !revId) return res.status(400).json({ error_code: 'INVALID_ID' });
     const bookId = _guardPage(req, res, pageId, 'editor');
     if (bookId == null) return;
-    const email = _userEmail(req);
+    const email = sessionEmail(req);
     const blocking = bookAccess.getBlockingLockFor(pageId, email);
     if (blocking) return res.status(423).json({
       error_code: 'PAGE_LOCKED',
@@ -218,7 +218,7 @@ function register(router) {
     // editor-Recht auf dem Ziel-Buch erzwingen.
     try { requireBookAccess(req, targetBookId, 'editor'); }
     catch (e) { if (sendACLError(res, e)) return; throw e; }
-    const email = _userEmail(req);
+    const email = sessionEmail(req);
     const blocking = bookAccess.getBlockingLockFor(pageId, email);
     if (blocking) return res.status(423).json({
       error_code: 'PAGE_LOCKED',

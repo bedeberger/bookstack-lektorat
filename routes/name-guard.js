@@ -15,7 +15,7 @@
 const express = require('express');
 const logger = require('../logger');
 const { db } = require('../db/schema');
-const { aclParamGuard } = require('../lib/acl');
+const { aclParamGuard, sessionEmail } = require('../lib/acl');
 const contentStore = require('../lib/content-store');
 const { htmlToPlainText } = require('../lib/html-text');
 const { detectNameVariants } = require('../lib/name-guard');
@@ -43,7 +43,7 @@ function _canonicalNames(bookId, userEmail) {
 
 router.post('/:book_id/check', async (req, res) => {
   const bookId = req.bookId;
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const ctx = { session: req.session };
   const log = logger.child({ job: 'name-guard', user: userEmail || '-', book: bookId });
   try {
@@ -66,7 +66,7 @@ router.post('/:book_id/check', async (req, res) => {
 });
 
 router.post('/:book_id/ignore', jsonBody, (req, res) => {
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const canonical = typeof req.body?.canonical === 'string' ? req.body.canonical : '';
   const variant = typeof req.body?.variant === 'string' ? req.body.variant : '';
   if (!variant.trim()) return res.status(400).json({ error_code: 'VARIANT_REQUIRED' });
@@ -75,7 +75,7 @@ router.post('/:book_id/ignore', jsonBody, (req, res) => {
 });
 
 router.post('/:book_id/unignore', jsonBody, (req, res) => {
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const variant = typeof req.body?.variant === 'string' ? req.body.variant : '';
   if (!variant.trim()) return res.status(400).json({ error_code: 'VARIANT_REQUIRED' });
   nameGuardDb.remove(req.bookId, userEmail, variant);

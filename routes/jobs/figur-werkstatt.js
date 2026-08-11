@@ -20,6 +20,7 @@ const embed = require('../../lib/embed');
 const { semanticQuery } = require('../../lib/semantic-retrieval');
 const { getUser } = require('../../db/app-users');
 const { resolveI18n, resolveI18nTree } = require('../../lib/i18n-server');
+const { sessionEmail } = require('../../lib/acl');
 
 const figurWerkstattRouter = express.Router();
 
@@ -319,7 +320,7 @@ figurWerkstattRouter.post('/werkstatt-brainstorm', jsonBody, (req, res) => {
   const knotenId = req.body?.knotenId;
   if (!draftId) return res.status(400).json({ error_code: 'DRAFT_ID_REQUIRED' });
   if (!knotenId || typeof knotenId !== 'string') return res.status(400).json({ error_code: 'KNOTEN_ID_REQUIRED' });
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   if (!userEmail) return res.status(401).json({ error_code: 'UNAUTHORIZED' });
 
   const draft = getDraftFigure(draftId);
@@ -346,7 +347,7 @@ figurWerkstattRouter.post('/werkstatt-brainstorm', jsonBody, (req, res) => {
 figurWerkstattRouter.post('/werkstatt-consistency', jsonBody, (req, res) => {
   const draftId = toIntId(req.body?.draftId);
   if (!draftId) return res.status(400).json({ error_code: 'DRAFT_ID_REQUIRED' });
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   if (!userEmail) return res.status(401).json({ error_code: 'UNAUTHORIZED' });
 
   const draft = getDraftFigure(draftId);

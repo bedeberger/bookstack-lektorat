@@ -11,6 +11,7 @@ const express = require('express');
 const categories = require('../db/book-categories');
 const { requireAdmin } = require('../lib/admin-mw');
 const logger = require('../logger');
+const { sessionEmail } = require('../lib/acl');
 
 const router = express.Router();
 const jsonBody = express.json();
@@ -30,7 +31,7 @@ router.post('/', requireAdmin, jsonBody, (req, res) => {
       parentId: parent_id,
       color,
       position,
-      createdBy: req.session?.user?.email || null,
+      createdBy: sessionEmail(req),
     });
     logger.info(`Kategorie angelegt id=${created.id} name="${created.name}" by=${req.session.user.email}`);
     res.json({ category: created });

@@ -35,7 +35,7 @@ const { parsePersonName } = require('../../lib/bib-parse');
 const { searchWork } = require('../../lib/source-lookup');
 const { toIntId } = require('../../lib/validate');
 const { setContext } = require('../../lib/log-context');
-const { requireBookAccess, sendACLError } = require('../../lib/acl');
+const { requireBookAccess, sendACLError, sessionEmail } = require('../../lib/acl');
 
 // Obergrenze fuer die Register-Abfragen eines Laufs. Zwei oeffentliche, kostenlose
 // Dienste (Crossref/OpenLibrary) mit bis zu zwei Requests pro Kandidat — ein
@@ -347,7 +347,7 @@ sourceDetectRouter.post('/source-detect', jsonBody, (req, res) => {
   // Buch-Quellenzuordnung (POST /sources), und genau die verlangt /sources auch.
   try { requireBookAccess(req, book_id, 'editor'); }
   catch (e) { if (sendACLError(res, e)) return; throw e; }
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
 
   const chapterId = req.body?.chapter_id == null || req.body.chapter_id === ''
@@ -372,7 +372,7 @@ sourceDetectRouter.post('/source-detect', jsonBody, (req, res) => {
 // waere die Liste eines Co-Autors fuer die anderen nur Rauschen.
 
 function _runGuard(req, res) {
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   if (!userEmail) { res.status(401).json({ error_code: 'LOGIN_REQ' }); return null; }
   const id = toIntId(req.params.id);
   if (!id) { res.status(400).json({ error_code: 'INVALID_ID' }); return null; }
@@ -387,7 +387,7 @@ function _runGuard(req, res) {
 }
 
 sourceDetectRouter.get('/source-detect/runs', (req, res) => {
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   const bookId = toIntId(req.query.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });

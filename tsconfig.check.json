@@ -1,0 +1,10 @@
+{
+  "//": "Import-Gate fuer den Server-CommonJS-Teil (lib/ + db/ + routes/), gefahren von scripts/check-imports.js (npm run test:imports). Pendant zu public/js/tsconfig.check.json und aus demselben Grund eine EIGENE Datei: jsconfig.json bleibt reine Editor-/LSP-Config ohne Typecheck (checkJs:false), damit sich das Verhalten der LSP nicht aendert. checkJs ist hier nur an, weil TypeScript undefinierte Namen ausschliesslich im Check-Modus meldet — ausgewertet werden NUR TS2304/TS2552 ('Cannot find name'), alle uebrigen Typfehler verwirft der Runner. Kein Build, kein Emit.",
+  "extends": "./jsconfig.json",
+  "compilerOptions": {
+    "checkJs": true,
+    "noEmit": true,
+    "skipLibCheck": true
+  },
+  "include": ["lib/**/*.js", "db/**/*.js", "routes/**/*.js", "_globals-server.d.ts"]
+}

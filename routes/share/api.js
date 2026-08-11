@@ -6,7 +6,7 @@
 
 const contentStore = require('../../lib/content-store');
 const shareLinks = require('../../db/share-links');
-const { requireBookAccess, sendACLError } = require('../../lib/acl');
+const { requireBookAccess, sendACLError, sessionEmail } = require('../../lib/acl');
 const { setContext } = require('../../lib/log-context');
 const notify = require('../../lib/notify');
 const logger = require('../../logger');
@@ -16,7 +16,7 @@ const { jsonBody, INTRO_MAX, ANCHOR_BID_RE, resolveBidsToPages, backfillScopeBlo
 
 // ── Auth-Mw ──────────────────────────────────────────────────────────────────
 function requireSession(req, res, next) {
-  if (!req.session?.user?.email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
+  if (!sessionEmail(req)) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
   next();
 }
 

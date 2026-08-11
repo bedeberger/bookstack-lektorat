@@ -19,7 +19,7 @@ const { parseImportFile, extOf, SUPPORTED_EXTS } = require('../../lib/import-par
 const { toIntId } = require('../../lib/validate');
 const { setContext } = require('../../lib/log-context');
 const { resolveProvider } = require('../../lib/ai');
-const { requireBookAccess, sendACLError } = require('../../lib/acl');
+const { requireBookAccess, sendACLError, sessionEmail } = require('../../lib/acl');
 const bookAccess = require('../../db/book-access');
 const { getBookLocale } = require('../../db/schema');
 const { db } = require('../../db/connection');
@@ -520,7 +520,7 @@ const rawZipBody = express.raw({
 });
 
 router.post('/folder-import', rawZipBody, async (req, res) => {
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   if (!userEmail) return res.status(401).json({ error_code: 'UNAUTHENTICATED' });
 
   const mode = (req.query?.mode === 'merge') ? 'merge' : 'new-book';

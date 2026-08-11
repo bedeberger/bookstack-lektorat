@@ -14,7 +14,7 @@ const { toIntId } = require('../../../lib/validate');
 const { resolveProvider, effectiveProviderClass } = require('../../../lib/ai');
 const appSettings = require('../../../lib/app-settings');
 const { setContext } = require('../../../lib/log-context');
-const { aclParamGuard, requireBookAccess, sendACLError } = require('../../../lib/acl');
+const { aclParamGuard, requireBookAccess, sendACLError, sessionEmail } = require('../../../lib/acl');
 const { jsonBody, createJob, enqueueJob, findActiveJobId } = require('../shared');
 const { runKomplettAnalyseJob, runKontinuitaetJob, runErzaehlprofilJob, runFaktencheckJob, runKomplettAnalyseAll } = require('./job');
 
@@ -30,7 +30,7 @@ komplettRouter.post('/komplett-analyse', jsonBody, (req, res) => {
   setContext({ book: book_id });
   try { requireBookAccess(req, book_id, 'editor'); }
   catch (e) { if (sendACLError(res, e)) return; throw e; }
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const userToken = null;
   const existing = findActiveJobId('komplett-analyse', book_id, userEmail);
   if (existing) return res.json({ jobId: existing, existing: true });
@@ -57,7 +57,7 @@ komplettRouter.post('/kontinuitaet', jsonBody, (req, res) => {
   setContext({ book: book_id });
   try { requireBookAccess(req, book_id, 'editor'); }
   catch (e) { if (sendACLError(res, e)) return; throw e; }
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   // Kontinuitätsprüfung braucht die Cloud-KLASSE (Single-Pass, Verify-Filter,
   // Attribut-Check setzen ein faehiges Modell voraus — keine Anthropic-API-Faehigkeit).
   // Dieselbe Entscheidung wie `/config` komplett.continuity und das Ueberspringen der
@@ -76,7 +76,7 @@ komplettRouter.post('/kontinuitaet', jsonBody, (req, res) => {
 komplettRouter.get('/kontinuitaet/:book_id', (req, res) => {
   const bookId = toIntId(req.params.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const result = getLatestContinuityCheck(bookId, userEmail);
   res.json(result);
 });
@@ -106,7 +106,7 @@ komplettRouter.post('/faktencheck', jsonBody, (req, res) => {
   setContext({ book: book_id });
   try { requireBookAccess(req, book_id, 'editor'); }
   catch (e) { if (sendACLError(res, e)) return; throw e; }
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   if (resolveProvider({ userEmail }) !== 'claude') return res.status(400).json({ error_code: 'FACTCHECK_CLAUDE_ONLY' });
   if (appSettings.get('ai.komplett.factcheck') === false) return res.status(400).json({ error_code: 'FACTCHECK_DISABLED' });
   if (!getBookSettings(book_id, userEmail)?.weltfakten_real_pruefen) return res.status(400).json({ error_code: 'FACTCHECK_NOT_ENABLED_FOR_BOOK' });
@@ -129,7 +129,7 @@ komplettRouter.post('/erzaehlprofil', jsonBody, (req, res) => {
   setContext({ book: book_id });
   try { requireBookAccess(req, book_id, 'editor'); }
   catch (e) { if (sendACLError(res, e)) return; throw e; }
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   // Erzählprofil braucht die Cloud-Klasse (Single-Pass). Serverseitiger Guard analog
   // Kontinuität (Defense-in-depth), gleiche Entscheidung wie `/config`.
   if (effectiveProviderClass({ userEmail }) !== 'cloud') return res.status(400).json({ error_code: 'NARRATIVE_PROFILE_PROVIDER_UNSUPPORTED' });
@@ -147,7 +147,7 @@ komplettRouter.post('/erzaehlprofil', jsonBody, (req, res) => {
 komplettRouter.get('/erzaehlprofil/:book_id', (req, res) => {
   const bookId = toIntId(req.params.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const profile = getChapterNarrativeProfile(bookId, userEmail);
   // Deterministischer Buch-Befund (read-time, pure Engine über die Katalog-Zeilen) +
   // gespeicherter KI-Dach-Befund (Autoren-Befund). Beides an dieselbe Antwort gehängt,
@@ -160,7 +160,7 @@ komplettRouter.get('/erzaehlprofil/:book_id', (req, res) => {
 komplettRouter.delete('/chapter-cache/:book_id', (req, res) => {
   const bookId = toIntId(req.params.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
-  const userEmail = req.session?.user?.email || '';
+  const userEmail = sessionEmail(req) || '';
   const deleted = deleteChapterExtractCache(bookId, userEmail);
   // F5: den Konsolidierungs-Checkpoint mitlöschen — sonst würde ein Re-Run nach dem Cache-Leeren
   // zwar Phase 1 neu extrahieren, aber (bei gleichem Inhalt) P2–P8 weiterhin überspringen.

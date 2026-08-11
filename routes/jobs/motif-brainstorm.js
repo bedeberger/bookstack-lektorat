@@ -19,7 +19,7 @@ const { resolveProvider } = require('../../lib/ai');
 const { bookSettingsSigPart, buildBookPagesSig } = require('./komplett/utils');
 const { toIntId } = require('../../lib/validate');
 const { setContext } = require('../../lib/log-context');
-const { requireBookAccess, sendACLError } = require('../../lib/acl');
+const { requireBookAccess, sendACLError, sessionEmail } = require('../../lib/acl');
 
 const VALID_TYP = new Set(['thema', 'motiv']);
 
@@ -179,7 +179,7 @@ motifBrainstormRouter.post('/motif-brainstorm', jsonBody, (req, res) => {
   setContext({ book: book_id });
   try { requireBookAccess(req, book_id, 'lektor'); }
   catch (e) { if (sendACLError(res, e)) return; throw e; }
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   const existing = findActiveJobId('motif-brainstorm', book_id, userEmail);
   if (existing) return res.json({ jobId: existing, existing: true });

@@ -26,6 +26,7 @@ const {
   HEADLINE_FIELDS, isValidHeadlineField, getHeadline, listVariants, addVariant,
 } = require('../../db/headline');
 const { pageBookGuard } = require('../../lib/page-guard');
+const { sessionEmail } = require('../../lib/acl');
 
 const headlineRouter = express.Router();
 
@@ -109,7 +110,7 @@ headlineRouter.post('/headline-variants', jsonBody, (req, res) => {
   });
   if (!g) return;
   const { pageId: page_id, bookId: book_id } = g;
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
 
   const felder = Array.isArray(req.body?.felder)
     ? req.body.felder.filter(isValidHeadlineField)

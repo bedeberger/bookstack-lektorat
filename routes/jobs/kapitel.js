@@ -23,6 +23,7 @@ const { setContext } = require('../../lib/log-context');
 const appSettings = require('../../lib/app-settings');
 const { resolveProvider } = require('../../lib/ai');
 const { getDescendantChapterIds } = require('../../db/book-order');
+const { sessionEmail } = require('../../lib/acl');
 
 function _sigHash(obj) {
   return crypto.createHash('sha1').update(JSON.stringify(obj ?? null)).digest('hex').slice(0, 12);
@@ -302,7 +303,7 @@ kapitelRouter.post('/chapter-review', jsonBody, (req, res) => {
   const { requireBookAccess, sendACLError } = require('../../lib/acl');
   try { requireBookAccess(req, book_id, 'editor'); }
   catch (e) { if (sendACLError(res, e)) return; throw e; }
-  const userEmail = req.session?.user?.email || null;
+  const userEmail = sessionEmail(req);
   const userToken = null;
   // Dedup auf Kapitel-Ebene – parallele Reviews unterschiedlicher Kapitel sind ok.
   const existing = findActiveJobId('chapter-review', chapter_id, userEmail);
