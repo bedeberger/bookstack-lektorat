@@ -8,6 +8,11 @@
 //
 // Best-effort: scheitert der Report selbst, wird er geschluckt — Telemetrie darf
 // nie eine Fehlerschleife ausloesen. Dedup + Throttle gegen Log-Flut.
+//
+// Exportiert `window.__reportClientError(payload)`, damit failsafe-reveal.js den
+// Boot-Ausfall selbst melden kann, ohne fetch/Dedup/Throttle zu duplizieren.
+// Beide sind klassische Scripts; client-error.js laedt zuerst (index.html), der
+// Zugriff erfolgt ohnehin erst zur Ereigniszeit.
 (function () {
   var MAX_REPORTS = 25;       // pro Page-Load, danach still
   var WINDOW_MS = 60 * 1000;  // gleiche Signatur max 1x pro Minute
@@ -32,10 +37,34 @@
     } catch (e) { /* ignore */ }
   }
 
+  window.__reportClientError = report;
+
+  // Capture-Phase ist Pflicht fuer den Resource-Zweig unten: Ladefehler von
+  // Script/Link/Img bubblen NICHT, sie sind nur im Capture am window sichtbar.
   window.addEventListener('error', function (e) {
-    // Resource-Lade-Fehler (img/script/link) haben kein e.message → ueberspringen,
-    // sonst fluten 404-Assets das Log.
-    if (!e || !e.message) return;
+    if (!e) return;
+
+    // Resource-Ladefehler haben kein e.message. Script + Stylesheet werden
+    // gemeldet — genau sie sind die URSACHE eines Boot-Ausfalls, waehrend die
+    // Folgefehler ("X is not defined") den eigentlichen Ausloeser verdecken.
+    // Bilder bleiben aussen vor, sonst fluten 404-Assets das Log.
+    if (!e.message) {
+      var el = e.target;
+      var tag = el && el.tagName;
+      if (tag !== 'SCRIPT' && tag !== 'LINK') return;
+      var url = (el.src || el.href || '') + '';
+      report({
+        kind: 'resource',
+        message: tag + ' nicht ladbar: ' + (url || '(unbekannt)'),
+        stack: null,
+        source: url || null,
+        line: null,
+        col: null,
+        pageUrl: location.href,
+      });
+      return;
+    }
+
     report({
       kind: 'error',
       message: String(e.message),
@@ -45,7 +74,7 @@
       col: typeof e.colno === 'number' ? e.colno : null,
       pageUrl: location.href,
     });
-  });
+  }, true);
 
   window.addEventListener('unhandledrejection', function (e) {
     var reason = e ? e.reason : null;

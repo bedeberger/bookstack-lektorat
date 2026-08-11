@@ -2,7 +2,7 @@ const express = require('express');
 const { db } = require('../db/schema');
 const { toIntId } = require('../lib/validate');
 const { localIsoDate, localHour } = require('../lib/local-date');
-const { aclParamGuard, guardBook } = require('../lib/acl');
+const { ACLError, aclParamGuard, guardBook, requireBookAccess } = require('../lib/acl');
 const { resolvePageBookId } = require('../lib/content-ownership');
 const { buildRueckblickCoverage } = require('./jobs/rueckblick-dates');
 const snapshots = require('../db/book-snapshots');
@@ -300,10 +300,17 @@ router.post('/page-stats/batch', jsonBodyLarge, (req, res) => {
   // ACL: nur Buecher, fuer die der User Editor-Zugriff hat. page_stats ist ein
   // geteilter Cache — ohne diese Pruefung koennte jeder eingeloggte User die
   // Statistik fremder Buecher ueberschreiben (IDOR, body-supplied book_id).
+  // Nur die Rechte-Absage (ACLError) ist ein erwarteter Ausgang. Ein blosses
+  // `catch {}` liess jeden anderen Fehler wie "kein Zugriff" aussehen und
+  // verwarf still JEDE Zeile JEDES Users — der Grund muss sichtbar bleiben.
   const allowedBooks = new Set();
+  const deniedBooks = new Map();
   for (const ownerBook of new Set(ownerByPage.values())) {
     try { requireBookAccess(req, ownerBook, 'editor'); allowedBooks.add(ownerBook); }
-    catch { /* kein Zugriff -> Rows dieses Buchs werden unten verworfen */ }
+    catch (e) {
+      deniedBooks.set(ownerBook, e instanceof ACLError ? e.code : 'ACL_CHECK_FAILED');
+      if (!(e instanceof ACLError)) logger.error(`page-stats/batch: ACL-Pruefung Buch ${ownerBook}: ${e.message}`);
+    }
   }
 
   const stmt = db.prepare(`
@@ -321,16 +328,26 @@ router.post('/page-stats/batch', jsonBodyLarge, (req, res) => {
       const pageId = toIntId(s?.page_id);
       const bookId = toIntId(s?.book_id);
       const ownerBook = pageId ? ownerByPage.get(pageId) : null;
-      if (!pageId || !bookId || !ownerBook || ownerBook !== bookId || !allowedBooks.has(ownerBook)) {
-        skipped.push({ page_id: s?.page_id, book_id: s?.book_id, owner_book: ownerBook ?? null });
+      // Genau ein Grund pro Zeile: stale Frontend-State und fehlende Buchrolle
+      // haben verschiedene Ursachen und duerfen im Log nicht unter einer
+      // Sammelbezeichnung verschwinden.
+      const reason = !pageId ? 'INVALID_PAGE_ID'
+        : !bookId ? 'INVALID_BOOK_ID'
+        : !ownerBook ? 'PAGE_NOT_FOUND'
+        : ownerBook !== bookId ? 'BOOK_MISMATCH'
+        : !allowedBooks.has(ownerBook) ? (deniedBooks.get(ownerBook) || 'NO_BOOK_ACCESS')
+        : null;
+      if (reason) {
+        skipped.push({ page_id: s?.page_id, book_id: s?.book_id, owner_book: ownerBook ?? null, reason });
         continue;
       }
       stmt.run({ ...s, page_id: pageId, book_id: bookId, cached_at: now });
       written += 1;
     }
   })();
-  if (skipped.length) {
-    logger.warn(`page-stats/batch: ${skipped.length} Row(s) verworfen (FK-Mismatch): ${JSON.stringify(skipped)}`);
+  const byReason = skipped.reduce((acc, r) => ((acc[r.reason] ||= []).push(r), acc), {});
+  for (const [reason, rows] of Object.entries(byReason)) {
+    logger.warn(`page-stats/batch: ${rows.length} Row(s) verworfen (${reason}): ${JSON.stringify(rows)}`);
   }
   res.json({ ok: true, count: written, skipped: skipped.length });
 });

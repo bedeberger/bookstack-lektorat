@@ -50,6 +50,19 @@
     color: var(--color-warn-text);
   }
 
+  /* Ursachen-Arten: heben sich von den 'error'-Folgefehlern ab, mit denen ein
+     Boot-Ausfall die Liste flutet. */
+  .js-errors-kind--resource {
+    background: var(--color-accent-bg);
+    color: var(--color-accent-text);
+  }
+
+  .js-errors-kind--boot {
+    background: var(--color-accent-bg);
+    color: var(--color-accent-text);
+    font-weight: 600;
+  }
+
   .js-errors-msg {
     font-size: var(--font-size-sm);
     color: var(--color-text);

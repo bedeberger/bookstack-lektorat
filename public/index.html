@@ -17,9 +17,11 @@
   <!-- Theme-Init synchron VOR dem ersten Paint, damit es FOUC verhindert.
        Kein defer/module – muss vor body-Render laufen. -->
   <script src="js/theme-init.js"></script>
-  <script src="js/failsafe-reveal.js"></script>
-  <!-- Globaler JS-Fehler-Reporter (klassisch, vor ESM) → /telemetry/js-error -->
+  <!-- Globaler JS-Fehler-Reporter (klassisch, vor ESM) → /telemetry/js-error.
+       VOR failsafe-reveal.js, weil dieses den Boot-Ausfall über den hier
+       exportierten window.__reportClientError meldet. -->
   <script src="js/client-error.js"></script>
+  <script src="js/failsafe-reveal.js"></script>
   <!-- Build-ID dieser Shell-Generation (generiert, setzt window.__SHELL_BUILD).
        Klassisch + vor ESM, damit app.js den Wert beim Boot gegen /config#shellBuild
        vergleichen kann (Self-Heal bei stale Shell nach Deploy). -->

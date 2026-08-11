@@ -110,7 +110,7 @@ const CATEGORIES = [
       'lib/page-index.js': 692,
       'lib/content-store/backends/localdb.js': 635,
       'lib/mailer-templates.js': 626,
-      'routes/history.js': 921,
+      'routes/history.js': 938,
       'routes/jobs/komplett/phases/extraktion.js': 922,
       'routes/jobs/book-chat-tools/tools-catalog.js': 716,
       'routes/figures.js': 715,

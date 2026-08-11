@@ -10,7 +10,10 @@ const logger = require('../logger');
 
 const router = express.Router();
 const jsonBody = express.json();
-const JS_ERROR_KINDS = new Set(['error', 'unhandledrejection']);
+// 'resource' = Script/Stylesheet nicht ladbar, 'boot' = Ausfall des ESM-Graphen
+// (public/js/failsafe-reveal.js). Beide benennen die URSACHE eines Boot-Ausfalls,
+// waehrend 'error' dabei nur die Folgefehler jeder x-data-Expression einsammelt.
+const JS_ERROR_KINDS = new Set(['error', 'unhandledrejection', 'resource', 'boot']);
 function _toInt(v) { const n = parseInt(v, 10); return Number.isInteger(n) ? n : null; }
 
 // Erlaubte Basis-Events. 'conflict_resolved' fuehrt zusaetzlich einen
