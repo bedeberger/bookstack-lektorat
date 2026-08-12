@@ -216,6 +216,17 @@ document.addEventListener('alpine:init', () => {
     get filteredTree() {
       const tree = this.$store.nav.tree;
       if (!this.pageSearch) {
+        // BEWUSST NICHT memoisiert — anders als der Search-Branch unten.
+        // Dieser Zweig haengt an `item.open`, und das wird IN PLACE mutiert
+        // (tree/open-state.js, tree-context-menu.js, book-organizer/crud.js),
+        // ohne dass `tree` seine Identitaet wechselt. Ein Ref-Vergleich-Memo
+        // wie unten (`memo.tree === tree`) waere hier also ein Cache-Hit auf
+        // veraltete Sichtbarkeit → das Auf-/Zuklappen von Kapiteln in der
+        // Sidebar wuerde nichts mehr tun. Ein korrekter Cache-Key muesste den
+        // open-Zustand aller Items einbeziehen und kostete damit denselben
+        // O(n)-Durchlauf, den er sparen soll. Kein Problem in der Praxis:
+        // sidebar.html liest `filteredTree` zweimal pro Render (x-for +
+        // Leer-Check), nicht pro Page-Row.
         const byId = new Map(tree.map(it => [it.id, it]));
         const isVisible = (item) => {
           let cur = item;

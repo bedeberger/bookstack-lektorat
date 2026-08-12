@@ -21,7 +21,7 @@ const {
   ANCHOR_BID_RE, READER_TOKEN_RE, READER_EMAIL_RE, TOKEN_RE,
   serializeCommentForReader, escHtml, detectLang, isExpired,
   fillTemplate, paragraphifyIntro, backfillScopeBlockIds, loadContentForLink,
-  buildTocBlock, renderGone, htmlToPlainLength,
+  buildTocBlock, renderGone, htmlToPlainLength, renderContentDiagrams,
 } = H;
 
 // Lesezeit-Schaetzung: durchschnittliche stille Lesegeschwindigkeit ~1100
@@ -245,6 +245,10 @@ function register(router) {
       readDepth: { chapters: readDepthChapters },
     }).replace(/</g, '\\u003c');
 
+    // Diagramme serverseitig aufloesen — Reihenfolge ist Pflicht, Begruendung
+    // am Helper (lib/share-helpers.js#renderContentDiagrams).
+    const contentHtml = await renderContentDiagrams(content.html);
+
     // Bei Buch-Shares ist content.title bereits der Buchname — keine Doppelung
     // (Buch-Zeile leer, H1 = Buchname). Sonst "Seite/Kapitel · Buch".
     const isBook = link.kind === 'book';
@@ -268,7 +272,7 @@ function register(router) {
       reading_meta: metaBlock,
       intro_block: introBlock,
       toc_block: tocBlock,
-      content_html: content.html,
+      content_html: contentHtml,
       anchored_comments_html: '',
       general_comments_html: generalCommentsHtml,
       form_block: formBlock,

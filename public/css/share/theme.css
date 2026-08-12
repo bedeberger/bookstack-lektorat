@@ -48,6 +48,14 @@
   --ms-article-title-size: 27px;
   --ms-lead-size: 18px;
   --ms-accent: var(--share-accent, var(--share-muted));
+  /* Diagramm-Variante: der Server liefert das SVG fertig gerendert und damit mit
+     GEBACKENEN Farben — er kann nicht wissen, in welchem Modus der Leser sitzt
+     (`prefers-color-scheme` ist Browser-Sache, die explizite Wahl steht im
+     localStorage). Darum liegen beide Varianten im Markup und die Theme-
+     Auflösung schaltet hier, wie jede andere Farbentscheidung des Readers auch.
+     Verbraucher: components/manuscript-content.css. */
+  --diagram-theme-light: inline;
+  --diagram-theme-dark: none;
   --ms-space-xs: 4px;
   --ms-space: 12px;
   --ms-space-md: 18px;
@@ -68,6 +76,8 @@ html[data-theme="dark"] {
   --share-hover: rgba(255, 255, 255, 0.06);
   --share-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
   --share-shadow-md: 0 6px 16px rgba(0, 0, 0, 0.55);
+  --diagram-theme-light: none;
+  --diagram-theme-dark: inline;
   color-scheme: dark;
 }
 
@@ -86,6 +96,8 @@ html[data-theme="dark"] {
     --share-hover: rgba(255, 255, 255, 0.06);
     --share-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
     --share-shadow-md: 0 6px 16px rgba(0, 0, 0, 0.55);
+    --diagram-theme-light: none;
+    --diagram-theme-dark: inline;
     color-scheme: dark;
   }
 }

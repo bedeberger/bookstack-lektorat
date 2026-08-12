@@ -244,6 +244,15 @@
     max-width: 100%;
     height: auto;
   }
+  /* Zwei Theme-Varianten in einem Knoten. Nur die SSR-Leseansicht liefert das
+     so (lib/diagram-export.js, `mode: 'screen'`): dort steht das SVG schon im
+     HTML und trägt seine Farben gebacken, während der Modus des Lesers erst im
+     Browser feststeht. Die Auflösung schaltet die Tokens (share/theme.css) —
+     kein zweiter Theme-Selektor hier. Fehlen die Tokens, zeigt die helle
+     Variante; die App holt ihr SVG ohnehin pro Theme einzeln. */
+  .diagram-theme--light { display: var(--diagram-theme-light, inline); }
+  .diagram-theme--dark { display: var(--diagram-theme-dark, none); }
+
   :is(.page-content-view, .book-editor-page-body, .share-content) .mermaid-render--error {
     font-size: var(--font-size-sm, 13px);
     color: var(--mc-subtle);

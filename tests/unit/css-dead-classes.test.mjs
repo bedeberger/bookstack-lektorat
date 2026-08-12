@@ -95,6 +95,10 @@ function buildCorpus() {
     join(ROOT, 'lib/wp-html.js'),
     ...walk(join(ROOT, 'lib/export-builders/epub'), ['.js']),
     join(ROOT, 'lib/pdf-render/html-walker.js'),
+    // Diagramm-Knoten der SSR-Leseansicht (`mode: 'screen'`): der Server liefert
+    // das gerenderte SVG in BEIDEN Themes aus, die Umschalt-Klassen entstehen
+    // hier und nirgends im Bundle.
+    join(ROOT, 'lib/diagram-export.js'),
   ];
   return [...new Set(files)]
     .filter(existsSync)

@@ -1,4 +1,14 @@
-// Diagramme in der oeffentlichen Leseansicht rendern.
+// Diagramme in der oeffentlichen Leseansicht rendern — RUECKFALL, nicht der
+// Normalweg.
+//
+// Normalweg ist die SSR-Antwort: routes/share/reader.js loest Diagramme vor dem
+// Ausliefern serverseitig auf (lib/diagram-export.js, `mode: 'screen'`, beide
+// Themes im Markup). Dann steht hier kein `pre.mermaid` mehr und dieses Modul
+// kehrt sofort zurueck — der anonyme Leser laedt die 3,4-MB-Lib nicht.
+//
+// Gefunden wird also nur, was der Server NICHT rendern konnte: Chromium fehlt im
+// Container, Rendering abgeschaltet, oder der Quelltext ist ungueltig. Genau
+// dafuer bleibt dieser Pfad bestehen.
 //
 // BEWUSSTE KOPIE des Kerns aus public/js/diagram/mermaid-view.js: der Reader
 // muss pre-auth ladbar sein und darf nur aus /js/share-reader/ importieren

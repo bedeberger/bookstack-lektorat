@@ -553,6 +553,7 @@ app.use('/name-guard', require('./routes/name-guard'));
 app.use('/stt', require('./routes/stt'));
 app.use('/tts', require('./routes/tts'));
 app.use('/dictionary', require('./routes/dictionary'));
+app.use('/diagram', require('./routes/diagram'));
 app.use('/books', require('./routes/book-access'));
 app.use('/book-editor', require('./routes/book-editor'));
 app.use('/admin/users', require('./routes/admin-users'));

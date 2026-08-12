@@ -67,11 +67,53 @@ Focus-Editor bleibt unberührt.
 
 ## Anzeige (Bildschirm)
 
-| Oberfläche | Modul | Verhalten |
-|---|---|---|
-| Notebook-Leseansicht | [diagram/mermaid-view.js](../public/js/diagram/mermaid-view.js) via [notebook/card.js](../public/js/editor/notebook/card.js) | rendert; im Edit-Modus bleibt der Quelltext |
-| Bucheditor | dasselbe Modul via [book-editor-card.js](../public/js/cards/book-editor-card.js) | inaktiver Block = Bild, aktiver Block = Quelltext |
-| Share-Reader | [share-reader/diagrams.js](../public/js/share-reader/diagrams.js) (**bewusste Kopie**) | rendert einmal beim Laden |
+| Oberfläche | Modul | Wer rendert | Verhalten |
+|---|---|---|---|
+| Notebook-Leseansicht | [diagram/mermaid-view.js](../public/js/diagram/mermaid-view.js) via [notebook/card.js](../public/js/editor/notebook/card.js) | **Server** (`POST /diagram/render`) | rendert; im Edit-Modus bleibt der Quelltext |
+| Bucheditor | dasselbe Modul via [book-editor-card.js](../public/js/cards/book-editor-card.js) | **Server** | inaktiver Block = Bild, aktiver Block = Quelltext |
+| Share-Reader | SSR in [share-helpers.js](../lib/share-helpers.js)#`renderContentDiagrams` | **Server**, schon in der HTML-Antwort | kein Client-Lauf; [share-reader/diagrams.js](../public/js/share-reader/diagrams.js) ist nur noch Rückfall |
+| Diagramm-Dialog | `renderDiagramSvg` in [mermaid-view.js](../public/js/diagram/mermaid-view.js) | **Client-Bundle** | Live-Vorschau beim Tippen |
+
+### Warum der Server auch für den Bildschirm rendert
+
+`vendor/mermaid-11.16.0.min.js` ist **3,4 MB** (~1 MB gzip) — mit Abstand die
+grösste Lib im Bestand. Sie nur zu laden, um ein fertiges Bild anzuzeigen, ist der
+falsche Preis: der Renderer existiert für die Exportwege ohnehin, sein Cache ist
+inhaltsadressiert, und ein gerendertes Diagramm wiegt ~11 KB pro Theme. Der
+Client-Bundle bleibt für die zwei Fälle, in denen er unersetzlich ist:
+
+- **Live-Vorschau im Dialog** — Tippen braucht Rückmeldung ohne Roundtrip, und der
+  Code ist dort noch nicht gespeichert.
+- **Rückfall**, wenn der Server nicht rendern kann (Chromium fehlt im Container,
+  `MERMAID_RENDER_DISABLED`). Dann verhält sich alles wie ohne diese Schicht —
+  deshalb bleibt der Bundle ausgeliefert und in `PUBLIC_ASSETS`.
+
+**Die Unterscheidung der beiden Fehlerlagen ist tragend** ([routes/diagram.js](../routes/diagram.js)):
+`422 DIAGRAM_INVALID` heisst „dieses Diagramm rendert nicht" → der Client zeigt
+seine Fehlerzeile und lädt **nichts** nach; `503 DIAGRAM_RENDERER_UNAVAILABLE`
+heisst „hier rendert gar nichts" → Rückfall auf den Bundle. Ohne die Trennung
+kostete ein Tippfehler im Diagramm-Code 1 MB Download. Der Zustand wird pro
+Sitzung gemerkt (`rendererUnavailable()` serverseitig, `_serverRenderOff` im
+Client) — kein Roundtrip mit vorhersagbarem 503.
+
+**Das Theme gehört in den Schlüssel des Render-Knotens** (`data-mermaid-key` =
+Inhalt + Theme). Die Farben stehen im SVG; mit einem rein inhaltsbasierten
+Schlüssel galten Diagramme nach einem Hell/Dunkel-Wechsel als „schon gerendert"
+und blieben im alten Modus stehen.
+
+**Der Share-Reader bekommt beide Themes** (`mode: 'screen'` in
+[diagram-export.js](../lib/diagram-export.js)): die SSR-Antwort kann nicht wissen,
+in welchem Modus der Leser sitzt — `prefers-color-scheme` ist Browser-Sache, die
+explizite Wahl steht in seinem `localStorage`. Also liegen beide Varianten im
+Markup (`.diagram-theme--light` / `--dark`) und die Theme-Auflösung des Readers
+schaltet über Tokens ([share/theme.css](../public/css/share/theme.css)) — zwei
+SVG à ~11 KB gegen 1 MB gzip. Liegt nur eine Variante vor, geht sie ohne
+Umschaltung raus; ein Diagramm in den falschen Farben ist besser als keines.
+
+**Reihenfolge im Reader ist Pflicht:** erst Umfang/Lesezeit und
+Inhaltsverzeichnis, dann `renderContentDiagrams`. Die messenden Schichten
+schneiden Diagramm-*Notation* über `pre.mermaid` aus — ein bereits ersetzter
+Knoten wäre ihnen Prosa, und die Zeichenzahl zählte die Knotenbeschriftungen mit.
 
 Gerendert wird **nie durch Umschreiben**: der `<pre>` bleibt im DOM und wird nur
 ausgeblendet (`.mermaid--rendered`), das SVG kommt als Geschwister-Knoten
@@ -173,6 +215,19 @@ SHA-1(Render-Version + Theme + Quelltext). Kein Buch-, Seiten- oder User-Bezug �
 dasselbe Diagramm sieht überall gleich aus. Gemessen: 807 ms für den ersten
 Lauf, 2 ms für den Treffer. `last_used_at` treibt das Aufräumen; der Cache ist
 rein rekonstruierbar, es geht nichts verloren.
+
+Cache-oder-Rendern liegt **einmal** in [lib/diagram-cache.js](../lib/diagram-cache.js)#`renderCachedDiagram`
+und wird von beiden Konsumenten benutzt (Export **und** Bildschirm). Genau darum
+ist es ein eigenes Modul: so rendert dasselbe Diagramm einmal, egal ob es zuerst
+am Bildschirm oder zuerst im Export gebraucht wurde. [lib/mermaid-render.js](../lib/mermaid-render.js)
+bleibt DB-frei (reiner Playwright-Renderer), die Persistenz kommt erst darüber.
+
+**Not-Aus:** `MERMAID_RENDER_DISABLED=1` schaltet das serverseitige Rendern ab,
+ohne Chromium zu deinstallieren (Muster wie `VERAPDF_DISABLED`/`GS_DISABLED`).
+Exporte zeigen dann Quelltext, die Bildschirm-Oberflächen fallen auf den
+Client-Bundle zurück. Der Schalter ist auch der Grund, warum
+[tests/unit/diagram-screen.test.mjs](../tests/unit/diagram-screen.test.mjs) ohne
+Chromium deterministisch läuft und den Miss-Fall überhaupt prüfen kann.
 
 ## Was Diagramme NICHT sind: Prosa
 
