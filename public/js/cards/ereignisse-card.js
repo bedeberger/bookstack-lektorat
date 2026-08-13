@@ -348,9 +348,20 @@ export function registerEreignisseCard() {
           zeitstrahlStatus: '',
           selectedEventIndex: null,
         },
-        load: (root) => { this._memos = {}; return root._reloadZeitstrahl(); },
+        load: async (root) => {
+          this._memos = {};
+          await root._reloadZeitstrahl();
+          // Nach dem Laden erneut spiegeln: bei einem Kaltstart (Palette-Klick,
+          // Deep-Link) stand die Auswahl schon, bevor die Liste da war.
+          this._syncSelectedEreignis();
+        },
         refreshNeedsBookId: false,
       });
+      // Auswahl (Store-SSoT, vom Hash-Router/Palette gesetzt) auf den
+      // Listen-Index spiegeln, an dem der Band-Marker haengt. Die Listenzeile
+      // selbst markiert sich im Template direkt ueber die ID — nur die Achse
+      // rechnet in Indizes.
+      this.$watch(() => Alpine.store('catalogUi').selectedEreignisId, () => this._syncSelectedEreignis());
       // Das Jahres-Band rendert deklarativ aus bandModel() (reaktiv über
       // filteredEreignisse) — kein imperativer Render-Pfad, kein Lazy-Lib-Load,
       // kein asynchrones Layout. Damit gibt es keinen Einklapp-/Expandier-Effekt.
@@ -453,6 +464,17 @@ export function registerEreignisseCard() {
         seite = f.seite ?? '', subtyp = f.subtyp ?? '';
       return this._memo('filtered', [events, suche, figurId, kapitel, seite, subtyp],
         () => applyEreignisseFilters(events, { suche, figurId, kapitel, seite, subtyp }));
+    },
+
+    // Ausgewaehltes Ereignis (Store-ID) → Listen-Index fuer die Achsen-Markierung.
+    // Kein Scroll hier: den macht `openEreignisById` ueber das `data-evid` der
+    // Zeile (gleicher Weg wie bei Figur/Ort/Szene), und zwar wartend, bis die
+    // Zeile im DOM steht.
+    _syncSelectedEreignis() {
+      const id = Alpine.store('catalogUi').selectedEreignisId;
+      if (id == null) { this.selectedEventIndex = null; return; }
+      const idx = this.filteredEreignisse().findIndex(ev => ev.id === id);
+      this.selectedEventIndex = idx >= 0 ? idx : null;
     },
 
     // Scrollt das Event am Listen-Index ins Sichtfeld (Klick auf Timeline-Item).

@@ -114,3 +114,37 @@ test('query: book_id-Filter geht durch + Empty-allowedBookIds short-circuits', (
     assert.deepEqual(r, { hits: [], fallback: false });
   } finally { teardown(); }
 });
+
+// nav_id = ID, mit der die Oberflaeche einen Treffer oeffnet. Fuer Figuren und
+// Schauplaetze ist das NICHT der PK, den der Index fuehrt, sondern die TEXT-ID
+// (fig_id/loc_id) — nur die kennen die Katalog-Listen und der Deep-Link-Hash.
+// Ohne die Aufloesung oeffnet ein Klick auf einen Volltext-Treffer die Karte,
+// ohne dass die Zeile darin je aufgeht.
+test('attachNavIds: figure/location bekommen ihre TEXT-ID, der Rest den PK', () => {
+  const { search, teardown } = _bootstrap();
+  try {
+    const { db } = require_('../../db/connection');
+    db.prepare("INSERT INTO books (book_id, name, created_at, updated_at) VALUES (7, 'Buch', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')").run();
+    db.prepare("INSERT INTO figures (id, book_id, fig_id, name, updated_at) VALUES (11, 7, 'fig_abc', 'Gerold', '2026-01-01T00:00:00.000Z')").run();
+    db.prepare("INSERT INTO locations (id, book_id, loc_id, name, updated_at) VALUES (22, 7, 'loc_xyz', 'Schloss', '2026-01-01T00:00:00.000Z')").run();
+
+    const rows = search.attachNavIds([
+      { kind: 'figure', entity_id: 11 },
+      { kind: 'location', entity_id: 22 },
+      { kind: 'page', entity_id: 33 },
+      { kind: 'scene', entity_id: 44 },
+      // Geloeschte Entitaet: kein Treffer in der Tabelle → PK bleibt stehen,
+      // statt dass das Feld fehlt und der Aufrufer stillschweigend `undefined`
+      // in die URL schreibt.
+      { kind: 'figure', entity_id: 999 },
+    ]);
+
+    assert.equal(rows[0].nav_id, 'fig_abc');
+    assert.equal(rows[1].nav_id, 'loc_xyz');
+    assert.equal(rows[2].nav_id, 33);
+    assert.equal(rows[3].nav_id, 44);
+    assert.equal(rows[4].nav_id, 999);
+    // entity_id bleibt unangetastet — daran haengen die Server-Konsumenten.
+    assert.equal(rows[0].entity_id, 11);
+  } finally { teardown(); }
+});

@@ -370,12 +370,16 @@ export function registerSearchCard() {
             root.toggleBookOverviewCard?.();
             return;
           }
+          // `nav_id`, nicht `entity_id`: Figuren/Schauplaetze werden ueber ihre
+          // TEXT-ID adressiert (fig_id/loc_id), Index + Embedding-Chunks fuehren
+          // den INTEGER-PK. Mit dem PK oeffnet die Karte zwar (und die URL sieht
+          // richtig aus), die Zeile klappt aber nie auf.
           case 'figure':
-            return root.openFigurById?.(hit.entity_id);
+            return root.openFigurById?.(hit.nav_id ?? hit.entity_id);
           case 'location':
-            return root.openOrtById?.(hit.entity_id);
+            return root.openOrtById?.(hit.nav_id ?? hit.entity_id);
           case 'scene':
-            return root.openSzeneById?.(hit.entity_id);
+            return root.openSzeneById?.(hit.nav_id ?? hit.entity_id);
           case 'research': {
             // Deep-Link-Hash als SSoT (analog reference-card#openRechercheItem):
             // der Hash-Router oeffnet die Karte, setzt Exklusivitaet und

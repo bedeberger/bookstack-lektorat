@@ -63,6 +63,7 @@ export const bookscopeMethods = {
     this.$store.catalogUi.selectedOrtId = null;
     this.$store.catalogUi.selectedSongId = null;
     this.$store.catalogUi.selectedSzeneId = null;
+    this.$store.catalogUi.selectedEreignisId = null;
     this.lastCheckId = null;
 
     this.$store.catalogUi.szenenUpdatedAt = null;
@@ -207,6 +208,7 @@ export const bookscopeMethods = {
     this.$store.catalog.globalZeitstrahl = [];
     this.$store.catalog.zeitstrahlChronology = null;
     this.$store.catalog.zeitstrahlServerLoaded = false;
+    this.$store.catalogUi.selectedEreignisId = null;
     this.showGlobalZeitstrahl = false;
     this.$store.catalog.szenen = [];
     this.$store.catalogUi.szenenUpdatedAt = null;

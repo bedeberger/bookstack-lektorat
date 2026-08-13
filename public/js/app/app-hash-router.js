@@ -20,7 +20,9 @@ import { EXCLUSIVE_CARDS } from '../cards/feature-registry.js';
 // Views mit Eigenlogik (Argument, Store-Spiegel, Event, Scroll-bei-offen) bleiben
 // als eigener `case` im switch stehen.
 const SIMPLE_HASH_VIEWS = {
-  'ereignisse':   'ereignisse',
+  // 'ereignisse' fehlt hier bewusst: die Karte kennt seit dem Einzel-Permalink
+  // (`ereignis/<id>`) einen Auswahl-Zustand und braucht darum denselben
+  // Zwei-Fall-Zweig wie szenen/orte — Liste ohne Argument nullt die Auswahl.
   'kontinuitaet': 'kontinuitaet',
   'erzaehlprofil':'erzaehlprofil',
   'bewertung':    'bookReview',
@@ -85,6 +87,8 @@ export const appHashRouterMethods = {
       parts.push('song', String(this.$store.catalogUi.selectedSongId));
     } else if (this.showSzenenCard && this.$store.catalogUi.selectedSzeneId) {
       parts.push('szene', String(this.$store.catalogUi.selectedSzeneId));
+    } else if (this.showEreignisseCard && this.$store.catalogUi.selectedEreignisId) {
+      parts.push('ereignis', String(this.$store.catalogUi.selectedEreignisId));
     } else if (this.showKapitelReviewCard && this.kapitelReviewChapterId) {
       parts.push('kapitel', String(this.kapitelReviewChapterId));
     } else if (this.showFigurWerkstattCard && this.$store.nav.werkstattDraftId) {
@@ -446,6 +450,19 @@ export const appHashRouterMethods = {
           if (!this.showSzenenCard) await this.toggleSzenenCard();
           else { this._closeOtherMainCards('szenen'); this._scrollToCardByKey('szenen'); }
           break;
+        case 'ereignis':
+          if (arg) await this.openEreignisById(arg);
+          else {
+            this.$store.catalogUi.selectedEreignisId = null;
+            if (!this.showEreignisseCard) await this.toggleEreignisseCard();
+            else { this._closeOtherMainCards('ereignisse'); this._scrollToCardByKey('ereignisse'); }
+          }
+          break;
+        case 'ereignisse':
+          this.$store.catalogUi.selectedEreignisId = null;
+          if (!this.showEreignisseCard) await this.toggleEreignisseCard();
+          else { this._closeOtherMainCards('ereignisse'); this._scrollToCardByKey('ereignisse'); }
+          break;
         case 'plot':
           // Optionaler Beat-Permalink (#…/plot/<beatId>). Root-SSoT vor dem Toggle
           // setzen; die plotCard fokussiert den Beat nach dem Board-Load (bzw.
@@ -556,6 +573,7 @@ export const appHashRouterMethods = {
       () => this.$store.catalogUi.selectedOrtId,
       () => this.$store.catalogUi.selectedSongId,
       () => this.$store.catalogUi.selectedSzeneId,
+      () => this.$store.catalogUi.selectedEreignisId,
       // Beat-Permalink: Edit öffnen setzt plotBeatId → #…/plot/<beatId> (replace,
       // gleiche Kategorie), Schliessen/Esc/Verwerfen nullt ihn → zurück auf #…/plot.
       () => this.$store.nav.plotBeatId,

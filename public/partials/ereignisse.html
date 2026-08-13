@@ -127,6 +127,7 @@
     <template x-for="(ev, i) in filteredEreignisse()" :key="ev.id ?? i">
       <div class="gz-item"
            :data-ev-index="i"
+           :data-evid="ev.id ?? null"
            :data-section-label="(i === firstUndatedIndex() && i > 0) ? $app.t('events.undatedSection') : null"
            :class="[
              ev.typ === 'extern' ? 'gz-item--extern' : '',
@@ -135,6 +136,7 @@
              !eventHasYear(ev) && ev.story_tag == null ? 'gz-item--unknown' : '',
              ev.manually_edited ? 'gz-item--manual' : '',
              (i === firstUndatedIndex() && i > 0) ? 'gz-item--section-start' : '',
+             (ev.id != null && $store.catalogUi.selectedEreignisId === ev.id) ? 'gz-item--selected' : '',
            ]"
            :style="eventSpanYears(ev) > 0 ? ('--span-years:' + eventSpanYears(ev)) : null">
         <div class="gz-marker" :class="ev.typ === 'extern' ? 'gz-marker--extern' : ''"></div>

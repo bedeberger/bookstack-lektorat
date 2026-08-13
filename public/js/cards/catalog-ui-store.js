@@ -22,7 +22,8 @@ export function registerCatalogUiStore() {
     selectedFigurId: null,
     figurenFilters: { kapitel: '', seite: '', suche: '' },
 
-    // Ereignisse: nur Filter (app-navigation schreibt sie).
+    // Ereignisse: Filter + Selektion (app-navigation schreibt beides).
+    selectedEreignisId: null,
     ereignisseFilters: { figurId: '', kapitel: '', seite: '', subtyp: '', suche: '' },
 
     szenenUpdatedAt: null,

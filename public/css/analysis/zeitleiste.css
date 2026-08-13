@@ -45,6 +45,15 @@
 
 .gz-item--section-start .gz-marker { top: calc(var(--space-18) + 4px); }
 
+/* Angesprungenes Ereignis (Palette-Treffer / Deep-Link `#…/ereignis/<id>`).
+   Gleiche Lesart wie .entity-row--selected in den Katalog-Listen: getönter
+   Grund, damit nach dem Scroll erkennbar bleibt, welche Zeile gemeint war. */
+.gz-item--selected {
+  background: var(--color-hover);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 0 0 var(--space-6) var(--color-hover);
+}
+
 .gz-marker {
   position: absolute;
   left: -33px;

@@ -169,6 +169,26 @@ export const appNavigationMethods = {
     }
   },
 
+  // Einzelnes Ereignis oeffnen (Palette-Treffer, Deep-Link `#…/ereignis/<id>`).
+  // Filter zuruecksetzen wie bei Figur/Ort/Szene: ein stehender Filter wuerde
+  // das Ziel sonst aus der Liste schneiden und der Sprung liefe ins Leere.
+  async openEreignisById(ereignisId) {
+    this._beginNavigation();
+    try {
+      const eid = _coerceId(ereignisId);
+      const f = this.$store.catalogUi.ereignisseFilters;
+      f.figurId = ''; f.kapitel = ''; f.seite = ''; f.subtyp = ''; f.suche = '';
+      if (!this.showEreignisseCard) {
+        await this.toggleEreignisseCard();
+      }
+      this.$store.catalogUi.selectedEreignisId = eid;
+      await this.$nextTick();
+      _scrollToWhenReady(`[data-evid="${eid}"]`);
+    } finally {
+      this._endNavigation();
+    }
+  },
+
   async openEreignisseMitKapitel(kapitel) {
     this._beginNavigation();
     try {

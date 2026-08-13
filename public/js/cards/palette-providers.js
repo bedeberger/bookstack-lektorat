@@ -41,9 +41,12 @@ function _runFulltextHit(root, hit) {
       if (Number.isFinite(bid) && Alpine.store('nav').selectedBookId !== bid) Alpine.store('nav').selectedBookId = bid;
       return root.toggleBookOverviewCard?.();
     }
-    case 'figure':   return root.openFigurById?.(hit.entity_id);
-    case 'location': return root.openOrtById?.(hit.entity_id);
-    case 'scene':    return root.openSzeneById?.(hit.entity_id);
+    // `nav_id`, nicht `entity_id`: Figuren/Schauplaetze werden ueber ihre
+    // TEXT-ID adressiert (fig_id/loc_id), der Index fuehrt den INTEGER-PK.
+    // Mit dem PK oeffnet die Karte zwar, die Zeile klappt aber nie auf.
+    case 'figure':   return root.openFigurById?.(hit.nav_id ?? hit.entity_id);
+    case 'location': return root.openOrtById?.(hit.nav_id ?? hit.entity_id);
+    case 'scene':    return root.openSzeneById?.(hit.nav_id ?? hit.entity_id);
     case 'idea':
       // Idea → eigene Suche im Karten-Trigger; Palette macht's einfach: SearchCard oeffnen.
       root.toggleSearchCard?.();
@@ -324,6 +327,45 @@ export const PROVIDERS = [
           indices: m.indices,
           available: true,
           run: (r) => r.openSzeneById(s.id),
+        });
+      }
+      return rank(out);
+    },
+  },
+  {
+    key: 'ereignisse',
+    prefix: '&',
+    sectionKey: 'palette.section.ereignisse',
+    list(root) {
+      return Array.isArray(root.$store.catalog.globalZeitstrahl) ? root.$store.catalog.globalZeitstrahl : [];
+    },
+    // Der Zeitstrahl wird sonst nur beim Öffnen der Ereignisse-Karte geladen.
+    prepare(root) {
+      if (Alpine.store('nav').selectedBookId && !this.list(root).length && typeof root._reloadZeitstrahl === 'function') {
+        _onceForBook(Alpine.store('nav').selectedBookId, 'ereignisse', () => root._reloadZeitstrahl());
+      }
+    },
+    search(root, q, _t) {
+      const items = this.list(root);
+      if (!items.length) return [];
+      const out = [];
+      for (const ev of items) {
+        // Ohne `id` ist das Ereignis nicht adressierbar: solche Einträge stammen
+        // aus dem Figuren-Fallback (`_buildGlobalZeitstrahl`) eines noch nicht
+        // konsolidierten Buchs und stehen in keiner `zeitstrahl_events`-Zeile.
+        if (ev.id == null) continue;
+        const m = fuzzyMatch(q, ev.ereignis || '');
+        if (!m) continue;
+        const kapitel = Array.isArray(ev.kapitel) ? ev.kapitel[0] : ev.kapitel;
+        out.push({
+          key: 'ereignis:' + ev.id,
+          providerKey: 'ereignisse',
+          label: ev.ereignis || '',
+          sub: [ev.datum_label || ev.datum || '', kapitel || ''].filter(Boolean).join(' · '),
+          score: m.score,
+          indices: m.indices,
+          available: true,
+          run: (r) => r.openEreignisById(ev.id),
         });
       }
       return rank(out);

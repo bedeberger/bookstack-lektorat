@@ -477,6 +477,7 @@ export function registerPaletteCard() {
         { prefix: '@', labelKey: 'palette.legend.figuren' },
         { prefix: '$', labelKey: 'palette.legend.orte' },
         { prefix: '%', labelKey: 'palette.legend.szenen' },
+        { prefix: '&', labelKey: 'palette.legend.ereignisse' },
         { prefix: '?', labelKey: 'palette.legend.fulltext' },
       ];
     },

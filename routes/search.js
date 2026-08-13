@@ -8,8 +8,12 @@
 //           scene/idea); Default = page,chapter (Spec-Default).
 //   - Trigram-Fallback automatisch bei Single-Word-Zero-Hit.
 //
-// Response: { hits: [{ kind, entity_id, book_id, title, snippet, rank }],
+// Response: { hits: [{ kind, entity_id, nav_id, book_id, title, snippet, rank }],
 //             fallback: boolean }
+//   - entity_id: INTEGER-PK der Tabelle (Index-Anker).
+//   - nav_id:    ID, mit der die Oberflaeche den Treffer oeffnet — bei
+//                figure/location die TEXT-ID (fig_id/loc_id), sonst = entity_id.
+//                Siehe lib/search.js#attachNavIds.
 
 const express = require('express');
 const { toIntId } = require('../lib/validate');
@@ -70,7 +74,12 @@ router.get('/', (req, res) => {
       allowedBookIds, kinds, bookId, limit, offset,
     });
     res.json({
-      hits: result.hits || [],
+      // nav_id = ID, mit der die Oberflaeche den Treffer oeffnet (siehe
+      // lib/search.js#attachNavIds). Nur hier angehaengt, nicht in query():
+      // die Server-Konsumenten des Index (Motiv-Scan, Beat-Verankerung,
+      // semantische Fusion) navigieren nichts und sollen die Zusatz-Queries
+      // nicht bezahlen.
+      hits: searchIndex.attachNavIds(result.hits || []),
       fallback: !!result.fallback,
     });
   } catch (e) {
@@ -112,7 +121,9 @@ function _resolveSemanticHits(hits) {
       score: Math.round(h.score * 1000) / 1000,
     });
   }
-  return out;
+  // Gleiche Aufloesung wie im FTS-Pfad: `semantic_chunks.entity_id` ist bei
+  // `figure` der INTEGER-PK, die Figuren-Karte kennt nur `fig_id`.
+  return searchIndex.attachNavIds(out);
 }
 
 router.get('/semantic', async (req, res) => {
