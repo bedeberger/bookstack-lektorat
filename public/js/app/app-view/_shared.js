@@ -47,11 +47,17 @@ export async function _withCardTransition(ctx, apply) {
 // (onReclick, requiresBook, loadDeps, auditEvent, extraRefreshOnOpen) und
 // kapselt die Open/Close/Refresh-Pfade. Bespoke-Toggles (kapitelReview, ideen,
 // chat, tree) leben weiterhin als eigene Methoden.
-export async function _toggleCardGeneric(entry) {
+// `opts.skipCardScroll` unterdrückt den Sprung an den Karten-Anfang. Gesetzt von
+// den zusammengesetzten Navigationen (`openFigurById` & Co.), die gleich danach
+// die getroffene ZEILE ins Bild scrollen: beide Scrolls laufen sonst als
+// konkurrierende Smooth-Animationen, und landen sie im selben Frame, schluckt
+// der Browser den zweiten — das Ziel bliebe ausserhalb des Bildes. Wer keine
+// Zeile im Sinn hat, bekommt den Karten-Scroll unverändert.
+export async function _toggleCardGeneric(entry, opts = {}) {
   if (this[entry.flag]) {
     if (entry.onReclick === 'refresh') {
       window.dispatchEvent(new CustomEvent(EVT.CARD_REFRESH, { detail: { name: entry.refreshName || entry.key } }));
-      this._scrollToCardByKey(entry.key);
+      if (!opts.skipCardScroll) this._scrollToCardByKey(entry.key);
     } else {
       await _withCardTransition(this, () => { this[entry.flag] = false; });
     }
@@ -77,7 +83,7 @@ export async function _toggleCardGeneric(entry) {
     this._closeOtherMainCards(entry.key);
     this[entry.flag] = true;
   });
-  this._scrollToCardByKey(entry.key);
+  if (!opts.skipCardScroll) this._scrollToCardByKey(entry.key);
   if (entry.auditEvent) this.logAuditEvent?.(entry.auditEvent, { book: this.$store.nav.selectedBookId });
   if (entry.extraRefreshOnOpen) {
     window.dispatchEvent(new CustomEvent(EVT.CARD_REFRESH, { detail: { name: entry.key } }));
@@ -101,7 +107,7 @@ export async function _toggleCardGeneric(entry) {
 export const generatedToggles = {};
 for (const entry of EXCLUSIVE_CARDS) {
   if (entry.bespoke || !entry.toggle) continue;
-  generatedToggles[entry.toggle] = async function() { return _toggleCardGeneric.call(this, entry); };
+  generatedToggles[entry.toggle] = async function(opts) { return _toggleCardGeneric.call(this, entry, opts || {}); };
 }
 
 // View-Steuerung: Exklusivität zwischen Buch-/Seiten-Karten, Seitenauswahl,

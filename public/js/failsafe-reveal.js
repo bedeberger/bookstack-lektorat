@@ -30,6 +30,11 @@
 
   // Umgebungs-Fingerabdruck: ohne ihn ist ein Boot-Ausfall im Log nicht
   // einzuordnen (Netz-Blip vs. Cache-Eviction vs. Generations-Skew).
+  // `ready`/`res`/`t` trennen die zwei Lagen, die im Report sonst identisch
+  // aussehen: ein toter Modul-Graph (readyState 'complete', aber keine
+  // Registrierung → echter Fehler, danebenliegende 'error'-Reports lesen) und
+  // ein bloss langsamer Load (noch 'loading'/'interactive', res waechst → nur
+  // Latenz). Ohne diese Unterscheidung ist jeder Boot-Ausfall im Log geraten.
   function bootEnv() {
     var sw = 'n/a';
     try {
@@ -37,8 +42,17 @@
         sw = navigator.serviceWorker.controller ? 'controlled' : 'uncontrolled';
       }
     } catch (_) {}
+    var res = '?';
+    try {
+      res = performance.getEntriesByType('resource').filter(function (r) {
+        return r.name.indexOf('.js') > 0;
+      }).length;
+    } catch (_) {}
     return 'online=' + (navigator.onLine !== false)
       + ' sw=' + sw
+      + ' ready=' + document.readyState
+      + ' js=' + res
+      + ' t=' + Math.round(performance.now()) + 'ms'
       + ' build=' + (window.__SHELL_BUILD || '?');
   }
 
@@ -91,17 +105,46 @@
   // Genau EINMAL pro Session (sessionStorage-Guard) und nur online — offline
   // wäre nach dem Cache-Wurf gar nichts mehr ladbar. app.js#init() löscht das
   // Flag nach erfolgreichem Boot.
-  setTimeout(function () {
+  //
+  // ZWEI Vorbedingungen, ohne die die Heilung nicht heilt, sondern schadet —
+  // beide sind teuer erkauft, weil ihr Fehlen sich selbst reproduziert:
+  //  1. `readyState === 'complete'`. Laeuft der Load noch, ist das kein Ausfall,
+  //     sondern Latenz — die Shell zieht ~200 Module. Die Heilung wirft dann
+  //     genau den Cache weg, der den naechsten Load schnell machen wuerde, und
+  //     der Folge-Load ist wieder kalt: derselbe Watchdog feuert erneut.
+  //     Darum einmalig Nachfrist statt Heilung.
+  //  2. Ein Service-Worker kontrolliert die Seite. Die Heilung repariert genau
+  //     EINEN Fall — eine Generations-Inkohaerenz, bei der der SW Shell-Markup
+  //     und Module aus verschiedenen Generationen ausliefert. Ohne Controller
+  //     kommt nichts aus dem SW-Cache, Markup und Module stammen zwangslaeufig
+  //     aus demselben Deploy, ein Skew ist ausgeschlossen. Cache-Wurf und
+  //     Abmeldung koennen dort nichts reparieren, kosten aber den Cache und die
+  //     Registrierung — und die Neu-Registrierung sitzt in app.js, also im Boot,
+  //     der gerade scheitert. Ein Fehlgriff laesst den User dauerhaft
+  //     unkontrolliert und kalt zurueck.
+  var HEAL_AFTER_MS = 10000;
+  var GRACE_MS = 10000;
+  function bootWatchdog(isRetry) {
     if (window.__app) return;
+    var secs = Math.round(performance.now() / 1000);
+    if (!isRetry && document.readyState !== 'complete') {
+      setTimeout(function () { bootWatchdog(true); }, GRACE_MS);
+      return;
+    }
     var alreadyHealed = false;
     try { alreadyHealed = !!sessionStorage.getItem(HEAL_KEY); } catch (_) {}
-    if (alreadyHealed || navigator.onLine === false) {
-      bootReport('Boot-Ausfall: keine Alpine-Registrierung nach 10s, Heilung uebersprungen ('
-        + (alreadyHealed ? 'bereits geheilt' : 'offline') + ')');
+    var controlled = false;
+    try { controlled = !!(navigator.serviceWorker && navigator.serviceWorker.controller); } catch (_) {}
+    if (alreadyHealed || navigator.onLine === false || !controlled) {
+      var grund = alreadyHealed ? 'bereits geheilt'
+        : navigator.onLine === false ? 'offline'
+        : 'ohne Service-Worker, kein Generations-Skew moeglich';
+      bootReport('Boot-Ausfall: keine Alpine-Registrierung nach ' + secs + 's, Heilung uebersprungen ('
+        + grund + ')');
       reveal();
       return;
     }
-    bootReport('Boot-Ausfall: keine Alpine-Registrierung nach 10s, harte Heilung laeuft');
+    bootReport('Boot-Ausfall: keine Alpine-Registrierung nach ' + secs + 's, harte Heilung laeuft');
     try { sessionStorage.setItem(HEAL_KEY, '1'); } catch (_) {}
     var done = function () { location.reload(); };
     var clearCaches = window.caches
@@ -118,7 +161,8 @@
           return Promise.all(regs.map(function (r) { return r.unregister(); }));
         }).catch(function () {});
     }).then(done, done);
-  }, 10000);
+  }
+  setTimeout(bootWatchdog, HEAL_AFTER_MS);
   window.addEventListener('error', function (e) {
     if (!(e && e.target && e.target.tagName === 'SCRIPT')) return;
     // Boot noch nicht erfolgt? → einmaliger Reload-Versuch gegen transiente

@@ -77,6 +77,9 @@ sharedRouter.get('/stats', (req, res) => {
     typeLabel:    JOB_TYPE_LABELS[r.type] || r.type,
     count:        r.count || 0,
     errorCount:   r.errorCount || 0,
+    // Rohwert neben der Formatform: die Tabelle sortiert nach Sekunden,
+    // ein Formatstring ("2 min 5 s") sortiert lexikografisch falsch.
+    avgDuration:  r.avgDuration != null ? r.avgDuration : null,
     avgDurationFmt: fmtDuration(r.avgDuration),
     lastRun:      r.lastRun || null,
     avgTokensIn:  r.avgTokensIn != null ? Math.round(r.avgTokensIn) : null,

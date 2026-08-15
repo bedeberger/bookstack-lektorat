@@ -4,30 +4,15 @@
 // `toggleMyStatsCard` leben im Root (generiert aus EXCLUSIVE_CARDS). Daten:
 // `GET /me/profile-stats` (Tiles) + `GET /me/profile-stats-history` (Chart).
 
-import { loadChart } from '../lazy-libs.js';
 import { tzOpts, localIsoDate, localIsoDaysAgo } from '../utils.js';
 import { EVT } from '../events.js';
 import { computeWritingStreak, computeWeekdayPattern, computeDerived, computeMilestones,
          computeReadability, computeWeeklyDelta, computePerBookTime, computeEffortSplit,
          computeVolumeDelta, computeHourPattern, computeGoalAttainment, computeBookGoals,
-         filterByWindow, bucketizeIso, aggregateByBucket } from './my-stats-compute.js';
+         filterByWindow } from './my-stats-compute.js';
 import { computeVolumeByCategory } from './my-stats-category.js';
 import { myStatsTrendMethods } from './my-stats-trends-methods.js';
-
-const cssVar = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-
-// Chart-Metriken: content aus book_stats_history (Summe pro Tag), writing aus
-// writing_time. Label-Keys werden zur Render-Zeit via t() aufgeloest (Locale-live).
-const METRIC_KEYS = {
-  chars:         'mystats.metric.chars',
-  normseiten:    'mystats.metric.normseiten',
-  words:         'mystats.metric.words',
-  unique_words:  'mystats.metric.uniqueWords',
-  page_count:    'mystats.metric.pages',
-  chapter_count: 'mystats.metric.chapters',
-  writing:       'mystats.metric.writing',
-  lektorat:      'mystats.metric.lektorat',
-};
+import { myStatsChartMethods, BOOK_COLORS } from './my-stats-chart-methods.js';
 
 // Meilenstein-Label-Keys pro Kategorie (Wert via {n} interpoliert).
 const MILESTONE_LABELS = {
@@ -37,22 +22,11 @@ const MILESTONE_LABELS = {
   books:      'mystats.milestone.books',
 };
 
-// Farbpalette fuer Pro-Buch-Linien — mittlere Saettigung, lesbar auf Light+Dark.
-const BOOK_COLORS = [
-  '#5b6ee1', '#e08a3c', '#3fae6e', '#c45fa0',
-  '#c9a93a', '#46a7bd', '#d05a5a', '#8f7ae0',
-  '#6aaf4e', '#b06ad0', '#d98f5e', '#4e8fd0',
-];
-
-// Chart.js-Instanz + Theme-Observer ausserhalb von Alpine halten, damit der
-// Reaktivitaets-Proxy die Instanz nicht beschaedigt (analog bookstats.js).
-let _chart = null;
-let _themeObserver = null;
-
 export function registerMyStatsCard() {
   if (typeof window === 'undefined' || !window.Alpine) return;
   window.Alpine.data('myStatsCard', () => ({
     ...myStatsTrendMethods,
+    ...myStatsChartMethods,
     myStatsData: null,
     myStatsHistory: [],
     myStatsWriting: [],
@@ -86,7 +60,7 @@ export function registerMyStatsCard() {
     destroy() {
       if (this._onRefresh) window.removeEventListener(EVT.CARD_REFRESH, this._onRefresh);
       this._destroyChart();
-      if (_themeObserver) { _themeObserver.disconnect(); _themeObserver = null; }
+      this._disconnectMyStatsThemeObserver();
     },
 
     async loadMyStats() {
@@ -373,201 +347,6 @@ export function registerMyStatsCard() {
       return dir > 0 ? 'arrow-up' : dir < 0 ? 'arrow-down' : 'minus';
     },
 
-    _destroyChart() {
-      if (_chart) { _chart.destroy(); _chart = null; }
-    },
-
-    _ensureThemeObserver() {
-      if (_themeObserver) return;
-      _themeObserver = new MutationObserver(() => {
-        if (!_chart || !window.__app.showMyStatsCard) return;
-        _chart.destroy();
-        _chart = null;
-        this.renderMyStatsChart();
-      });
-      _themeObserver.observe(document.documentElement, {
-        attributes: true, attributeFilter: ['data-theme'],
-      });
-    },
-
-    // Buchname aus der bereits geladenen Root-Buchliste (id → name).
-    _bookName(bookId) {
-      const b = (Alpine.store('nav').books || []).find(x => String(x.id) === String(bookId));
-      return b?.name || (window.__app.t('mystats.unknownBook') + ' ' + bookId);
-    },
-
-    async renderMyStatsChart() {
-      const canvas = document.getElementById('my-stats-chart');
-      if (!canvas) return;
-      if (typeof window.Chart === 'undefined') {
-        try { await loadChart(); }
-        catch (e) {
-          const ph = document.createElement('div');
-          ph.className = 'muted-msg muted-msg--block';
-          ph.textContent = e.message;
-          canvas.replaceWith(ph);
-          return;
-        }
-      }
-      // Immer frisch aufbauen (Update-Pfad liest keine neuen Canvas-Dimensionen).
-      if (_chart) { _chart.destroy(); _chart = null; }
-
-      const metric = this.myStatsMetric;
-      // Zeit-Metriken (Schreib- bzw. Lektoratszeit) sind Tages-Deltas in Sekunden;
-      // Inhalts-Metriken sind kumulative book_stats_history-Snapshots.
-      const isTime = metric === 'writing' || metric === 'lektorat';
-      const timeSrc = metric === 'lektorat' ? this.myStatsLektorat : this.myStatsWriting;
-      const byBook = this.myStatsChartMode === 'byBook';
-
-      // Quelle vereinheitlichen auf { book_id, date, raw }.
-      const src = isTime ? timeSrc : this.myStatsHistory;
-      let rows = src.map(r => ({ book_id: r.book_id, date: r.recorded_at || r.date, raw: r }));
-      if (!rows.length) return;
-
-      const win = this.myStatsWindow();
-      if (win.from) rows = rows.filter(r => r.date >= win.from);
-      if (win.to)   rows = rows.filter(r => r.date <= win.to);
-      if (!rows.length) return;
-
-      // Nur bis zum letzten vollständigen Sync zeigen: book_stats_history bekommt
-      // pro Buch eine Tageszeile vom Nacht-Cron. Ein manueller Einzelbuch-Sync
-      // mitten am Tag (oder ein noch ausstehender Nachtlauf) erzeugt sonst einen
-      // Teil-Tages-Punkt mit weniger Büchern als der Vortag — als künstlicher
-      // Einbruch sichtbar. Darum jüngste Tage abschneiden, solange ihre Buch-Zahl
-      // unter der des Vortags liegt. Nur für Content-Historie — Zeit-Metriken sind
-      // naturgemäss dünn (nur aktive Tage) und kennen kein „vollständiges" Tagesbild.
-      if (!isTime) {
-        const allDates = [...new Set(rows.map(r => r.date))].sort();
-        const booksOn = new Map();
-        for (const r of rows) {
-          if (!booksOn.has(r.date)) booksOn.set(r.date, new Set());
-          booksOn.get(r.date).add(r.book_id);
-        }
-        let last = allDates.length - 1;
-        while (last > 0 && booksOn.get(allDates[last]).size < booksOn.get(allDates[last - 1]).size) last--;
-        const lastDate = allDates[last];
-        rows = rows.filter(r => r.date <= lastDate);
-      }
-
-      const valOf = (raw) => {
-        if (metric === 'normseiten') return Math.round(((Number(raw.chars) || 0) / 1500) * 10) / 10;
-        if (isTime)                 return Math.round((Number(raw.seconds) || 0) / 60);
-        return Number(raw[metric]) || 0;
-      };
-
-      // Zeitachsen-Granularitaet: Tag/Woche/Monat. Schreibzeit-Tageswerte werden
-      // im Bucket summiert ('sum'); Inhalts-Snapshots (kumulative Groessen) nehmen
-      // den juengsten Tageswert je Bucket ('last').
-      const gran = this.myStatsChartGran;
-      const aggMode = isTime ? 'sum' : 'last';
-
-      // X-Achse = sortierte eindeutige Buckets über alle Bücher.
-      const buckets = [...new Set(rows.map(r => bucketizeIso(r.date, gran)))].sort();
-
-      const localeTag = (Alpine.store('shell').uiLocale === 'en') ? 'en-US' : 'de-CH';
-      const labels = buckets.map(b => {
-        if (gran === 'month') return new Date(b + 'T12:00:00').toLocaleDateString(localeTag, tzOpts({ month: 'short', year: '2-digit' }));
-        const [y, m, dd] = b.split('-');
-        return `${dd}.${m}.${y.slice(2)}`;
-      });
-
-      const metricLabel = window.__app.t(METRIC_KEYS[metric] || metric);
-      const isDecimal = metric === 'normseiten';
-      const fmt = v => (v == null) ? '' : (isDecimal
-        ? v.toLocaleString(localeTag, { minimumFractionDigits: 1, maximumFractionDigits: 1 })
-        : Math.round(v).toLocaleString(localeTag));
-
-      const primary  = cssVar('--color-primary');
-      const muted    = cssVar('--color-muted');
-      const gridLine = cssVar('--color-border');
-
-      let datasets;
-      if (byBook) {
-        // Eine Linie pro Buch (Reihenfolge nach erstem Auftreten = stabile Farbe).
-        const order = [];
-        const perBook = new Map(); // book_id → [{ date, value }]
-        for (const r of rows) {
-          if (!perBook.has(r.book_id)) { perBook.set(r.book_id, []); order.push(r.book_id); }
-          perBook.get(r.book_id).push({ date: r.date, value: valOf(r.raw) });
-        }
-        datasets = order.map((bid, i) => {
-          const color = BOOK_COLORS[i % BOOK_COLORS.length];
-          const bmap = new Map(aggregateByBucket(perBook.get(bid), gran, aggMode).map(x => [x.bucket, x.value]));
-          return {
-            label: this._bookName(bid),
-            data: buckets.map(b => bmap.has(b) ? bmap.get(b) : null),
-            borderColor: color,
-            backgroundColor: color,
-            pointBackgroundColor: color,
-            borderWidth: 2,
-            tension: 0.3,
-            pointRadius: 2,
-            pointHoverRadius: 5,
-            fill: false,
-            spanGaps: true,
-          };
-        });
-      } else {
-        // Gesamt: erst Summe pro Tag über alle Bücher, dann auf Buckets verdichten.
-        const totalByDate = new Map();
-        for (const r of rows) totalByDate.set(r.date, (totalByDate.get(r.date) || 0) + valOf(r.raw));
-        const points = [...totalByDate.entries()].map(([date, value]) => ({ date, value }));
-        const bmap = new Map(aggregateByBucket(points, gran, aggMode).map(x => [x.bucket, x.value]));
-        let series = buckets.map(b => bmap.has(b) ? bmap.get(b) : 0);
-        // Kumuliert nur fuer Zeit-Metriken sinnvoll (Bucket-Deltas aufsummiert →
-        // total investierte Zeit). Inhaltsmetriken sind bereits kumulative
-        // Snapshot-Groessen, daher dort kein Cumulative-Toggle im UI.
-        if (this.myStatsCumulative && isTime) {
-          let acc = 0;
-          series = series.map(v => (acc += v));
-        }
-        datasets = [{
-          label: metricLabel,
-          data: series,
-          borderColor: primary,
-          backgroundColor: primary + '12',
-          pointBackgroundColor: primary,
-          borderWidth: 2,
-          tension: 0.35,
-          pointRadius: 3,
-          pointHoverRadius: 6,
-          fill: true,
-          spanGaps: false,
-        }];
-      }
-
-      this._ensureThemeObserver();
-
-      _chart = new window.Chart(canvas, {
-        type: 'line',
-        data: { labels, datasets },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          interaction: { mode: 'index', intersect: false },
-          plugins: {
-            legend: {
-              display: byBook,
-              position: 'bottom',
-              labels: { boxWidth: 12, boxHeight: 12, font: { size: 11 }, color: muted, usePointStyle: true },
-            },
-            tooltip: { callbacks: { label: ctx => ctx.parsed.y == null ? null : ` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)}` } },
-          },
-          scales: {
-            x: { grid: { color: gridLine }, ticks: { font: { size: 11 }, color: muted, maxTicksLimit: 12 } },
-            y: {
-              grid: { color: gridLine },
-              beginAtZero: isTime || byBook,
-              ticks: {
-                font: { size: 11 }, color: muted,
-                callback: v => fmt(v),
-                stepSize: (metric === 'page_count' || metric === 'chapter_count') ? 1 : undefined,
-              },
-            },
-          },
-        },
-      });
-    },
 
     // Locale-aware Tausender-Trennung (Swiss: de-CH = Apostroph).
     _myStatsFmt(n) {

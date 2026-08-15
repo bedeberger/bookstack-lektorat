@@ -19,6 +19,18 @@ export const adminMethods = {
     }
   },
 
+  // Zeilen fuer die sortierbare Job-Statistik-Tabelle. Der Server liefert
+  // `typeLabel` als i18n-Key und die Zahlenspalten zusaetzlich vorformatiert;
+  // sortiert werden muss aber nach dem, was der User SIEHT (uebersetztes Label)
+  // bzw. nach dem Rohwert (Dauer/Tokens), nicht nach dem Formatstring.
+  bookJobStatsRows() {
+    return (this.bookJobStats || []).map(r => ({
+      ...r,
+      typeName:  window.__app.t(r.typeLabel),
+      avgTokens: r.avgTokensIn != null ? (r.avgTokensIn || 0) + (r.avgTokensOut || 0) : null,
+    }));
+  },
+
 
   async resetBookHistory() {
     const bookId = Alpine.store('nav').selectedBookId;

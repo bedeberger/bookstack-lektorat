@@ -253,6 +253,7 @@ SSoT: `_scrollToCardByKey(key)` + `_scrollToCardEl(el)` in [public/js/app/app-vi
 - `_toggleCardGeneric` ruft `_scrollToCardByKey(entry.key)` nach `_ensurePartial` + Flag-Set. Reihenfolge zwingend — Selector `[x-show="$app.${flag}"]` findet das Element erst nach Partial-Inject.
 - Refresh-Pfad (`onReclick: 'refresh'`) scrollt **auch** — Re-Klick auf offene Karte zentriert sie wieder, statt User weggescrollt zu lassen.
 - Hash-Apply für bereits offene Karte (`_applyHash`-Branches): explizit `_scrollToCardByKey(key)` ergänzen, sonst landet User nach Deep-Link-Click ins Nichts.
+- **Ausnahme `toggleXxxCard({ skipCardScroll: true })`:** wer direkt danach eine ZEILE anspringt (`openFigurById`/`openOrtById`/`openSzeneById`/`openEreignisById` via `_scrollToWhenReady`), unterdrückt den Karten-Scroll. **Why:** sonst laufen zwei Smooth-Animationen gegeneinander (Sprung an den Karten-Anfang + Sprung zur Zeile); landen sie im selben Frame, schluckt der Browser die zweite und das Ziel bleibt ausserhalb des Bildes. Nur mit einem präziseren Ziel setzen — ohne Zeilen-Scroll bliebe der User stehen, wo er war. Der Zeilen-Scroll wartet dafür auf eine **stabile dokument-absolute Position** des Ziels: „im DOM" heisst noch nicht „an seinem Platz", und ein Scroll in eine halb aufgebaute Liste ist ein No-op, nach dem das Ziel unbemerkt unterhalb des Bildes liegt.
 
 **Anti-Pattern:**
 - Eigene `el.scrollIntoView()`-Calls in Sub-Komponenten oder Toggle-Methoden — Mobile/Desktop-Branching dann doppelt + drift-anfällig.

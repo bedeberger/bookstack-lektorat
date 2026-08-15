@@ -44,7 +44,7 @@ let _themeObserver = null;
 function _ensureThemeObserver(component) {
   if (_themeObserver) return;
   _themeObserver = new MutationObserver(() => {
-    if (!_statsChart || !component.$root.showBookStatsCard) return;
+    if (!_statsChart || !window.__app?.showBookStatsCard) return;
     _statsChart.destroy();
     _statsChart = null;
     component.renderStatsChart();

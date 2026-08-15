@@ -91,6 +91,12 @@
     registerCollapsible();
     const { registerFileDrop } = await import('/public/js/file-drop.js');
     registerFileDrop();
+    // sortableTable — der Statistik-Tab desselben Partials mountet damit seine
+    // Job-Statistik-Tabelle. Fehlt die Registrierung, wirft Alpine beim Mount
+    // des Tab-Bundles (sortClass/ariaSort/sorted undefined), obwohl der
+    // Publikation-Tab selbst nichts damit zu tun hat.
+    const { registerSortableTable } = await import('/public/js/sortable-table.js');
+    registerSortableTable();
 
     const { registerBookSettingsCard } = await import('/public/js/cards/book-settings-card.js');
     registerBookSettingsCard();

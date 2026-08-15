@@ -9,15 +9,36 @@ function _coerceId(id) {
   return (typeof id === 'string' && /^\d+$/.test(id)) ? Number(id) : id;
 }
 
-// Wartet, bis das Ziel-Element im DOM ist, und scrollt es zentriert ins Bild.
-// Cold-Open: toggleXxxCard öffnet die Karte, deren Lifecycle-Load aber async
-// läuft und vom Toggle nicht awaited wird → bei $nextTick fehlt die erst nach
-// dem Fetch gerenderte Listenzeile noch.
+// Wartet, bis das Ziel-Element im DOM UND an seinem Platz ist, und scrollt es
+// zentriert ins Bild. Cold-Open: toggleXxxCard öffnet die Karte, deren
+// Lifecycle-Load aber async läuft und vom Toggle nicht awaited wird → bei
+// $nextTick fehlt die erst nach dem Fetch gerenderte Listenzeile noch.
+//
+// „Im DOM" allein reicht nicht: im ersten Frame nach dem Einfügen steht die
+// Zeile noch bei 0 und das Dokument ist kaum höher als das Fenster — ein Scroll
+// dorthin ist dann ein No-op, und wenn die Liste danach fertig aufbaut, liegt
+// das Ziel unbemerkt unterhalb des Bildes. Darum wird auf eine **stabile
+// dokument-absolute Position** gewartet (zwei Frames gleich). Absolut gemessen,
+// nicht relativ zum Fenster: der Wert ändert sich dann nur durch Layout, nicht
+// durch einen laufenden Scroll. Bleibt das Layout bis zum Ende des Budgets in
+// Bewegung, wird trotzdem gescrollt — lieber ungenau als gar nicht.
 function _scrollToWhenReady(selector, tries = 60) {
-  const el = document.querySelector(selector);
-  if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
-  if (tries <= 0) return;
-  requestAnimationFrame(() => _scrollToWhenReady(selector, tries - 1));
+  let lastOffset = null;
+  const step = (left) => {
+    const el = document.querySelector(selector);
+    if (!el) {
+      if (left > 0) requestAnimationFrame(() => step(left - 1));
+      return;
+    }
+    const offset = Math.round(el.getBoundingClientRect().top + window.scrollY);
+    if (offset !== lastOffset && left > 0) {
+      lastOffset = offset;
+      requestAnimationFrame(() => step(left - 1));
+      return;
+    }
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+  step(tries);
 }
 
 // Interne Navigation zwischen Buch-Views. `_beginNavigation/_endNavigation`
@@ -32,7 +53,7 @@ export const appNavigationMethods = {
       this.$store.catalogUi.figurenFilters.kapitel = '';
       this.$store.catalogUi.figurenFilters.seite = '';
       if (!this.showFiguresCard) {
-        await this.toggleFiguresCard();
+        await this.toggleFiguresCard({ skipCardScroll: true });
       }
       this.$store.catalogUi.selectedFigurId = fid;
       await this.$nextTick();
@@ -49,7 +70,7 @@ export const appNavigationMethods = {
       this.$store.catalogUi.figurenFilters.kapitel = kapitelName || '';
       this.$store.catalogUi.figurenFilters.seite = '';
       if (!this.showFiguresCard) {
-        await this.toggleFiguresCard();
+        await this.toggleFiguresCard({ skipCardScroll: true });
       }
       this.$store.catalogUi.selectedFigurId = fid;
       await this.$nextTick();
@@ -68,7 +89,7 @@ export const appNavigationMethods = {
       this.$store.catalogUi.orteFilters.kapitel = '';
       this.$store.catalogUi.orteFilters.szeneId = '';
       if (!this.showOrteCard) {
-        await this.toggleOrteCard();
+        await this.toggleOrteCard({ skipCardScroll: true });
       }
       this.$store.catalogUi.selectedOrtId = oid;
       await this.$nextTick();
@@ -87,7 +108,7 @@ export const appNavigationMethods = {
       this.$store.catalogUi.orteFilters.kapitel = kapitelName || '';
       this.$store.catalogUi.orteFilters.szeneId = '';
       if (!this.showOrteCard) {
-        await this.toggleOrteCard();
+        await this.toggleOrteCard({ skipCardScroll: true });
       }
       this.$store.catalogUi.selectedOrtId = oid;
       await this.$nextTick();
@@ -159,7 +180,7 @@ export const appNavigationMethods = {
       this.$store.catalogUi.szenenFilters.kapitel = '';
       this.$store.catalogUi.szenenFilters.ortId = '';
       if (!this.showSzenenCard) {
-        await this.toggleSzenenCard();
+        await this.toggleSzenenCard({ skipCardScroll: true });
       }
       this.$store.catalogUi.selectedSzeneId = sid;
       await this.$nextTick();
@@ -179,7 +200,7 @@ export const appNavigationMethods = {
       const f = this.$store.catalogUi.ereignisseFilters;
       f.figurId = ''; f.kapitel = ''; f.seite = ''; f.subtyp = ''; f.suche = '';
       if (!this.showEreignisseCard) {
-        await this.toggleEreignisseCard();
+        await this.toggleEreignisseCard({ skipCardScroll: true });
       }
       this.$store.catalogUi.selectedEreignisId = eid;
       await this.$nextTick();

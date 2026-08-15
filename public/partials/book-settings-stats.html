@@ -5,17 +5,29 @@
       <div x-show="bookJobStatsLoading && !bookJobStats" class="job-stats-loading" x-text="$app.t('jobStats.loading')"></div>
       <div x-show="bookJobStats && bookJobStats.length === 0" class="job-stats-empty" x-text="$app.t('jobStats.empty')"></div>
       <div x-show="bookJobStats && bookJobStats.length > 0" class="job-stats-scroll">
-      <table class="job-stats-table">
+      <table class="job-stats-table"
+             x-data="sortableTable({
+               rows: () => bookJobStatsRows(),
+               defaultKey: 'lastRun',
+               defaultDir: 'desc',
+               types: { typeName: 'string', avgDuration: 'number', avgTokens: 'number', lastRun: 'date', count: 'number' },
+               persistKey: 'bookJobStats'
+             })">
         <thead>
           <tr>
-            <th x-text="$app.t('jobStats.col.type')"></th>
-            <th :data-tip="$app.t('jobStats.col.avgDurationTitle')" x-text="$app.t('jobStats.col.avgDuration')"></th>
-            <th :data-tip="$app.t('jobStats.col.avgTokensTitle')" x-text="$app.t('jobStats.col.avgTokens')"></th>
-            <th x-text="$app.t('jobStats.col.lastRun')"></th>
-            <th :data-tip="$app.t('jobStats.col.runsTitle')" x-text="$app.t('jobStats.col.runs')"></th>
+            <th class="sortable-th" :class="sortClass('typeName')" :aria-sort="ariaSort('typeName')" @click="sortBy('typeName')"
+                x-text="$app.t('jobStats.col.type')"></th>
+            <th class="sortable-th" :class="sortClass('avgDuration')" :aria-sort="ariaSort('avgDuration')" @click="sortBy('avgDuration')"
+                :data-tip="$app.t('jobStats.col.avgDurationTitle')" x-text="$app.t('jobStats.col.avgDuration')"></th>
+            <th class="sortable-th" :class="sortClass('avgTokens')" :aria-sort="ariaSort('avgTokens')" @click="sortBy('avgTokens')"
+                :data-tip="$app.t('jobStats.col.avgTokensTitle')" x-text="$app.t('jobStats.col.avgTokens')"></th>
+            <th class="sortable-th" :class="sortClass('lastRun')" :aria-sort="ariaSort('lastRun')" @click="sortBy('lastRun')"
+                x-text="$app.t('jobStats.col.lastRun')"></th>
+            <th class="sortable-th" :class="sortClass('count')" :aria-sort="ariaSort('count')" @click="sortBy('count')"
+                :data-tip="$app.t('jobStats.col.runsTitle')" x-text="$app.t('jobStats.col.runs')"></th>
           </tr>
         </thead>
-        <template x-for="row in bookJobStats" :key="row.type">
+        <template x-for="row in sorted" :key="row.type">
           <tbody>
               <tr class="job-stats-row job-stats-row--clickable"
                   :class="{ 'job-stats-row--open': expandedJobType === row.type }"

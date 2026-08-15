@@ -92,9 +92,9 @@
                         x-text="t.revoked_at ? $app.t('admin.settings.api.status.revoked') : (t.expires_at && t.expires_at < new Date().toISOString() ? $app.t('admin.settings.api.status.expired') : $app.t('admin.settings.api.status.active'))"></span>
                 </td>
                 <td>
-                  <button type="button" x-show="!t.revoked_at" @click="$root.adminApiTokensRevoke(t.id)"
+                  <button type="button" x-show="!t.revoked_at" @click="adminApiTokensRevoke(t.id)"
                           x-text="$app.t('admin.settings.api.revokeButton')"></button>
-                  <button type="button" x-show="t.revoked_at" @click="$root.adminApiTokensDelete(t.id)"
+                  <button type="button" x-show="t.revoked_at" @click="adminApiTokensDelete(t.id)"
                           x-text="$app.t('admin.settings.api.deleteButton')"></button>
                 </td>
               </tr>

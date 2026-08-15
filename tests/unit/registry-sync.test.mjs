@@ -2,7 +2,7 @@
 //   1. FEATURES (public/js/cards/feature-registry.js, kind:'toggle')
 //   2. EXCLUSIVE_CARDS (same file)
 //   3. ALLOWED_KEYS (routes/usage.js — Tracking-Allowlist)
-//   4. Hash-Router-watchers + apply-Branch (public/js/app/app-hash-router.js)
+//   4. Hash-Router-watchers + apply-Branch (public/js/app/app-hash-router/)
 //   5. showXxxCard-Flags (public/js/app/app-state.js#cardsState)
 //
 // Fehlt eine neue Karte in (3), verwirft `/usage/track` 400 → keine Recency-
@@ -52,7 +52,17 @@ function parseCardsStateFlags() {
 
 // ── Hash-Router-watchers + apply-View-Cases parsen ──────────────────────────
 function parseHashRouterFlags() {
-  const src = read('public/js/app/app-hash-router.js');
+  // Der Router ist eine Facade ueber app-hash-router/ (build/apply/setup).
+  // Facade + alle Submodule zusammen lesen, damit der Test eine spaetere
+  // Umverteilung INNERHALB des Routers ueberlebt und nur dann rot wird, wenn
+  // das watchers-Array wirklich verschwindet.
+  const dir = 'public/js/app/app-hash-router';
+  const src = [
+    read('public/js/app/app-hash-router.js'),
+    ...fs.readdirSync(path.join(repo, dir))
+      .filter(f => f.endsWith('.js'))
+      .map(f => read(path.join(dir, f))),
+  ].join('\n');
   // watchers-Array in _setupHashRouting.
   const m = src.match(/const\s+watchers\s*=\s*\[([\s\S]*?)\]/);
   assert.ok(m, 'watchers-Array im Hash-Router gefunden');
