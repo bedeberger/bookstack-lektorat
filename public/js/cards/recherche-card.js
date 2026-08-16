@@ -10,6 +10,20 @@ import { EVT } from '../events.js';
 import { emptyDraft as _emptyDraft } from '../book/recherche/shared.js';
 import { rechercheInterviewMethods, rechercheInterviewState } from '../book/recherche/interview.js';
 
+// Filterleiste + Sortierung pro Buch im localStorage (siehe
+// public/js/filter-persist.js). `filterLinked` ist der aus Kategorie + Ziel
+// zusammengesetzte Query-Wert und wird mitgespeichert, weil `loadRecherche` ihn
+// als Query-Parameter schickt — die drei Felder werden immer zusammen gesetzt.
+// `resetRecherche` fasst diese Felder nicht mehr an; die Restaurierung laeuft
+// im Lifecycle VOR dem Nachladen, sonst holte der Buchwechsel die ungefilterte
+// Liste und der restaurierte Filter zeigte auf nichts.
+const RECHERCHE_FILTER_SCOPES = [
+  { scope: 'recherche', defaults: {
+    filterKind: '', filterTag: '', filterLinked: '', filterLinkedKind: '',
+    filterLinkedTargetId: '', filterText: '', sortBy: 'updated', showArchived: false,
+  } },
+];
+
 export function registerRechercheCard() {
   if (typeof window === 'undefined' || !window.Alpine) return;
   window.Alpine.data('rechercheCard', () => ({
@@ -124,6 +138,7 @@ export function registerRechercheCard() {
         showFlag: 'showRechercheCard',
         timerKeys: ['_suggestTimer', '_researchChatPollTimer', '_ivPollTimer'],
         resetState: { detailEditing: false, menuOpenId: null, linkPickerItemId: null, busy: false },
+        filterScopes: RECHERCHE_FILTER_SCOPES,
         load: () => this.loadRecherche(),
         extraListeners: [
           { type: 'recherche:filter-page', handler: (e) => this.filterToPage(e.detail?.pageId) },

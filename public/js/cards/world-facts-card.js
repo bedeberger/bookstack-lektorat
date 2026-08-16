@@ -28,6 +28,13 @@ const KAT_ICON = {
   ereignis:     'zap',
   sonstiges:    'more-horizontal',
 };
+// Filterleiste pro Buch im localStorage (siehe public/js/filter-persist.js).
+// `defaults` ist zugleich die SSoT der Feldliste — `wfFilters` gehört damit dem
+// Persistenz-Layer und wird in `resetState` nicht mehr mitgesetzt.
+const WF_FILTER_SCOPES = [
+  { scope: 'wfFilters', key: 'wfFilters', defaults: { suche: '', kategorie: '', seite: '' } },
+];
+
 const _katRank = new Map(KAT_ORDER.map((k, i) => [k, i]));
 function _normKat(k) {
   return _katRank.has(k) ? k : 'sonstiges';
@@ -49,7 +56,8 @@ export function registerWorldFactsCard() {
       this._lifecycle = setupCardLifecycle(this, {
         name: 'weltfakten',
         showFlag: 'showWorldFactsCard',
-        resetState: { fakten: [], wfUpdatedAt: null, wfLoading: false, wfFilters: { suche: '', kategorie: '', seite: '' }, wfOpenGroups: {} },
+        resetState: { fakten: [], wfUpdatedAt: null, wfLoading: false, wfOpenGroups: {} },
+        filterScopes: WF_FILTER_SCOPES,
         load: () => this.loadWorldFacts(),
       });
     },

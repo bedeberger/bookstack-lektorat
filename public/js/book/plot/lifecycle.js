@@ -123,7 +123,10 @@ export const lifecycleMethods = {
     this.anchorProgress = 0;
     this._pendingFocusBeatId = null;
     if (window.Alpine) window.Alpine.store('nav').plotBeatId = null;
-    this.plotFilters = { kapitel: '', figurId: '', draftFigurId: '', status: '', text: '' };
+    // `plotFilters` bewusst NICHT hier: die Filterleiste gehört dem
+    // Persistenz-Layer (PLOT_FILTER_SCOPES in plot-card.js), der sie beim
+    // Buchwechsel aus dem localStorage restauriert und bei `view:reset` auf
+    // Defaults setzt. Ein Reset hier gewänne gegen den restaurierten Stand.
     this.tensionFocusFigur = '';
     this.verworfenOpen = {};
     this.actColorPickerId = null;

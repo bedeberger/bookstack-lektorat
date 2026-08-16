@@ -4,21 +4,26 @@ import { computeTodayRing, computeWeekBars, computeWritingStreak } from '../../t
 import { EXCLUSIVE_CARDS, hiddenForBuchtyp, matchesRequiredBuchtyp } from '../../cards/feature-registry.js';
 import { contentRepo } from '../../repo/content.js';
 import { readDraft, clearDraft } from '../../editor/draft-storage.js';
-import { setLastPageId, getLastPageId, getFilters } from '../../local-prefs.js';
+import { setLastPageId, getLastPageId } from '../../local-prefs.js';
+import { resetFilterScopes, restoreFilterScopes } from '../../filter-persist.js';
 import { getDeviceId } from '../../device-id.js';
 import { EVT } from '../../events.js';
 
-// Karten-Scopes, deren Filter pro Buch im localStorage persistiert werden.
-// Defaults werden bei Buchwechsel angewandt; gespeicherte Werte überschreiben
-// jeweils nur die genannten Keys. SSoT für persist (app.js-Watcher),
-// restore (`_restoreBookPrefs`) und reset (`resetView`).
+// Filterleisten der Katalog-Karten. Sie leben in `Alpine.store('catalogUi')` und
+// werden pro Buch im localStorage gehalten — Mechanik, Spec-Form und die drei
+// Vorgaenge (restore/reset/persist) stehen in [public/js/filter-persist.js].
+// Hier ist die SSoT der Scopes: persist (`app-init.js`-Watcher), restore
+// (`_restoreBookPrefs`) und reset (`resetView`) lesen alle daraus.
+// Die Filterleisten der uebrigen Karten (Plot, Weltfakten, Recherche, Quellen,
+// Titel-Werkstatt) liegen im Karten-State und laufen ueber `filterScopes` in
+// `setupCardLifecycle` — gleiche Mechanik, anderer Host.
 export const FILTER_SCOPES = [
-  ['figurenFilters',      { kapitel: '', seite: '', suche: '' }],
-  ['ereignisseFilters',   { figurId: '', kapitel: '', seite: '', suche: '' }],
-  ['szenenFilters',       { wertung: '', figurId: '', kapitel: '', ortId: '', suche: '' }],
-  ['orteFilters',         { figurId: '', kapitel: '', szeneId: '', suche: '' }],
-  ['songsFilters',        { figurId: '', kapitel: '', szeneId: '', genre: '', kontextTyp: '', suche: '' }],
-  ['kontinuitaetFilters', { figurId: '', kapitel: '', schwere: '' }],
+  { scope: 'figurenFilters',      key: 'figurenFilters',      defaults: { kapitel: '', seite: '', suche: '' } },
+  { scope: 'ereignisseFilters',   key: 'ereignisseFilters',   defaults: { figurId: '', kapitel: '', seite: '', subtyp: '', suche: '' } },
+  { scope: 'szenenFilters',       key: 'szenenFilters',       defaults: { wertung: '', figurId: '', kapitel: '', ortId: '', suche: '' } },
+  { scope: 'orteFilters',         key: 'orteFilters',         defaults: { figurId: '', kapitel: '', szeneId: '', suche: '' } },
+  { scope: 'songsFilters',        key: 'songsFilters',        defaults: { figurId: '', kapitel: '', szeneId: '', genre: '', kontextTyp: '', suche: '' } },
+  { scope: 'kontinuitaetFilters', key: 'kontinuitaetFilters', defaults: { figurId: '', kapitel: '', schwere: '' } },
 ];
 
 // Kartenwechsel als sanfter Cross-Fade (View Transitions API). Progressive
@@ -114,4 +119,4 @@ for (const entry of EXCLUSIVE_CARDS) {
 // Reset-Logik beim Buch-/Seitenwechsel. Buchebenen-Features und Editor sind
 // gegenseitig exklusiv (siehe CLAUDE.md-Regel "Feature-Toggle").
 
-export { EVT, EXCLUSIVE_CARDS, clearDraft, computeTodayRing, computeWeekBars, computeWritingStreak, contentRepo, decorateMentions, escHtml, fetchJson, getDeviceId, getFilters, getLastPageId, htmlToText, readDraft, setLastPageId };
+export { EVT, EXCLUSIVE_CARDS, clearDraft, computeTodayRing, computeWeekBars, computeWritingStreak, contentRepo, decorateMentions, escHtml, fetchJson, getDeviceId, getLastPageId, htmlToText, readDraft, resetFilterScopes, restoreFilterScopes, setLastPageId };

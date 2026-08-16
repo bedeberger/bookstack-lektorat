@@ -9,6 +9,14 @@ import { titelwerkstattMethods } from '../book/titelwerkstatt.js';
 import { setupCardLifecycle } from './card-lifecycle.js';
 import { HEADLINE_FIELDS } from '../headline/channels.js';
 
+// Filterleiste pro Buch im localStorage (siehe public/js/filter-persist.js).
+// Die beiden Felder stehen weiterhin in `freshState()` (Regel „State explizit
+// deklariert"), werden von `setupCardLifecycle` aber aus dem Reset-Payload
+// gestrichen — sonst gewänne der Default gegen den restaurierten Stand.
+const TW_FILTER_SCOPES = [
+  { scope: 'titelwerkstatt', defaults: { twFilterSuche: '', twFilterKapitel: '' } },
+];
+
 // Buch-skopierter State — Factory, damit `book:changed` und `view:reset` nicht
 // dieselben Objekt-Referenzen weiterreichen.
 const freshState = () => ({
@@ -51,6 +59,7 @@ export function registerTitelwerkstattCard() {
         showFlag: 'showTitelwerkstattCard',
         timerKeys: ['_twPollTimer'],
         resetState: freshState,
+        filterScopes: TW_FILTER_SCOPES,
         onShow: async () => { await this.loadTitelwerkstatt(); },
         onCardRefresh: async (e, ctx) => { await ctx.loadTitelwerkstatt(); },
         extraListeners: [

@@ -93,14 +93,11 @@ export const rechercheBoardMethods = {
     this.closeCreate();
     this._pendingFocusItemId = null;
     if (window.Alpine) window.Alpine.store('nav').rechercheItemId = null;
-    this.filterKind = '';
-    this.filterTag = '';
-    this.filterLinked = '';
-    this.filterLinkedKind = '';
-    this.filterLinkedTargetId = '';
-    this.filterText = '';
-    this.sortBy = 'updated';
-    this.showArchived = false;
+    // Filterleiste + Sortierung bewusst NICHT hier: sie gehören dem
+    // Persistenz-Layer (RECHERCHE_FILTER_SCOPES in recherche-card.js), der sie
+    // beim Buchwechsel aus dem localStorage restauriert — vor dem Nachladen.
+    // Ein Reset hier gewänne gegen den restaurierten Stand. Den ausdrücklichen
+    // Weg „alles zurücksetzen" gibt es weiter über `clearFilters()`.
     this.menuOpenId = null;
     this.linkPickerItemId = null;
     this.suggestions = {};

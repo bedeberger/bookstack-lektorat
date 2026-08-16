@@ -8,6 +8,15 @@ import { setupCardLifecycle } from './card-lifecycle.js';
 import { attachFullscreenSync } from '../fullscreen.js';
 import { loadSortable } from '../lazy-libs.js';
 import { EVT } from '../events.js';
+import { getUserPref, setUserPref } from '../local-prefs.js';
+
+const HIDE_IM_BUCH_PREF_KEY = 'plotHideImBuch';
+
+// Filterleiste pro Buch im localStorage (siehe public/js/filter-persist.js).
+// `resetPlot` (book/plot/lifecycle.js) fasst `plotFilters` deshalb nicht an.
+const PLOT_FILTER_SCOPES = [
+  { scope: 'plotFilters', key: 'plotFilters', defaults: { kapitel: '', figurId: '', draftFigurId: '', status: '', text: '' } },
+];
 
 export function registerPlotCard() {
   if (typeof window === 'undefined' || !window.Alpine) return;
@@ -56,6 +65,14 @@ export function registerPlotCard() {
     // die Beats pro Akt-Spalte rein fürs Rendering (beatsForAct bleibt ungefiltert
     // für Drag&Drop + Order-Persistenz).
     plotFilters: { kapitel: '', figurId: '', draftFigurId: '', status: '', text: '' },
+
+    // Umgesetzte Beats („im Buch") ausblenden — Arbeitsmodus „zeig mir nur, was
+    // noch offen ist". Bewusst NEBEN plotFilters und NICHT in PLOT_FILTER_SCOPES:
+    // das ist eine per User persistierte Gewohnheit, keine buch-skopierte
+    // Filterauswahl. Im Scope läge sie pro Buch und `view:reset` würde sie über
+    // `resetFilterScopes` abräumen; ebenso weist die Cross-Feature-Landung
+    // applyDraftFigureFilter plotFilters komplett neu zu.
+    plotHideImBuch: false,
 
     // Beat-Edit / -Add
     editingBeatId: null,
@@ -167,6 +184,20 @@ export function registerPlotCard() {
     _lifecycle: null,
 
     init() {
+      // „im Buch ausblenden" ist eine Arbeitsgewohnheit, kein Buch-Datum —
+      // darum User-Pref (buch-unabhängig), nicht FILTER_SCOPES (die tragen
+      // buch-skopierte Filter aus $store.catalogUi; plotFilters lebt hier in
+      // der Karte). Muster wie bookStatsMetric.
+      const email = Alpine.store('session').currentUser?.email;
+      this.plotHideImBuch = getUserPref(email, HIDE_IM_BUCH_PREF_KEY, false) === true;
+      this.$watch('plotHideImBuch', (v) => {
+        setUserPref(Alpine.store('session').currentUser?.email, HIDE_IM_BUCH_PREF_KEY, v);
+        // Widerspruchsfreie Leiste: „nur im Buch" + „im Buch ausblenden" ergäbe
+        // eine garantiert leere Sackgasse. Die Status-Combobox blendet die
+        // Option aus (plot.html), hier fällt die schon getroffene Wahl weg.
+        if (v && this.plotFilters.status === 'im_buch') this.plotFilters.status = '';
+      });
+
       this._lifecycle = setupCardLifecycle(this, {
         name: 'plot',
         showFlag: 'showPlotCard',
@@ -176,6 +207,7 @@ export function registerPlotCard() {
         // Sortable vor dem ersten Board-Render laden — _reattachSortables (via
         // loadBoard / $watch) bindet die Beat-Zellen, sobald window.Sortable da ist.
         onShow: async () => { await loadSortable(); await this.loadBoard(); },
+        filterScopes: PLOT_FILTER_SCOPES,
         onBookChanged: () => {
           this._destroySortables();
           this.resetPlot();

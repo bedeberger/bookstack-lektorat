@@ -4,7 +4,7 @@
 // gespreadeten Methoden/Getter/State-Felder ganz normal.
 import { fetchJson, configureTokenEstimate, configureAppTimezone } from '../utils.js';
 import { configurePrompts } from '../prompts.js';
-import { setFilters } from '../local-prefs.js';
+import { watchFilterScopes } from '../filter-persist.js';
 import { configureI18n, getSupportedLocales } from '../i18n.js';
 import { setupSpellcheckDispatch } from '../cards/editor-spellcheck/dispatch.js';
 import { FILTER_SCOPES } from './app-view.js';
@@ -282,15 +282,13 @@ export const appInitMethods = {
       // in `_resetBookScopedState`/`_restoreBookPrefs`; initialer Restore
       // im Hash-Router (isInitialApply-Branch), bevor View-Argumente Filter
       // setzen.
-      for (const [key] of FILTER_SCOPES) {
-        // Filter leben in Alpine.store('catalogUi') → Getter-Watch statt
-        // String-Pfad. Alpine.watch JSON.stringifyt den Getter-Wert → deep,
-        // also feuert es auch bei verschachtelten Filter-Mutationen.
-        this.$watch(() => this.$store.catalogUi[key], (val) => {
-          if (!this.$store.nav.selectedBookId) return;
-          setFilters(this.$store.session.currentUser?.email, this.$store.nav.selectedBookId, key, val);
-        });
-      }
+      // Filter leben in Alpine.store('catalogUi') → Getter-Watch statt
+      // String-Pfad. Alpine.watch JSON.stringifyt den Getter-Wert → deep,
+      // also feuert es auch bei verschachtelten Filter-Mutationen.
+      watchFilterScopes(this, () => this.$store.catalogUi, FILTER_SCOPES, {
+        email: () => this.$store.session.currentUser?.email,
+        bookId: () => this.$store.nav.selectedBookId,
+      });
 
       this.$watch('entityPanelOpen', (val) => {
         try { localStorage.setItem('sw:entityPanelOpen', val ? '1' : '0'); } catch (_) {}

@@ -1,5 +1,5 @@
 // Teil von appViewMethods (siehe Facade app-view.js).
-import { EVT, EXCLUSIVE_CARDS, FILTER_SCOPES, computeTodayRing, computeWeekBars, computeWritingStreak, fetchJson, getFilters } from './_shared.js';
+import { EVT, EXCLUSIVE_CARDS, FILTER_SCOPES, computeTodayRing, computeWeekBars, computeWritingStreak, fetchJson, resetFilterScopes, restoreFilterScopes } from './_shared.js';
 
 export const bookscopeMethods = {
 
@@ -112,17 +112,7 @@ export const bookscopeMethods = {
   // gespeicherte Werte aus localStorage. Wird bei Buchwechsel und beim
   // initialen Bootstrap aufgerufen.
   _restoreBookPrefs(bookId) {
-    const email = this.$store.session.currentUser?.email;
-    for (const [stateKey, defaults] of FILTER_SCOPES) {
-      const target = this.$store.catalogUi[stateKey];
-      if (!target) continue;
-      const saved = bookId ? getFilters(email, bookId, stateKey) : null;
-      for (const k of Object.keys(defaults)) {
-        target[k] = (saved && Object.prototype.hasOwnProperty.call(saved, k))
-          ? saved[k]
-          : defaults[k];
-      }
-    }
+    restoreFilterScopes(this.$store.catalogUi, FILTER_SCOPES, this.$store.session.currentUser?.email, bookId);
   },
 
 
@@ -218,11 +208,7 @@ export const bookscopeMethods = {
     this.$store.catalogUi.selectedSongId = null;
     // Filter-Reset einheitlich über FILTER_SCOPES — deckt auch `suche`-Keys
     // ab, die früher nur teilweise gesetzt wurden (drift-freie SSoT).
-    for (const [stateKey, defaults] of FILTER_SCOPES) {
-      const target = this.$store.catalogUi[stateKey];
-      if (!target) continue;
-      for (const k of Object.keys(defaults)) target[k] = defaults[k];
-    }
+    resetFilterScopes(this.$store.catalogUi, FILTER_SCOPES);
     // Einen aktiv laufenden Komplett-Job NICHT abwürgen: Poller + Live-Progress
     // stehen lassen, sonst friert der Fortschrittsring bei 0 % ein und das
     // Job-Ende wird oben rechts nie sichtbar (nur der globale Queue-Poll bliebe

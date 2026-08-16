@@ -113,10 +113,18 @@
          x-modelable="value" x-model="plotFilters.kapitel"
          x-effect="options = plotKapitelListe().map(k => ({value: k, label: k}))">
     </div>
+    <!-- „im Buch" fällt aus den Status-Optionen, solange der Ausblend-Schalter
+         steht — die Kombination beider wäre eine garantiert leere Auswahl. -->
     <div x-data="catalogFilter('status')"
          x-modelable="value" x-model="plotFilters.status"
-         x-effect="options = statusList().map(s => ({value: s, label: $app.t('plot.status.' + s)}))">
+         x-effect="options = statusList().filter(s => !(plotHideImBuch && s === 'im_buch')).map(s => ({value: s, label: $app.t('plot.status.' + s)}))">
     </div>
+    <!-- Arbeitsmodus „nur was noch offen ist". Persistiert per User (localStorage),
+         darum ausserhalb von plotFilters — siehe plot-card.js. -->
+    <label class="filter-toggle">
+      <input type="checkbox" x-model="plotHideImBuch">
+      <span x-text="$app.t('plot.filter.hideImBuch')"></span>
+    </label>
     <span class="filter-count" x-text="filteredBeatCount() + ' / ' + beats.length"></span>
   </div>
 

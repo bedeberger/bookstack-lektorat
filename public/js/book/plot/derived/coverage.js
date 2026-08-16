@@ -155,7 +155,11 @@ export const coverageMethods = {
     return c.total > 0 && (c.developedNoPlot.length > 0 || c.inPlotNoArc.length > 0);
   },
 
-  // ── Filter (Volltext / Kapitel / Figur) ─────────────────────────────────────
+  // ── Filter (Volltext / Kapitel / Figur / Status) ────────────────────────────
+  // Zwei Achsen mit unterschiedlicher Reichweite: plotFilters ist die Auswahl
+  // FÜR DIESES BUCH (pro Buch im localStorage, PLOT_FILTER_SCOPES in
+  // plot-card.js; applyDraftFigureFilter weist sie komplett neu zu),
+  // plotHideImBuch die Arbeitsgewohnheit ÜBER ALLE BÜCHER (sw:userpref:).
   // Kapitel-Optionen aus den Beats ableiten (buchgeordnet via Root-Helper),
   // damit nur Kapitel angeboten werden, die im Board überhaupt vorkommen.
   plotKapitelListe() {
@@ -164,7 +168,7 @@ export const coverageMethods = {
 
   plotFilterActive() {
     const f = this.plotFilters;
-    return !!(f.kapitel || f.figurId || f.draftFigurId || f.status || (f.text || '').trim());
+    return !!(f.kapitel || f.figurId || f.draftFigurId || f.status || this.plotHideImBuch || (f.text || '').trim());
   },
 
   // Beteiligt ein Beat die Katalog-Figur figId — explizit verlinkt ODER implizit
@@ -189,6 +193,7 @@ export const coverageMethods = {
     // Strangs), damit der Filter dieselbe Beat-Menge trifft wie das Plot-Badge.
     return (!txt || (b.titel || '').toLowerCase().includes(txt) || (b.beschreibung || '').toLowerCase().includes(txt)) &&
            (!f.kapitel || this.effectiveChapterNameForBeat(b) === f.kapitel) &&
+           (!this.plotHideImBuch || b.status !== 'im_buch') &&
            (!f.status || b.status === f.status) &&
            (!f.figurId || this._beatInvolvesCatalog(b, f.figurId)) &&
            (!f.draftFigurId || this._beatInvolvesDraft(b, f.draftFigurId));
@@ -209,13 +214,13 @@ export const coverageMethods = {
     const f = this.plotFilters;
     const base = this.beatsForAct(actId);
     if (!this.plotFilterActive()) return base;
-    return this._memo(`fbeats:${actId}`, [base, this.threads, f.kapitel, f.figurId, f.draftFigurId, f.status, f.text], () =>
+    return this._memo(`fbeats:${actId}`, [base, this.threads, f.kapitel, f.figurId, f.draftFigurId, f.status, f.text, this.plotHideImBuch], () =>
       base.filter(b => this._beatMatchesFilter(b)));
   },
 
   filteredBeatCount() {
     const f = this.plotFilters;
-    return this._memo('fcount', [this.beats, this.threads, f.kapitel, f.figurId, f.draftFigurId, f.status, f.text], () =>
+    return this._memo('fcount', [this.beats, this.threads, f.kapitel, f.figurId, f.draftFigurId, f.status, f.text, this.plotHideImBuch], () =>
       (this.beats || []).filter(b => this._beatMatchesFilter(b)).length);
   },
 
@@ -227,7 +232,7 @@ export const coverageMethods = {
     const base = this.beatsForCell(actId, threadId);
     if (!this.plotFilterActive()) return base;
     const tid = threadId == null ? null : threadId;
-    return this._memo(`fcell:${actId}:${tid}`, [base, this.threads, f.kapitel, f.figurId, f.draftFigurId, f.status, f.text], () =>
+    return this._memo(`fcell:${actId}:${tid}`, [base, this.threads, f.kapitel, f.figurId, f.draftFigurId, f.status, f.text, this.plotHideImBuch], () =>
       base.filter(b => this._beatMatchesFilter(b)));
   },
 };

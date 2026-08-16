@@ -18,6 +18,14 @@ import { sourcesDocMethods } from '../sources/doc.js';
 import { sourcesDetectMethods } from '../sources/detect.js';
 import { draftFromSource } from '../sources/fields.js';
 
+// Filterleiste pro Buch im localStorage (siehe public/js/filter-persist.js).
+// Bewusst NUR die Filterleiste: `srcPoolFilter` (Bibliotheks-Picker) und
+// `srcLibQuery` (semantische Suche) sind Eingaben eines offenen Panels, kein
+// Blick auf die Liste — sie sollen beim naechsten Oeffnen leer sein.
+const SRC_FILTER_SCOPES = [
+  { scope: 'sources', defaults: { srcFilterText: '', srcFilterType: '', srcShowArchived: false } },
+];
+
 export function registerSourcesCard() {
   if (typeof window === 'undefined' || !window.Alpine) return;
   window.Alpine.data('sourcesCard', () => ({
@@ -115,6 +123,7 @@ export function registerSourcesCard() {
         // Buchwechsel/View-Reset stoppen den Index-Poll mit — sonst tickt er
         // gegen ein Formular weiter, das es nicht mehr gibt.
         timerKeys: ['_srcIndexTimer'],
+        filterScopes: SRC_FILTER_SCOPES,
         load: () => this.loadSources(),
         extraListeners: [
           // Permalink #book/X/quellen/<sourceId>: der Hash-Router dispatcht das
@@ -133,9 +142,6 @@ export function registerSourcesCard() {
           sourcesBusy: false,
           sourcesError: '',
           sourcesNotice: '',
-          srcFilterText: '',
-          srcFilterType: '',
-          srcShowArchived: false,
           srcEditingId: null,
           srcDraft: draftFromSource(null),
           srcFormError: '',

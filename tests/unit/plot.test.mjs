@@ -722,10 +722,10 @@ test('plot prompts: System-Prompt verbietet Fliesstext + erzwingt JSON (Claude-M
 const { plotMethods } = await import('../../public/js/book/plot.js');
 
 // Minimaler Karten-Kontext: plotMethods auf ein Plain-Object gemappt, `this`=ctx.
-function makeCtx({ beats = [], acts = [], threads = [], verworfenOpen = {}, plotFilters } = {}) {
+function makeCtx({ beats = [], acts = [], threads = [], verworfenOpen = {}, plotFilters, plotHideImBuch = false } = {}) {
   return Object.assign(
     {
-      _memos: {}, beats, acts, threads, verworfenOpen,
+      _memos: {}, beats, acts, threads, verworfenOpen, plotHideImBuch,
       plotFilters: plotFilters || { kapitel: '', figurId: '', draftFigurId: '', status: '', text: '' },
     },
     plotMethods,
@@ -838,4 +838,62 @@ test('plotMethods._beatMatchesFilter: Kapitel-Filter trifft auch geerbte Kapitel
   assert.equal(ctx._beatMatchesFilter(beats[0]), true);
   ctx.plotFilters.kapitel = 'Kap 6';
   assert.equal(ctx._beatMatchesFilter(beats[0]), false);
+});
+
+// Ausblend-Schalter „im Buch" (plotHideImBuch) — eigene Achse neben plotFilters.
+test('plotMethods: plotHideImBuch blendet umgesetzte Beats aus', () => {
+  const beats = [
+    { id: 1, act_id: 1, status: 'geplant', fig_ids: [], draft_fig_ids: [] },
+    { id: 2, act_id: 1, status: 'im_buch', fig_ids: [], draft_fig_ids: [] },
+  ];
+  const off = makeCtx({ beats });
+  assert.equal(off._beatMatchesFilter(beats[1]), true);   // aus: im_buch bleibt sichtbar
+
+  const on = makeCtx({ beats, plotHideImBuch: true });
+  assert.equal(on._beatMatchesFilter(beats[0]), true);    // geplant bleibt
+  assert.equal(on._beatMatchesFilter(beats[1]), false);   // im_buch faellt weg
+});
+
+// Die Falle: ohne Eintrag in plotFilterActive() reicht filteredBeatsForAct den
+// ungefilterten Array durch, sobald sonst kein Filter steht — der Schalter waere
+// als einziger aktiver Filter wirkungslos.
+test('plotMethods: plotHideImBuch allein zaehlt als aktiver Filter und greift im Render-Pfad', () => {
+  const beats = [
+    { id: 1, act_id: 1, position: 0, status: 'geplant', fig_ids: [], draft_fig_ids: [] },
+    { id: 2, act_id: 1, position: 1, status: 'im_buch', fig_ids: [], draft_fig_ids: [] },
+  ];
+  const off = makeCtx({ beats });
+  assert.equal(off.plotFilterActive(), false);
+  assert.equal(off.filteredBeatsForAct(1).length, 2);
+  assert.equal(off.filteredBeatCount(), 2);
+
+  const on = makeCtx({ beats, plotHideImBuch: true });
+  assert.equal(on.plotFilterActive(), true);
+  assert.deepEqual(on.filteredBeatsForAct(1).map(b => b.id), [1]);
+  assert.equal(on.filteredBeatCount(), 1);
+  assert.deepEqual(on.filteredBeatsForCell(1, null).map(b => b.id), [1]);
+});
+
+// Memo-Deps: derselbe Kontext muss auf das Umlegen des Schalters reagieren —
+// fehlt plotHideImBuch in den Deps-Arrays, friert das erste Ergebnis ein.
+// WICHTIG: ein zweiter Filter (hier Volltext, trifft beide Beats) muss aktiv
+// BLEIBEN. Sonst faellt plotFilterActive() beim Ausschalten auf false, und
+// filteredBeatsForAct reicht den ungefilterten Array am Memo VORBEI durch —
+// der Test wuerde dann gruen bleiben, auch ohne die Dep.
+test('plotMethods: Umlegen von plotHideImBuch invalidiert die Memos', () => {
+  const beats = [
+    { id: 1, act_id: 1, position: 0, titel: 'Beat eins', status: 'geplant', fig_ids: [], draft_fig_ids: [] },
+    { id: 2, act_id: 1, position: 1, titel: 'Beat zwei', status: 'im_buch', fig_ids: [], draft_fig_ids: [] },
+  ];
+  const filters = { kapitel: '', figurId: '', draftFigurId: '', status: '', text: 'beat' };
+  const ctx = makeCtx({ beats, plotFilters: filters, plotHideImBuch: true });
+  assert.deepEqual(ctx.filteredBeatsForAct(1).map(b => b.id), [1]);
+  assert.deepEqual(ctx.filteredBeatsForCell(1, null).map(b => b.id), [1]);
+  assert.equal(ctx.filteredBeatCount(), 1);
+
+  ctx.plotHideImBuch = false;
+  assert.equal(ctx.plotFilterActive(), true); // Volltext haelt den Memo-Pfad aktiv
+  assert.deepEqual(ctx.filteredBeatsForAct(1).map(b => b.id), [1, 2]);
+  assert.deepEqual(ctx.filteredBeatsForCell(1, null).map(b => b.id), [1, 2]);
+  assert.equal(ctx.filteredBeatCount(), 2);
 });

@@ -1026,6 +1026,7 @@
   "plot.beat.intensitaetTip": "Tension 1–5 — click again to clear",
   "plot.beat.konfliktBadge": "Consistency finding — jump to check",
   "plot.filter.searchPlaceholder": "Search beats …",
+  "plot.filter.hideImBuch": "Hide “in book”",
   "plot.coverage.title": "Chapter coverage",
   "plot.coverage.uncovered": "{n} chapters without a beat",
   "plot.coverage.noChapter": "{n} beats without a chapter",

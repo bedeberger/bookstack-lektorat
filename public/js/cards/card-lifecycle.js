@@ -1,4 +1,5 @@
 import { EVT } from '../events.js';
+import { ownedFilterKeys, resetFilterScopes, restoreFilterScopes, watchFilterScopes } from '../filter-persist.js';
 // Shared lifecycle helper for Buch-scoped Karten.
 //
 // Most Cards duplicate the same Pattern: clear timers + reset Meta-Flags on
@@ -30,6 +31,18 @@ import { EVT } from '../events.js';
 //   refreshNeedsBookId       — default true; set false if cfg.load checks itself
 //   showNeedsBookId          — default true; set false to call onShow without book
 //   extraListeners           — [{ type, handler(e) }] auto-attached + auto-removed
+//   filterScopes             — [{ scope, key?, defaults }] (siehe filter-persist.js):
+//                              Filterleisten dieser Karte, pro Buch im
+//                              localStorage. Der Helper restauriert sie beim
+//                              Mount und bei `book:changed` (VOR cfg.load, damit
+//                              server-seitig filternde Karten gleich richtig
+//                              laden), setzt sie bei `view:reset` auf Defaults
+//                              und schreibt jede Mutation zurueck. Die Karte
+//                              fasst diese Felder in ihren eigenen Reset-Pfaden
+//                              NICHT an — `resetState` wird um sie bereinigt,
+//                              eigene Reset-Methoden duerfen sie nicht setzen
+//                              (sonst gewinnt der Default gegen den
+//                              restaurierten Stand).
 //
 // Lifecycle returns { signal, destroy } — signal is the AbortController signal
 // used internally; cards can attach their own listeners with `{ signal }` to get
@@ -49,12 +62,23 @@ export function setupCardLifecycle(ctx, cfg) {
   // (`saveQueue.push`, `drafts[id] = …`): ein einmalig gebautes Literal teilt
   // seine Referenzen mit dem Live-State und schleppt beim nächsten Reset die
   // Mutationen des letzten Buchs wieder ein.
+  // Felder, die die Filter-Persistenz besitzt: aus dem Reset-Payload streichen,
+  // damit ein Karten-Reset den restaurierten Filterstand nicht ueberschreibt.
+  // Die Karte darf sie weiter in ihrem Initial-State deklarieren (Regel „State
+  // explizit deklariert") — nur zurueckgesetzt werden sie hier nicht mehr.
+  const filterSpecs = cfg.filterScopes || [];
+  const filterKeys = ownedFilterKeys(filterSpecs);
   const applyReset = (which) => {
     const src = which === 'view' && cfg.resetStateView
       ? cfg.resetStateView
       : cfg.resetState;
-    const state = typeof src === 'function' ? src() : src;
-    if (state) Object.assign(ctx, state);
+    let state = typeof src === 'function' ? src() : src;
+    if (!state) return;
+    if (filterKeys.size) {
+      state = { ...state };
+      for (const k of filterKeys) delete state[k];
+    }
+    Object.assign(ctx, state);
   };
 
   if (cfg.showFlag && (cfg.load || cfg.onShow)) {
@@ -90,6 +114,23 @@ export function setupCardLifecycle(ctx, cfg) {
     if (cfg.onCardRefresh) cfg.onCardRefresh(e, ctx, root());
     else if (cfg.load) cfg.load(root());
   };
+
+  // Filter-Persistenz VOR den Karten-Handlern anhaengen: Listener feuern in
+  // Registrierungsreihenfolge, und eine Karte, die im `book:changed`-Handler
+  // gleich nachlaedt (Recherche filtert serverseitig), muss den restaurierten
+  // Stand schon sehen.
+  if (filterSpecs.length) {
+    const email = () => Alpine.store('session').currentUser?.email;
+    const bookId = () => Alpine.store('nav').selectedBookId;
+    restoreFilterScopes(ctx, filterSpecs, email(), bookId());
+    window.addEventListener(EVT.BOOK_CHANGED, () => {
+      restoreFilterScopes(ctx, filterSpecs, email(), bookId());
+    }, { signal });
+    window.addEventListener(EVT.VIEW_RESET, () => {
+      resetFilterScopes(ctx, filterSpecs);
+    }, { signal });
+    watchFilterScopes(ctx, ctx, filterSpecs, { email, bookId });
+  }
 
   window.addEventListener(EVT.BOOK_CHANGED, onBookChanged, { signal });
   window.addEventListener(EVT.VIEW_RESET, onViewReset, { signal });

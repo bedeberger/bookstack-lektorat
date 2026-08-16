@@ -1026,6 +1026,7 @@
   "plot.beat.intensitaetTip": "Spannung 1–5, erneut klicken zum Zurücksetzen",
   "plot.beat.konfliktBadge": "Konsistenz-Befund, zur Prüfung springen",
   "plot.filter.searchPlaceholder": "Handlungsbögen durchsuchen …",
+  "plot.filter.hideImBuch": "„im Buch“ ausblenden",
   "plot.coverage.title": "Kapitel-Abdeckung",
   "plot.coverage.uncovered": "{n} Kapitel ohne Handlungsbogen",
   "plot.coverage.noChapter": "{n} Handlungsbögen ohne Kapitel",
