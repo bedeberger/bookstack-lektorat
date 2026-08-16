@@ -372,6 +372,17 @@ const staticServe = express.static(path.join(__dirname, 'public'), {
   etag: true,
   lastModified: true,
   setHeaders(res, filePath) {
+    // Positiv-Marker der SPA-Shell fuer den Service Worker. Er ist noetig, weil
+    // `GET /` unter EINER URL zwei verschiedene Dokumente liefert: eingeloggt
+    // die Shell (dieses index.html), anonym die Landing-Seite (routes/public.js)
+    // — beide mit 200. Ein URL-Cache kann die zwei nicht auseinanderhalten;
+    // ohne Marker legt der SW bei abgelaufener Session die Landing-Seite als
+    // Shell ab und bedient sie danach cache-only weiter (nur Hard-Refresh
+    // kommt daran vorbei). Der SW cacht und serviert `/` nur mit diesem Header,
+    // siehe public/sw.js#isShellResponse.
+    if (/(?:^|[\\/])index\.html$/i.test(filePath)) {
+      res.setHeader('X-App-Shell', '1');
+    }
     // sw.js darf nie HTTP-gecached werden, sonst frieren Clients auf alter
     // Service-Worker-Version fest und sehen Asset-Updates nicht.
     if (/(?:^|[\\/])sw\.js$/i.test(filePath)) {

@@ -1,7 +1,10 @@
 // Service Worker: hält die SPA-Shell und Buch-Inhalte offline verfügbar (Zug-Szenario).
 // Strategie:
 //  - Navigate (/, /index.html): Cache-Only innerhalb der Generation, Netz nur
-//    bei kaltem Cache. Der Shell-HTML gehört zum kohärenz-kritischen Satz (s.u.)
+//    ohne verifizierten Shell-Eintrag. Verifiziert heisst: die Antwort trägt den
+//    Marker `X-App-Shell` (server.js) — `GET /` liefert anonym die Landing-Seite
+//    unter derselben URL, ebenfalls mit 200, und die darf nie als Shell gelten.
+//    Der Shell-HTML gehört zum kohärenz-kritischen Satz (s.u.)
 //    und wird beim Install mitgecacht. Bewusst KEIN Stale-While-Revalidate —
 //    eine Revalidierung schriebe nach einem Deploy das HTML der neuen Generation
 //    in den Cache des noch aktiven alten SW und erzeugte damit „neues Markup
@@ -93,20 +96,70 @@ function isNeverCache(url) {
   return NEVER_CACHE_PREFIXES.some(p => url.pathname === p || url.pathname.startsWith(p + '/'));
 }
 
-// Atomarer Precache mit Backoff-Retry. `cache.addAll` ist all-or-nothing: ein
-// einziger fehlgeschlagener von ~480 Requests rejectet den ganzen Satz und
-// committet nichts (kein halb gefüllter Cache). Genau im schlechten Netz (= das
-// Zielszenario) reicht ein transienter Fehler, um ein Update nie zu installieren.
-// Darum mehrere Versuche mit wachsender Pause; bleibt es nach `attempts` beim
-// Fehler, propagiert der letzte Error und der Install scheitert sauber — der alte
-// SW bedient seinen eigenen, kohärenten Satz unverändert weiter.
+// Positiv-Marker der SPA-Shell (server.js setzt ihn auf index.html). Er ist
+// nötig, weil `GET /` unter EINER URL zwei Dokumente liefert: eingeloggt die
+// Shell, anonym die Landing-Seite (routes/public.js) — beide mit 200, ohne
+// Redirect. `ok`/`opaqueredirect` allein unterscheidet sie also nicht.
+const SHELL_MARKER = 'X-App-Shell';
+
+// Gilt für Netz- UND Cache-Antworten: nur eine so markierte Antwort darf als
+// SPA-Shell abgelegt werden.
+function isShellResponse(res) {
+  return !!res && res.ok && res.type !== 'opaqueredirect' && res.headers.get(SHELL_MARKER) === '1';
+}
+
+// Alpine-Wurzel der SPA (public/index.html). Dient als Rückfall-Erkennung für
+// Cache-Einträge aus einer Generation VOR dem Marker: die sind echte Shells,
+// tragen den Header aber noch nicht. Sie am Inhalt zu erkennen ist Pflicht —
+// sie stattdessen durch die Netzkopie zu ersetzen wäre nach einem Deploy das
+// HTML der NEUEN Generation gegen die alten Module dieser hier (genau der Skew,
+// den der cache-only-Satz verhindert). Landing- und Login-Seite enthalten den
+// String nicht; Drift ist in tests/unit/sw-shell-coherence.test.mjs gegated.
+const SHELL_BODY_MARKER = 'x-data="lektorat"';
+
+// Darf dieser Cache-Eintrag als SPA-Shell ausgeliefert werden? Markierte
+// Einträge (Regelfall) ohne Body-Lesen; erst der unmarkierte Altbestand kostet
+// einen Textvergleich.
+async function isCachedShell(res) {
+  if (!res) return false;
+  if (isShellResponse(res)) return true;
+  try { return (await res.clone().text()).includes(SHELL_BODY_MARKER); }
+  catch { return false; }
+}
+
+// Precache mit Backoff-Retry, faktisch all-or-nothing: erst wenn ALLE Antworten
+// da und ok sind, wird geschrieben (kein halb gefüllter Cache). Genau im
+// schlechten Netz (= das Zielszenario) reicht sonst ein transienter Fehler, um
+// ein Update nie zu installieren — darum mehrere Versuche mit wachsender Pause.
+// Bleibt es nach `attempts` beim Fehler, propagiert der letzte Error und der
+// Install scheitert sauber; der alte SW bedient seinen eigenen, kohärenten Satz
+// unverändert weiter.
+//
+// Bewusst NICHT `cache.addAll`: das folgt einem Redirect und legt die Antwort
+// unter der ANGEFRAGTEN URL ab. Partials laufen ohne Session in den Auth-Guard
+// (302 → /login), und Chromium lehnt umgeleitete Antworten hier nicht ab — die
+// Login-Seite landete so unter jedem Partial-Pfad. Weil Shell-Assets cache-only
+// ausgeliefert werden, bliebe die Generation dauerhaft kaputt. `redirect:'error'`
+// lässt den Fetch stattdessen scheitern: fällt die Session während des Installs
+// aus, schlägt er fehl, statt Müll zu committen.
 async function precacheWithRetry(cache, paths, attempts = 3) {
   let lastErr;
   for (let i = 0; i < attempts; i++) {
+    // Beim ersten Fehlschlag die übrigen Requests dieses Versuchs abbrechen:
+    // ohne das laufen ~800 bereits gestartete Fetches weiter und der nächste
+    // Versuch legt seine ~800 obendrauf — bei fehlender Session (jeder Pfad
+    // scheitert) dauert ein Install so Minuten statt Sekunden.
+    const ctrl = new AbortController();
     try {
-      await cache.addAll(paths.map(p => new Request(p, { cache: 'reload' })));
+      const fetched = await Promise.all(paths.map(async (p) => {
+        const res = await fetch(new Request(p, { cache: 'reload', redirect: 'error', signal: ctrl.signal }));
+        if (!res || !res.ok) throw new Error(`Precache ${p}: HTTP ${res && res.status}`);
+        return [p, res];
+      }));
+      await Promise.all(fetched.map(([p, res]) => cache.put(p, res)));
       return;
     } catch (err) {
+      ctrl.abort();
       lastErr = err;
       if (i < attempts - 1) await new Promise(r => setTimeout(r, 500 * (i + 1)));
     }
@@ -117,26 +170,29 @@ async function precacheWithRetry(cache, paths, attempts = 3) {
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(SHELL_CACHE);
+    // ZUERST die Shell holen — ihre Antwort sagt autoritativ, ob diese Generation
+    // überhaupt installierbar ist. Ohne gültige Session antwortet `/` mit der
+    // Landing-Seite (200, kein Marker) und jedes auth-pflichtige Partial mit
+    // einem Redirect auf /login; der Precache liefe dann in Müll. Ein Request
+    // klärt das, statt erst ~700 öffentliche Assets zu laden und beim ersten
+    // Partial aufzulaufen (die stehen alphabetisch hinter /css und /js).
+    const shellRes = await fetch(new Request('/', { cache: 'reload' }));
+    if (!isShellResponse(shellRes)) {
+      throw new Error('Install abgebrochen: `/` liefert keine SPA-Shell (Session abgelaufen?).');
+    }
     // Den VOLLSTÄNDIGEN kohärenz-kritischen Asset-Satz dieser Generation ATOMAR
     // vorcachen: App-JS + Partials + App-CSS + i18n + Icon-Sprite. So zieht zur
     // Laufzeit nie ein lazy-gefetchtes Partial / dynamisch importiertes Modul eine
     // fremde Generation vom Netz. `cache: 'reload'` umgeht den HTTP-Cache, damit
     // der Precache wirklich diese Generation holt.
     await precacheWithRetry(cache, SHELL_MANIFEST);
-    // Einstiegspunkt (SPA-Shell) best-effort dazu — nicht im Manifest, weil er
-    // unter zwei Schlüsseln adressiert wird ('/' bei Navigation, SHELL_PATH beim
-    // Lookup); offline-Install scheitert hier lautlos. Unter BEIDEN Schlüsseln
-    // ablegen, damit der Lookup in handleNavigate deterministisch die Kopie
-    // DIESER Generation trifft. `ok`/`opaqueredirect`-Check statt `cache.add`:
-    // fällt die Session beim Install gerade aus, antwortet `/` mit einem
-    // Login-Redirect — der darf nie als SPA-Shell im Cache landen.
-    try {
-      const shellRes = await fetch(new Request('/', { cache: 'reload' }));
-      if (shellRes && shellRes.ok && shellRes.type !== 'opaqueredirect') {
-        await cache.put(SHELL_PATH, shellRes.clone());
-        await cache.put('/', shellRes.clone());
-      }
-    } catch {}
+    // Einstiegspunkt (SPA-Shell) zuletzt — nicht im Manifest, weil er unter zwei
+    // Schlüsseln adressiert wird ('/' bei Navigation, SHELL_PATH beim Lookup).
+    // Unter BEIDEN ablegen, damit der Lookup in handleNavigate deterministisch
+    // die Kopie DIESER Generation trifft. Erst nach dem Precache, damit ein
+    // gescheiterter Install keine Shell ohne ihren Asset-Satz hinterlässt.
+    await cache.put(SHELL_PATH, shellRes.clone());
+    await cache.put('/', shellRes.clone());
     // Bewusst KEIN skipWaiting hier: der neue SW bleibt `waiting`, bis der
     // User das Update-Banner klickt (applyUpdate → 'skip-waiting'-Message).
     // Sonst übernähme der neue SW eine laufende (Editor-)Seite sofort und
@@ -179,19 +235,28 @@ self.addEventListener('activate', (event) => {
 async function handleNavigate(req) {
   const cache = await caches.open(SHELL_CACHE);
   const cached = await cache.match(SHELL_PATH) || await cache.match('/');
-  if (cached) return cached;
+  if (await isCachedShell(cached)) return cached;
 
-  // Kalter Cache: der Install-Precache der Shell ist best-effort und kann
-  // scheitern (offline installiert, Session-Redirect). Hier einmalig aus dem Netz
-  // füllen — kein Skew-Risiko, denn es gibt keine gecachte Generation, die
-  // überschrieben würde, und genau dieses HTML wird gerendert.
+  // Ab hier ist entweder gar nichts gecacht (kalter Cache — der Install-Precache
+  // der Shell ist best-effort) oder der Eintrag ist nachweislich keine Shell:
+  // eine eingefangene Landing-/Login-Seite aus einem Install ohne Session. Die
+  // darf nicht ausgeliefert werden — sonst sieht der eingeloggte User die
+  // anonyme Startseite und kommt nur per Hard-Refresh daran vorbei.
   try {
     const net = await fetch(req);
-    if (net && net.ok && net.type !== 'opaqueredirect') cache.put(SHELL_PATH, net.clone());
-    return net;
-  } catch {
-    return new Response('Offline – Shell nicht im Cache.', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
-  }
+    // Erstbefüllung NUR bei wirklich kaltem Cache und nur mit markierter Shell.
+    // Lag schon etwas da, gehört die übrige Generation noch zusammen; wir
+    // schreiben nicht dazwischen, sondern liefern nur aus. Der nächste Install
+    // räumt sie vollständig auf (er überschreibt jeden Eintrag).
+    if (!cached && isShellResponse(net)) cache.put(SHELL_PATH, net.clone());
+    // Keine Shell (anonym → Landing mit 200, oder ein Redirect auf /login):
+    // unverändert durchreichen und NICHT cachen.
+    if (net) return net;
+  } catch {}
+
+  // Offline: ein unmarkierter Alt-Eintrag ist besser als gar keine App.
+  if (cached) return cached;
+  return new Response('Offline – Shell nicht im Cache.', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
 }
 
 // Meldet allen kontrollierten Tabs, dass der kohärente Asset-Satz dieser
