@@ -1,8 +1,8 @@
 // Diagramme im Browser anzeigen — geteilt von allen drei Anzeige-Oberflaechen
 // (Notebook-Leseansicht, Bucheditor, Diagramm-Dialog des Notebook-Editors).
-// Der Share-Reader hat eine eigene Kopie: er muss pre-auth ladbar sein und darf
-// nur aus /js/share-reader/ importieren (siehe PUBLIC_ASSET_PREFIXES in
-// server.js) — gegated durch tests/unit/mermaid-drift.test.mjs.
+// Der Share-Reader hat eine eigene Kopie: er ist ein eigenstaendiger, schlanker
+// Modulgraph und darf nur aus /js/share-reader/ importieren — gegated durch
+// tests/unit/mermaid-drift.test.mjs.
 //
 // WER RENDERT: fuer die LESENDEN Ansichten der Server (POST /diagram/render,
 // inhaltsadressierter Cache) — mermaid ist mit 3,4 MB die groesste Lib im

@@ -74,7 +74,7 @@ Quellenangaben dürfen von den Text-Prüfern nicht angefasst werden:
 
 Dazu die **Paste-Allowlist** ([utils/html.js](../public/js/utils/html.js)): `SPAN` ist ausschliesslich als Chip erlaubt, alles andere wird unwrapped — sonst zerfällt ein kopierter Satz zu reinem Text und verliert den Zeiger.
 
-**Zwei bewusste Selektor-KOPIEN** (nicht konsolidieren): `TTS_SKIP_SEL` in [tts-segment.js](../public/js/tts-segment.js) — das Modul steht in `PUBLIC_ASSETS` und muss pre-auth ohne App-Bundle-Kanten ladbar bleiben — und `CITE_SKIP_SEL` in [editor-spellcheck/mapping.js](../public/js/cards/editor-spellcheck/mapping.js). Beide gegen `CITE_SEL` gegated.
+**Zwei bewusste Selektor-KOPIEN** (nicht konsolidieren): `TTS_SKIP_SEL` in [tts-segment.js](../public/js/tts-segment.js) — das Modul gehört zum schlanken Share-Reader-Modulgraph und darf keine App-Bundle-Kanten ziehen — und `CITE_SKIP_SEL` in [editor-spellcheck/mapping.js](../public/js/cards/editor-spellcheck/mapping.js). Beide gegen `CITE_SEL` gegated.
 
 ## Einstellungen (pro Buch, nicht pro Exportprofil)
 

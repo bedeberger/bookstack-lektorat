@@ -11,10 +11,9 @@
 // dafuer bleibt dieser Pfad bestehen.
 //
 // BEWUSSTE KOPIE des Kerns aus public/js/diagram/mermaid-view.js: der Reader
-// muss pre-auth ladbar sein und darf nur aus /js/share-reader/ importieren
-// (siehe PUBLIC_ASSET_PREFIXES in server.js) — ein Import aus /js/diagram/ kaeme
-// beim anonymen Leser als HTML vom Auth-Guard zurueck und der Browser wuerde das
-// Modul wegen MIME-Type verweigern. Dieselbe Lage wie READER_BLOCK_SEL in
+// ist ein eigenstaendiger, schlanker Modulgraph und darf nur aus
+// /js/share-reader/ importieren — ein Import aus /js/diagram/ zoege dem anonymen
+// Leser das App-Bundle in die Leseansicht. Dieselbe Lage wie READER_BLOCK_SEL in
 // share-reader/tts.js. Gegen Drift gesichert durch
 // tests/unit/mermaid-drift.test.mjs.
 //

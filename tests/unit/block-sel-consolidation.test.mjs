@@ -10,9 +10,10 @@
 // erweitert, muss die Erwartung hier mitziehen und trifft dabei auf die Frage,
 // ob die anderen Familien denselben Zusatz brauchen.
 //
-// `share-reader/tts.js` ist der Sonderfall: der Reader muss pre-auth ladbar sein
-// und darf nur aus `/js/share-reader/` importieren (PUBLIC_ASSET_PREFIXES in
-// server.js), kann den Kern also nicht importieren. Seine Kopie wird hier gegen
+// `share-reader/tts.js` ist der Sonderfall: der Reader ist ein eigenstaendiger,
+// schlanker Modulgraph und darf nur aus `/js/share-reader/` importieren (sonst
+// zieht die Leseansicht das App-Bundle), kann den Kern also nicht importieren.
+// Seine Kopie wird hier gegen
 // den Kern geprüft — als Quelltext, weil das Modul Browser-Globals braucht.
 
 import test from 'node:test';

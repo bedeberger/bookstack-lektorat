@@ -78,8 +78,8 @@ test('TTS liest Querverweise MIT — anders als Belege', () => {
 });
 
 test('tts-segment.js bleibt frei von App-Bundle-Importen', () => {
-  // Das Modul steht in PUBLIC_ASSETS (server.js) — der Share-Reader importiert
-  // es pre-auth. Ein Import aus dem App-Bundle würde die Kette brechen.
+  // Der Share-Reader importiert es in seinen schlanken Modulgraph. Ein Import
+  // aus dem App-Bundle würde die Kette brechen.
   const src = readFileSync(resolve(ROOT, 'public', 'js', 'tts-segment.js'), 'utf8');
   const imports = [...src.matchAll(/^\s*import\s.*?from\s+'([^']+)'/gm)].map(x => x[1]);
   assert.deepEqual(imports, [], `tts-segment.js darf nichts importieren, hat aber: ${imports}`);

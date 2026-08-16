@@ -120,9 +120,9 @@ export function normalizeForSpeech(text) {
 // gefiltert, driftete das Highlight um die Chip-Laenge.
 //
 // Der Selektor ist eine bewusste KOPIE von CITE_SEL (public/js/sources/
-// cite-html.js): dieses Modul muss pre-auth ladbar bleiben (PUBLIC_ASSETS in
-// server.js, der Share-Reader importiert es) und darf deshalb nichts aus dem
-// App-Bundle importieren — dieselbe Begruendung wie bei READER_BLOCK_SEL in
+// cite-html.js): der Share-Reader importiert dieses Modul und bleibt ein
+// eigenstaendiger, schlanker Modulgraph — es darf deshalb nichts aus dem
+// App-Bundle importieren, dieselbe Begruendung wie bei READER_BLOCK_SEL in
 // share-reader/tts.js. Gegen Drift gesichert durch tests/unit/tts-cite-skip.test.mjs.
 export const TTS_SKIP_SEL = 'span.cite[data-src]';
 

@@ -125,10 +125,11 @@ Im **Bucheditor** ist das keine Kosmetik, sondern Pflicht: `_onBlockInput` liest
 ersten Tastendruck im Manuskript. Darum räumt `activateBlock` den aktiven Block
 (`clearRenderedDiagrams`) und gibt dem verlassenen sein Bild zurück.
 
-Die **Share-Reader-Kopie** ist Absicht: der Reader muss pre-auth ladbar sein und
-darf nur aus `/js/share-reader/` importieren (`PUBLIC_ASSET_PREFIXES` in
-[server.js](../server.js)). Dieselbe Lage wie `READER_BLOCK_SEL`. Die Vendor-Datei
-selbst steht dafür einzeln in `PUBLIC_ASSETS`.
+Die **Share-Reader-Kopie** ist Absicht: der Reader ist ein eigenständiger,
+schlanker Modulgraph und darf nur aus `/js/share-reader/` importieren — ein
+Import aus `/js/diagram/` zöge dem anonymen Leser das App-Bundle in die
+Leseansicht. Dieselbe Lage wie `READER_BLOCK_SEL`. Die Vendor-Datei selbst steht
+einzeln in `PUBLIC_ASSETS` (`/vendor/` ist nicht pauschal pre-auth freigegeben).
 
 ## Export
 

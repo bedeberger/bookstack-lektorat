@@ -322,36 +322,11 @@ const PUBLIC_ASSETS = new Set([
   '/icons.svg',
   '/schreibwerkstatt_icon.ico',
   '/favicon.ico',
-  // Handler der Passwort-Formen auf /login (Admin-Pfad + Demo-Zugang).
-  '/js/credential-login.js',
-  '/js/share-reader.js',
-  // share-reader.js importiert charOffset/locateRange/resolveCurrentQuote als
-  // ES-Modul aus share-anchor.js (SSoT mit der Owner-Karte). Der Import-Request
-  // muss ebenfalls pre-auth durchgehen, sonst kommt er als HTML zurueck und der
-  // Browser verweigert das Modul wegen falschem MIME-Type.
-  '/js/share-anchor.js',
-  // Weitere ES-Module, die share-reader.js statisch importiert (Reader-
-  // Abhaengigkeitsgraph). Wie share-anchor.js muessen sie pre-auth durchgehen —
-  // sonst redirected der Auth-Guard den Modul-Request eines ANONYMEN Lesers auf
-  // /login, er kommt als HTML zurueck und der Browser verweigert das Modul
-  // (nosniff) → der gesamte JS-Enhancement der Reader-View (Theme, Composer,
-  // verankerte Kommentare, Vorlesen) faellt still aus. Die share-reader/*-
-  // Submodule deckt der /js/share-reader/-Prefix unten ab.
-  '/js/editor/comment-threads.js',  // groupThreads (Thread-Gruppierung)
-  '/js/avatar.js',                  // Initialen-Pips (deterministische Hue)
-  '/js/scroll-fade.js',             // Auto-Hide-Scrollbar am TOC
-  '/js/comment-card-layout.js',     // pure Kollisions-Geometrie (share-reader/layout.js)
-  '/js/tts-segment.js',             // pure TTS-Segmentierung (share-reader/tts.js)
-  // FOUC-Schutz der Reader-View: share.html/share.gone.html laden dieses Script
-  // blockierend im <head>, bevor der Leser eingeloggt ist. Ohne Freigabe landet
-  // es im Auth-Guard, kommt als HTML zurueck und der Browser verweigert die
-  // Ausfuehrung (nosniff) → kein Theme vor dem ersten Paint, gespeicherte Wahl
-  // wird ignoriert.
-  '/js/share-theme-init.js',
-  // Skripte der Pre-Auth-Seiten (register.html + /login). Ohne Freigabe
-  // landet ihr Request im Auth-Guard und kommt als HTML (`/login?returnTo=...`)
-  // zurück → Browser verweigert die Ausführung wegen falschem MIME-Type.
-  '/js/register.js',
+  // Asset-Liste + Content-Hash des Service Workers. sw.js zieht die Datei als
+  // ERSTES per importScripts — sie ist damit genauso pre-auth-pflichtig wie der
+  // SW selbst. Faellt die Session aus, kaeme sonst Login-HTML zurueck und die
+  // SW-Auswertung scheiterte an nosniff.
+  '/sw-manifest.js',
   // ALTCHA-PoW-Widget (Custom-Element): von register.html + /login per
   // dynamic `<script type="module">` nachgeladen, sobald ALTCHA aktiv ist.
   '/vendor/altcha-3.0.11.min.js',
@@ -367,12 +342,28 @@ const PUBLIC_ASSETS = new Set([
 // Ohne diese Freigabe landen die Requests im Auth-Guard und werden als HTML
 // (`/login?returnTo=...`) zurückgegeben → Browser verweigert das Stylesheet wegen
 // falschem MIME-Type.
-// /js/share-reader/ deckt alle Reader-Widget-Submodule (dom/identity/menu/theme/
-// reading-prefs/toc/progress/layout/composer/feedback/tts sowie die eigenstaendigen
-// dwell/read-depth/resume) ab, die share-reader.js statisch importiert bzw. share.html
-// direkt laedt — pre-auth erreichbar fuer den anonymen Leser (siehe Kommentar bei den
-// einzelnen Reader-Modulen in PUBLIC_ASSETS).
-const PUBLIC_ASSET_PREFIXES = ['/css/', '/fonts/', '/js/share-reader/'];
+//
+// /js/ steht aus demselben Grund vollstaendig offen, und zwar fuer BEIDE Seiten:
+//  - Der anonyme Leser braucht den kompletten Share-Reader-Modulgraph
+//    (/js/share-reader/* plus die geteilten Module share-anchor, avatar,
+//    scroll-fade, comment-card-layout, tts-segment, editor/comment-threads) sowie
+//    die Skripte der Pre-Auth-Seiten (credential-login, register, share-theme-init).
+//  - Der EINGELOGGTE User braucht ihn, weil der Service Worker die Shell
+//    cache-only bedient: ein einzelner evictierter Eintrag (v.a. iOS) geht als
+//    Notnagel ans Netz, und faellt in genau diesem Moment die Session aus, kam
+//    frueher ein 302 auf /login zurueck. Fuer `<script type="module">` und
+//    `<link rel="modulepreload">` heisst das: HTML statt JS, nosniff verweigert
+//    das Modul, die App bootet nicht — sichtbar nur als "SCRIPT/LINK nicht
+//    ladbar" im Fehler-Log. Client-Code ist kein Geheimnis (Stylesheets stehen
+//    seit je offen), deshalb faellt die Gate-Ebene hier weg statt die Fehlerlage
+//    ehrlicher zu machen.
+// Ausnahme bleibt /js/plausible-init.js: die Route davor rendert es aus
+// app_settings und greift zuerst.
+//
+// Das entbindet den Reader NICHT von seiner Import-Disziplin — er darf weiterhin
+// nur aus /js/share-reader/ importieren (Kopplung + Bundle-Groesse), gegated
+// durch block-sel-consolidation/cite-guard-drift/mermaid-drift.
+const PUBLIC_ASSET_PREFIXES = ['/css/', '/fonts/', '/js/'];
 // Statische Assets: `no-cache` für alles ausser Bildern. ETag bleibt aktiv —
 // Browser revalidiert bei jedem Reload mit If-None-Match (304 wenn unverändert,
 // nur Header-Roundtrip, keine Bytes). Bilder/Icons halten 7 Tage, weil sie sich

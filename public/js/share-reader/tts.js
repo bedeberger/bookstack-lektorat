@@ -34,11 +34,10 @@ const ERROR_SHOW_MS = 4000;        // wie lange der Fehler-Status stehen bleibt
 // Prosa-Bloecke, die vorgelesen werden. Leaf-Filter (siehe readableBlocks)
 // verhindert Doppel-Lesen bei Verschachtelung (z.B. blockquote > p).
 //
-// BEWUSSTE KOPIE des Kerns aus editor/shared/dom-block.js: der Reader muss
-// pre-auth ladbar sein und darf nur aus /js/share-reader/ importieren (siehe
-// PUBLIC_ASSET_PREFIXES in server.js) — ein Import aus editor/shared/ kaeme
-// beim anonymen Leser als HTML vom Auth-Guard zurueck und der Browser wuerde
-// das Modul wegen MIME-Type verweigern. Eigener Name, damit die Kopie nicht
+// BEWUSSTE KOPIE des Kerns aus editor/shared/dom-block.js: der Reader ist ein
+// eigenstaendiger, schlanker Modulgraph und darf nur aus /js/share-reader/
+// importieren — ein Import aus editor/shared/ zoege dem anonymen Leser das
+// halbe App-Bundle in die Leseansicht. Eigener Name, damit die Kopie nicht
 // wie der Editor-Selektor aussieht; gegen Drift gesichert durch
 // tests/unit/block-sel-consolidation.test.mjs.
 const READER_BLOCK_SEL = 'p, h1, h2, h3, h4, h5, h6, blockquote, li, pre, figcaption';
