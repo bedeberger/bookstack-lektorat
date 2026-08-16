@@ -202,7 +202,13 @@ test('Ziel-Picker fuegt einen Verweis am Caret ein', async ({ page }) => {
   expect(res.spans).toBe(1);
 });
 
-test('Paste behaelt den Verweis und wirft fremde Span-Huellen weg', async ({ page }) => {
+test('Paste behaelt den Verweis und wirft fremde Span-Huellen weg', async ({ page, browserName }) => {
+  // Nicht die App, sondern das Harness: Gecko ignoriert das dem
+  // `ClipboardEvent`-Konstruktor uebergebene `DataTransfer` und liefert dem
+  // Handler ein leeres Clipboard (`getData('text/html') === ''`), waehrend
+  // Chromium es durchreicht. Der Paste-Pfad bekommt in Firefox also gar keine
+  // Daten — die Invariante bleibt durch den Chromium-Lauf abgedeckt.
+  test.skip(browserName === 'firefox', 'ClipboardEvent traegt in Gecko kein synthetisches DataTransfer');
   await boot(page);
   const { chapters } = await targets(page);
   const chId = chapters[0].target;

@@ -470,6 +470,16 @@ mit `myCardOptions() { return this.cardData.map(...); }` am Karten-Scope.
 
 **Counter in Button:** `<span class="btn-count">N</span>` rechts vom Label.
 
+**Absolut positionierter Button braucht eine eigene `:active`-Regel.** `button:active { transform: scale(0.98) }` ([components/buttons-badges.css](public/css/components/buttons-badges.css)) gilt global und **ersetzt** — nicht ergänzt — jeden eigenen `transform`. Ein mit `top: 50%; transform: translateY(-50%)` zentrierter Knopf verliert seine Zentrierung also genau im Moment des Drückens und springt um die halbe Höhe weg. Chromium hält den Klick dabei oft noch, Gecko liefert `mouseup` auf dem darunterliegenden Element ab: der `click` entsteht erst am gemeinsamen Vorfahren und der `@click`-Handler feuert **nie**.
+
+```css
+/* zentriert positionierter Button */
+.mein-knopf        { position: absolute; top: 50%; transform: translateY(-50%); }
+.mein-knopf:active { transform: translateY(-50%) scale(0.98); }   /* Pflicht */
+```
+
+Betrifft jeden Knopf mit eigenem `transform`. Wer den Druck-Effekt gar nicht will, setzt `:active { transform: none; }` (so lösen es `.combobox-trigger`, `.palette-item`, `.palette-hero`, `.figur-lookup-link`).
+
 ---
 
 ## Action-Icon-Library (verbindlich)

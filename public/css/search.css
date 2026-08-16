@@ -87,6 +87,14 @@
   border-radius: var(--radius-sm);
 }
 .search-clear--icon:hover { color: var(--color-text); background: var(--color-hover); }
+/* Zentrierung im :active MITNEHMEN. `button:active { transform: scale(0.98) }`
+   (components/buttons-badges.css) ersetzt sonst das translateY(-50%) komplett,
+   und der 22px-Knopf springt im Moment des Druecken um 11px nach unten — unter
+   dem Cursor weg. Chromium haelt den Klick dabei gerade noch, Gecko liefert
+   mouseup auf dem Eingabefeld ab: der `click` entsteht erst am gemeinsamen
+   Vorfahren, `@click` am Knopf feuert nie und das Feld bleibt gefuellt.
+   Betrifft jedes Clear-X der App (Organizer, Orte, Ereignisse, Quellen …). */
+.search-clear--icon:active { transform: translateY(-50%) scale(0.98); }
 .btn-group.sidebar-action-group {
   display: inline-flex;
   align-items: stretch;
@@ -160,6 +168,8 @@
   cursor: pointer;
 }
 .search-clear:hover { color: var(--color-text); }
+/* Siehe .search-clear--icon:active — gleiche Falle, gleicher Grund. */
+.search-clear:active { transform: translateY(-50%) scale(0.98); }
 
 .search-filters {
   display: flex;

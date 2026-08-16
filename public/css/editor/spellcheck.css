@@ -436,12 +436,20 @@ textarea[data-spellcheck="spelling"]:not(.card-title--input, .page-head__input) 
   z-index: 1;
 }
 
+/* Zentrierung im :active mitnehmen — `button:active { transform: scale(0.98) }`
+   (components/buttons-badges.css) ersetzt sonst das translateY(-50%) und der
+   Badge springt beim Druecken unter dem Cursor weg. Steht bewusst VOR der
+   Textarea-Variante: die ist gleich spezifisch und soll als spaetere Regel
+   gewinnen (dort gibt es nichts zu zentrieren). */
+.lt-badge--form:active { transform: translateY(-50%) scale(0.98); }
+
 /* Textarea: Badge bottom-right damit oben die erste Textzeile frei bleibt. */
 .lt-field-wrap--textarea > .lt-badge--form {
   top: auto;
   bottom: 8px;
   transform: none;
 }
+.lt-field-wrap--textarea > .lt-badge--form:active { transform: scale(0.98); }
 
 /* Quiet: weniger visuelles Rauschen wenn nichts zu zeigen. Wird vom JS gesetzt
  * fuer idle/clean/disabled. Hover/Fokus aufs Feld macht Badge wieder voll

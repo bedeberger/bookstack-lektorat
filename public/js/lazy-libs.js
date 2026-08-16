@@ -5,7 +5,9 @@
 // Self-hosted unter public/vendor/ — externe CDNs (unpkg, jsdelivr) entfallen,
 // damit offline (Zug-Szenario) Karten weiter funktionieren und kein Third-Party-
 // Roundtrip beim Erstöffnen anfällt. Versionen sind im Dateinamen gepinnt;
-// Update = neue Datei + alte löschen + SHELL_CACHE in public/sw.js bumpen.
+// Update = neue Datei + alte löschen + Pfad hier nachziehen. vendor/ liegt
+// bewusst NICHT im Shell-Manifest, sondern im generationsunabhängigen
+// VENDOR_CACHE (public/sw.js) — es gibt hier nichts zu bumpen.
 
 let _visPromise = null;
 let _chartPromise = null;
@@ -35,11 +37,32 @@ function _ensureCss(href) {
   document.head.appendChild(l);
 }
 
+// Lädt ein Vendor-Script und gibt sein Global erst heraus, wenn es wirklich
+// steht. `pick()` MUSS dieselbe Bedingung prüfen wie der Cache-Hit des jeweiligen
+// Loaders — die Asymmetrie zwischen beiden ist der eigentliche Fehler, den dieser
+// Helper verhindert.
+//
+// **Why:** `onload` bedeutet nur „Datei wurde ausgeführt", nicht „Global ist
+// nutzbar". Bei abgeschnittener oder teilweise ausgelieferter Antwort (Proxy,
+// Netz-Blip, halb gefüllter Cache) feuert es trotzdem, und der Loader lieferte
+// dann `undefined` aus. Weil der Aufrufer dieses Ergebnis in seiner
+// Modul-Promise cacht, bekam danach JEDER weitere Aufruf denselben unbrauchbaren
+// Wert bis zum Reload — der Weg zu „undefined is not a constructor (evaluating
+// 'new vis.Network(…)')". Ein Wurf hier lässt die Promise stattdessen in den
+// `catch`-Zweig des Loaders laufen, der den Cache nullt und den nächsten Versuch
+// wieder laden lässt.
+function _loadGlobal(src, pick, label) {
+  return _loadScript(src).then(() => {
+    const g = pick();
+    if (!g) throw new Error(`${label} geladen, aber Global fehlt (unvollstaendige Antwort?): ${src}`);
+    return g;
+  });
+}
+
 export function loadVis() {
   if (window.vis?.Network) return Promise.resolve(window.vis);
   if (!_visPromise) {
-    _visPromise = _loadScript('vendor/vis-network-10.0.2.min.js')
-      .then(() => window.vis)
+    _visPromise = _loadGlobal('vendor/vis-network-10.0.2.min.js', () => (window.vis?.Network ? window.vis : null), 'vis-network')
       .catch(err => { _visPromise = null; throw err; });
   }
   return _visPromise;
@@ -48,8 +71,7 @@ export function loadVis() {
 export function loadChart() {
   if (typeof window.Chart !== 'undefined') return Promise.resolve(window.Chart);
   if (!_chartPromise) {
-    _chartPromise = _loadScript('vendor/chart-4.5.1.umd.min.js')
-      .then(() => window.Chart)
+    _chartPromise = _loadGlobal('vendor/chart-4.5.1.umd.min.js', () => window.Chart, 'chart.js')
       .catch(err => { _chartPromise = null; throw err; });
   }
   return _chartPromise;
@@ -58,8 +80,7 @@ export function loadChart() {
 export function loadJsMind() {
   if (typeof window.jsMind !== 'undefined') return Promise.resolve(window.jsMind);
   if (!_jsMindPromise) {
-    _jsMindPromise = _loadScript('vendor/jsmind-0.8.7.js')
-      .then(() => window.jsMind)
+    _jsMindPromise = _loadGlobal('vendor/jsmind-0.8.7.js', () => window.jsMind, 'jsMind')
       .catch(err => { _jsMindPromise = null; throw err; });
   }
   return _jsMindPromise;
@@ -68,8 +89,7 @@ export function loadJsMind() {
 export function loadSortable() {
   if (typeof window.Sortable !== 'undefined') return Promise.resolve(window.Sortable);
   if (!_sortablePromise) {
-    _sortablePromise = _loadScript('vendor/sortable-1.15.6.min.js')
-      .then(() => window.Sortable)
+    _sortablePromise = _loadGlobal('vendor/sortable-1.15.6.min.js', () => window.Sortable, 'Sortable')
       .catch(err => { _sortablePromise = null; throw err; });
   }
   return _sortablePromise;
@@ -78,8 +98,7 @@ export function loadSortable() {
 export function loadDiff() {
   if (typeof window.Diff !== 'undefined') return Promise.resolve(window.Diff);
   if (!_diffPromise) {
-    _diffPromise = _loadScript('vendor/diff-9.0.0.min.js')
-      .then(() => window.Diff)
+    _diffPromise = _loadGlobal('vendor/diff-9.0.0.min.js', () => window.Diff, 'diff')
       .catch(err => { _diffPromise = null; throw err; });
   }
   return _diffPromise;
@@ -96,8 +115,7 @@ export function loadDiff() {
 export function loadWordCloud() {
   if (window.d3?.layout?.cloud) return Promise.resolve(window.d3.layout.cloud);
   if (!_cloudPromise) {
-    _cloudPromise = _loadScript('vendor/d3-cloud-1.2.9.js')
-      .then(() => window.d3.layout.cloud)
+    _cloudPromise = _loadGlobal('vendor/d3-cloud-1.2.9.js', () => window.d3?.layout?.cloud, 'd3-cloud')
       .catch(err => { _cloudPromise = null; throw err; });
   }
   return _cloudPromise;
@@ -115,8 +133,7 @@ export function loadWordCloud() {
 export function loadMermaid() {
   if (window.mermaid) return Promise.resolve(window.mermaid);
   if (!_mermaidPromise) {
-    _mermaidPromise = _loadScript('vendor/mermaid-11.16.0.min.js')
-      .then(() => window.mermaid)
+    _mermaidPromise = _loadGlobal('vendor/mermaid-11.16.0.min.js', () => window.mermaid, 'mermaid')
       .catch(err => { _mermaidPromise = null; throw err; });
   }
   return _mermaidPromise;
@@ -127,11 +144,11 @@ export function loadLeaflet() {
   _ensureCss('vendor/leaflet-1.9.4/leaflet.css');
   if (typeof window.L !== 'undefined') return Promise.resolve(window.L);
   if (!_leafletPromise) {
-    _leafletPromise = _loadScript('vendor/leaflet-1.9.4/leaflet.js')
-      .then(() => {
+    _leafletPromise = _loadGlobal('vendor/leaflet-1.9.4/leaflet.js', () => window.L, 'leaflet')
+      .then(L => {
         // Auto-Detect der Image-Pfade scheitert bei manchen Setups → explizit setzen.
-        if (window.L?.Icon?.Default) window.L.Icon.Default.imagePath = 'vendor/leaflet-1.9.4/images/';
-        return window.L;
+        if (L?.Icon?.Default) L.Icon.Default.imagePath = 'vendor/leaflet-1.9.4/images/';
+        return L;
       })
       .catch(err => { _leafletPromise = null; throw err; });
   }
