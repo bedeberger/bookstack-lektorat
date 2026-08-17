@@ -32,6 +32,7 @@ const mailer = require('../lib/mailer');
 const rateLimit = require('../lib/register-ratelimit');
 const altcha = require('../lib/altcha');
 const extensionRelease = require('../lib/extension-release');
+const macclientRelease = require('../lib/macclient-release');
 const { tServer } = require('../lib/i18n-server');
 
 const router = express.Router();
@@ -116,7 +117,7 @@ function _renderLanding(req, res) {
     macTitle:      t('landing.macTitle'),
     macDesc:       t('landing.macDesc'),
     macLinkLabel:  t('landing.macLinkLabel'),
-    macUrl:        'https://github.com/bedeberger/schreibwerkstatt-focuseditor/releases/latest',
+    macUrl:        macclientRelease.MAC_APP_STORE_URL,
     androidTitle:     t('landing.androidTitle'),
     androidDesc:      t('landing.androidDesc'),
     androidLinkLabel: t('landing.androidLinkLabel'),

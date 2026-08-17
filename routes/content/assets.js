@@ -1,6 +1,6 @@
 'use strict';
 // Content-Routes: OTA-/Release-Assets der nativen Clients — Focus-Editor-Bundle
-// (macOS), macclient-i18n-Overrides, Release-Discovery (macOS + Android).
+// (macOS), macclient-i18n-Overrides, Release-Discovery (macOS, Android, Chrome).
 // Alle ETag-konditional (If-None-Match → 304). Auth via globalem Guard.
 
 const { createHash } = require('node:crypto');
@@ -75,23 +75,27 @@ function register(router) {
     } catch (e) { _fail(res, e, 'GET /content/macclient-i18n.json'); }
   });
 
-  // GET /content/macclient/release.json — latest-Release-Metadaten der nativen
-  // macOS-App (schreibwerkstatt-focuseditor) fuer den Download-Hinweis im Profil.
-  // Body: { available, version, notes, publishedAt, dmg:{ name, sizeBytes,
-  // downloadUrl } } bzw. { available:false }. Quelle: GitHub-Public-API ueber
-  // [lib/macclient-release.js](../lib/macclient-release.js) (In-Memory-Cache).
+  // GET /content/macclient/release.json — Installationsweg + freigegebene Version
+  // der nativen macOS-App (schreibwerkstatt-focuseditor) fuer das Profil und den
+  // Veraltet-Vergleich im Admin-Tab. Body: { storeUrl, available, version, notes,
+  // publishedAt, sizeBytes } bzw. { storeUrl, available:false }. Versionsquelle:
+  // iTunes-Lookup-API ueber [lib/macclient-release.js](../lib/macclient-release.js)
+  // (In-Memory-Cache).
   //
-  // Die UI verlinkt direkt auf dmg.downloadUrl (GitHub-CDN) — kein Download-Proxy.
-  // Da das Client-Repo oeffentlich ist, ist die Asset-URL selbst oeffentlich; der
-  // Download wird nur Eingeloggten *angezeigt* (Anzeige-Gating, kein Hard-Gating).
+  // `storeUrl` steht IMMER im Body, auch bei available:false — der Mac App Store
+  // ist der einzige Installationsweg und darf nicht an einem Ausfall der
+  // Lookup-API haengen. Es gibt keinen Direkt-Download und damit keinen
+  // Download-Proxy; die Zeile wird nur Eingeloggten *angezeigt* (Anzeige-Gating).
   //
-  // Auth: globaler Guard (server.js). ETag = sha256(version); bei If-None-Match
-  // mit passendem ETag → 304 ohne Body.
+  // Auth: globaler Guard (server.js). ETag = sha256(version + storeUrl) — die
+  // Store-URL gehoert hinein, sonst liefert ein 304 einem Client mit altem
+  // Cache-Body weiterhin die alte Antwort. Bei If-None-Match mit passendem ETag
+  // → 304 ohne Body.
   router.get('/macclient/release.json', async (req, res) => {
     try {
-      const rel = await macclientRelease.getLatestRelease();
+      const rel = { storeUrl: macclientRelease.MAC_APP_STORE_URL, ...(await macclientRelease.getLatestRelease()) };
       const body = JSON.stringify(rel);
-      const etag = `"${createHash('sha256').update(`macclient-release:${rel.available ? rel.version : 'none'}`).digest('hex')}"`;
+      const etag = `"${createHash('sha256').update(`macclient-release:${rel.available ? rel.version : 'none'}:${rel.storeUrl}`).digest('hex')}"`;
       res.set('ETag', etag);
       res.set('Cache-Control', 'no-cache'); // immer revalidieren (via If-None-Match)
       if (req.headers['if-none-match'] === etag) return res.status(304).end();

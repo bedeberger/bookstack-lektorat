@@ -237,22 +237,27 @@ export const userSettingsMethods = {
     }
   },
 
-  // ── macOS-App-Download (schreibwerkstatt-focuseditor) ───────────────────────
-  // latest-Release-Metadaten vom Server (GitHub-Public-API-Proxy). Wirft nie;
-  // bei { available:false } wird der Abschnitt schlicht nicht gerendert.
+  // ── macOS-App (schreibwerkstatt-focuseditor, Mac App Store) ─────────────────
+  // Installationsweg + freigegebene Store-Version vom Server. Wirft nie.
+  // `storeUrl` ist der Installationsweg und kommt immer mit — auch wenn der
+  // Versions-Lookup nichts liefert; darum wird bei available:false nur der
+  // Versions-Teil verworfen, nicht die Store-URL. Ohne beides bleibt der
+  // Abschnitt leer und wird nicht gerendert.
   async loadMacRelease() {
     try {
       const data = await fetchJson('/content/macclient/release.json');
-      this.macRelease = data && data.available ? data : { available: false };
+      this.macRelease = data && data.available
+        ? data
+        : { available: false, storeUrl: data?.storeUrl || '' };
     } catch (e) {
       console.error('[user-settings] Mac-Release laden fehlgeschlagen:', e);
-      this.macRelease = { available: false };
+      this.macRelease = { available: false, storeUrl: '' };
     }
   },
 
-  /** Dateigröße des .dmg in MB, locale-formatiert. */
+  /** Download-Größe der Store-App in MB, locale-formatiert. */
   macReleaseSizeMb() {
-    const bytes = this.macRelease?.dmg?.sizeBytes || 0;
+    const bytes = this.macRelease?.sizeBytes || 0;
     if (!bytes) return '';
     return (bytes / 1048576).toLocaleString(Alpine.store('shell').uiLocale === 'en' ? 'en-US' : 'de-CH', { maximumFractionDigits: 1 });
   },

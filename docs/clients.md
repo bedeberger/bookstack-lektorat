@@ -97,17 +97,19 @@ Offline-First: der Client hält einen lokalen SQLite-Spiegel und synchronisiert 
 
 ## Release-Discovery (Download-Hinweis im Profil + Landing)
 
-Das Profil (`/me`) und die Landing-Page zeigen Logged-in-Usern bzw. Besucher:innen Version + Download-Link der nativen Apps und der Chrome-Erweiterung. Alle Routen sind dünne Proxies auf die GitHub-Public-API über den generischen Fetcher [lib/github-release.js](../lib/github-release.js) (In-Memory-Cache):
+Das Profil (`/me`) und die Landing-Page zeigen Logged-in-Usern bzw. Besucher:innen Installationsweg + Version der nativen Apps und der Chrome-Erweiterung. Alle Routen sind dünne Proxies mit In-Memory-Cache; **die Versionsquelle folgt dem Auslieferungsweg** — Store-App aus dem Store, Direkt-Download aus dem GitHub-Release:
 
-| Plattform | Route | Lib | Asset |
-|-----------|-------|-----|-------|
-| macOS | `GET /content/macclient/release.json` | [lib/macclient-release.js](../lib/macclient-release.js) | `.dmg` |
-| Android | `GET /content/android/release.json` | [lib/androidclient-release.js](../lib/androidclient-release.js) | `.apk` (Sideload) |
-| Chrome | `GET /content/extension/release.json` | [lib/extension-release.js](../lib/extension-release.js) | `.zip` (Zweitweg neben dem Chrome Web Store) |
+| Plattform | Route | Lib | Weg + Versionsquelle |
+|-----------|-------|-----|----------------------|
+| macOS | `GET /content/macclient/release.json` | [lib/macclient-release.js](../lib/macclient-release.js) | Mac App Store (kein Direkt-Download); Version aus der iTunes-Lookup-API über [lib/appstore-lookup.js](../lib/appstore-lookup.js) |
+| Android | `GET /content/android/release.json` | [lib/androidclient-release.js](../lib/androidclient-release.js) | `.apk` (Sideload); Version aus dem GitHub-Release |
+| Chrome | `GET /content/extension/release.json` | [lib/extension-release.js](../lib/extension-release.js) | Chrome Web Store, `.zip` als Zweitweg; Version aus dem GitHub-Release |
 
-- Die UI verlinkt direkt auf die GitHub-CDN-URL (kein Download-Proxy). Da die Client-Repos öffentlich sind, ist die Asset-URL selbst öffentlich; der Download wird nur Eingeloggten **angezeigt** (Anzeige-Gating, kein Hard-Gating).
-- ETag = sha256(Version) → 304. Bei Chrome geht zusätzlich die Store-URL in den Hash: sie steht als `storeUrl` **immer** im Body (auch bei `available:false`, denn der Store darf nicht an einem GitHub-Ausfall hängen), und ohne sie im ETag bekäme ein Client mit altem Cache-Body weiterhin ein 304. SSoT der URL: `CHROME_STORE_URL` in [lib/extension-release.js](../lib/extension-release.js) — die Landing liest sie direkt.
-- **GitHub-Rate-Limit:** ohne Token 60 Req/h. Ein optionaler PAT hebt das auf 5000/h (Admin-Settings → Erweitert → `macclient.github_token`, verschlüsselt in `app_settings`; `GITHUB_TOKEN` in `.env` nur als einmaliger Boot-Seed). Das Token ist konto-weit gültig und deckt alle drei Client-Repos ab. Siehe [README.md](../README.md).
+- **Warum die macOS-Version nicht am GitHub-Tag hängt:** ohne Download-Asset gibt es dort nichts, woraus sich eine Version ableiten liesse, und eine getaggte, aber noch in Review hängende Version wäre die falsche Vergleichsgrösse — installieren kann man nur die freigegebene. Der generische GitHub-Fetcher [lib/github-release.js](../lib/github-release.js) bedient darum nur noch Android + Erweiterung.
+- Wo es einen Direkt-Download gibt, verlinkt die UI direkt auf die GitHub-CDN-URL (kein Download-Proxy). Da die Client-Repos öffentlich sind, ist die Asset-URL selbst öffentlich; der Download wird nur Eingeloggten **angezeigt** (Anzeige-Gating, kein Hard-Gating).
+- ETag = sha256(Version) → 304. Bei **macOS und Chrome** geht zusätzlich die Store-URL in den Hash: sie steht als `storeUrl` **immer** im Body (auch bei `available:false`, denn der Store darf nicht an einem Ausfall der Versionsquelle hängen), und ohne sie im ETag bekäme ein Client mit altem Cache-Body weiterhin ein 304. SSoT der URLs: `MAC_APP_STORE_URL` in [lib/macclient-release.js](../lib/macclient-release.js) bzw. `CHROME_STORE_URL` in [lib/extension-release.js](../lib/extension-release.js) — die Landing liest beide direkt.
+- **`MAC_APP_STORE_URL` ist storefront-neutral** (`https://apps.apple.com/app/id…?mt=12`, kein `/ch/`-Pfad): Apple leitet auf die Storefront des Besuchers um, ein festgenagelter Ländercode zeigt allen anderen den falschen Shop. Der Lookup fragt dagegen eine konkrete Storefront ab (die API braucht eine); die Version ist storefront-gleich.
+- **GitHub-Rate-Limit:** ohne Token 60 Req/h. Ein optionaler PAT hebt das auf 5000/h (Admin-Settings → Erweitert → `macclient.github_token`, verschlüsselt in `app_settings`; `GITHUB_TOKEN` in `.env` nur als einmaliger Boot-Seed). Der Key-Name stammt aus der Zeit des DMG-Downloads und bleibt aus Kompatibilität; betroffen sind heute Android + Erweiterung, der App-Store-Lookup braucht kein Token. Siehe [README.md](../README.md).
 - Profil-UI-Strings: `profile.macApp.*` / `profile.androidApp.*` / `profile.extensionApp.*` in [public/js/i18n/{de,en}.json](../public/js/i18n/). Landing-Strings: `landing.{mac,android,extension}{Title,Desc,LinkLabel}`.
 - **Veraltet-Vergleich im Admin-Tab:** `/admin/devices` liefert `latestVersions: { macos, android, extension }`. Der Client bestimmt pro Gerät anhand der gemeldeten `client_version` (Plattform-Prefix `android/…` bzw. `chrome/…`) und des Freitext-`platform`-Felds, welcher Referenzstrang gilt; fuer Chrome zeichnet `_devicesIsChrome` zuständig. `devicesIsOutdated(d)` vergleicht dotted-numeric und blendet dieselbe „veraltet"-Badge ein wie bei den nativen Clients.
 
@@ -149,7 +151,7 @@ Content-Type: application/json
 | Device-Token-Auth | ✅ `device` | ✅ `device` | ✅ `capture` (enge Allowlist) |
 | Schreibt ins Manuskript | ✅ | ✅ | — (Recherche + Quellen, nie Buchtext) |
 | Sync (`/sync`) + Presence | ✅ | ✅ | — (kein lokaler Spiegel) |
-| Release-Discovery | ✅ `.dmg` | ✅ `.apk` | ✅ Chrome Web Store (+ `.zip` als Zweitweg) |
+| Release-Discovery | ✅ Mac App Store | ✅ `.apk` | ✅ Chrome Web Store (+ `.zip` als Zweitweg) |
 | OTA-Editor-Bundle | ✅ | ✅ (eigenes Boot-HTML) | — |
 | OTA-i18n-Override | ✅ | — (native Strings) | — (eigene Strings) |
 | Konto-Selbstlöschung | ✅ `DELETE /me/account` | — (Web-Profil) | — (`/me/*` nicht allowlistet) |

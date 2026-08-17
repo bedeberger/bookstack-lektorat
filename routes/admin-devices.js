@@ -2,10 +2,11 @@
 // Admin-Tab „Geraete": listet alle Device-Tokens (native Mac-Focus-Clients +
 // Chrome-Erweiterung) user-uebergreifend mit gemeldeter Client-Version,
 // Nutzungszaehler und letzter Aktivitaet. Read-only — Ausstellen/Widerrufen
-// bleibt beim User unter /me. Die installierten Versionen sind gegen das
-// neueste GitHub-Release der jeweiligen Plattform (macOS, Android, Chrome-
-// Erweiterung) abgleichbar, damit veraltete Clients sichtbar werden — getrennt,
-// weil alle Repos eigene Versionsstraenge haben.
+// bleibt beim User unter /me. Die installierten Versionen sind gegen die jeweils
+// neueste veroeffentlichte Version der Plattform abgleichbar (macOS: freigegebene
+// Mac-App-Store-Version, Android + Chrome-Erweiterung: neuestes GitHub-Release),
+// damit veraltete Clients sichtbar werden — getrennt, weil alle Clients eigene
+// Versionsstraenge haben.
 
 const express = require('express');
 const { requireAdmin } = require('../lib/admin-mw');
@@ -23,7 +24,9 @@ router.get('/', async (req, res) => {
     const devices = deviceTokens.listAllDeviceTokens();
     // Pro Plattform die neueste Version separat — ein Android-Client darf nicht
     // gegen die macOS-Version verglichen werden (sonst falsches „veraltet").
-    // Gleiches gilt fuer die Chrome-Erweiterung (eigener Versionsstrang).
+    // Gleiches gilt fuer die Chrome-Erweiterung (eigener Versionsstrang). Bei
+    // macOS ist der Vergleichswert die *freigegebene* Store-Version: eine noch in
+    // Review haengende Version kann niemand installiert haben.
     const latestVersions = { macos: null, android: null, extension: null };
     try {
       const [mac, android, ext] = await Promise.all([

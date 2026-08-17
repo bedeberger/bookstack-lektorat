@@ -35,8 +35,9 @@ export function registerUserSettingsCard() {
     // Konto-Selbstloeschung (DELETE /me/account, Guideline 5.1.1(v))
     accountDeleting: false,
     accountDeleteError: '',
-    // macOS-App-Download (schreibwerkstatt-focuseditor)
-    macRelease: { available: false },
+    // macOS-App (schreibwerkstatt-focuseditor): storeUrl = Mac App Store
+    // (einziger Installationsweg), available/version = freigegebene Store-Version
+    macRelease: { available: false, storeUrl: '' },
     // Android-App-Download (schreibwerkstatt-mobile)
     androidRelease: { available: false },
     // Chrome-Erweiterung (schreibwerkstatt-browser-extension): storeUrl = Chrome

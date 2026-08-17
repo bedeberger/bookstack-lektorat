@@ -6,7 +6,7 @@ Schreiben, Lektorat und Buchanalyse mit KI. Eigenständiger Node.js-Service, Mul
 
 ### Schreiben & Editor
 - **Bearbeitungsmodus** (Notebook-Editor) – Seiten direkt bearbeiten. Auto-Save (Idle 60 s / Max 120 s), lokaler Draft (localStorage), Offline-Modus mit Retry, Block-Level-Merge bei parallelen Edits mit Konflikt-Auflösung.
-- **Fokusmodus** (Cmd/Ctrl+Shift+E) – Vollbild, Typewriter-Scroll, Absatz-Hervorhebung. Auto-Save, Schreibzeit-Tracking, Live-Zeichen-/Wortzähler, Mobile-/IME-Support. Auch als native Clients (offline-first, lokaler SQLite-Store + Sync) verfügbar: **macOS** [schreibwerkstatt-focuseditor](https://github.com/bedeberger/schreibwerkstatt-focuseditor), **Android** [schreibwerkstatt-mobile](https://github.com/bedeberger/schreibwerkstatt-mobile).
+- **Fokusmodus** (Cmd/Ctrl+Shift+E) – Vollbild, Typewriter-Scroll, Absatz-Hervorhebung. Auto-Save, Schreibzeit-Tracking, Live-Zeichen-/Wortzähler, Mobile-/IME-Support. Auch als native Clients (offline-first, lokaler SQLite-Store + Sync) verfügbar: **macOS** im [Mac App Store](https://apps.apple.com/app/id6797073919?mt=12) (Quellcode: [schreibwerkstatt-focuseditor](https://github.com/bedeberger/schreibwerkstatt-focuseditor)), **Android** [schreibwerkstatt-mobile](https://github.com/bedeberger/schreibwerkstatt-mobile).
 - **Bucheditor** – Ganzes Buch als scrollbarer Stream mit Kapitel-Trennern und Outline. Inline-Edit pro Seite, Save-All sequenziell. Buchweite Suche & Ersetzen (Case/Whole-Word, Treffer-Navigation, Replace-All).
 - **Live-Rechtschreibung** – Optionale LanguageTool-Integration (self-hosted, regelbasiert) auf allen drei Editoren und Prosa-Formularfeldern, mit eigenem Wörterbuch.
 - **Diktat** – Speech-to-Text im Notebook-Editor über einen self-hosted Whisper-Endpunkt (browserseitige Sprachpausen-Erkennung, Text verbatim am Cursor). [docs/stt.md](docs/stt.md).
@@ -130,9 +130,11 @@ apt-get install -y epubcheck            # oder: apk add epubcheck / brew install
 # Deaktivieren ohne Deinstallation: app_settings epub.validate.disabled = true
 ```
 
-### Optional: GITHUB_TOKEN (macOS-App-Download)
+### Optional: GITHUB_TOKEN (Client-Versionen im Profil)
 
-Das Profil (`/me`) zeigt eingeloggten Usern Version + Download-Link der nativen macOS-App. Der Server liest dafür das `latest`-Release des öffentlichen Repos [schreibwerkstatt-focuseditor](https://github.com/bedeberger/schreibwerkstatt-focuseditor) über die GitHub-Public-API ([lib/macclient-release.js](lib/macclient-release.js), In-Memory-Cache ~10 min). Kein Token nötig. Wird ein GitHub-Token (PAT) hinterlegt, wird es als Bearer mitgeschickt, um das API-Rate-Limit anzuheben (60→5000 Requests/h). Konfiguration: **Admin-Settings → Erweitert → `macclient.github_token`** (verschlüsselt in `app_settings` gespeichert). `GITHUB_TOKEN` in `.env` dient nur noch als einmaliger Boot-Seed in die DB.
+Das Profil (`/me`) zeigt eingeloggten Usern Installationsweg + Version der Clients. Für die **Android-App** ([schreibwerkstatt-mobile](https://github.com/bedeberger/schreibwerkstatt-mobile)) und die **Chrome-Erweiterung** ([schreibwerkstatt-browser-extension](https://github.com/bedeberger/schreibwerkstatt-browser-extension)) liest der Server das `latest`-Release des öffentlichen Repos über die GitHub-Public-API ([lib/github-release.js](lib/github-release.js), In-Memory-Cache ~10 min). Kein Token nötig. Wird ein GitHub-Token (PAT) hinterlegt, wird es als Bearer mitgeschickt, um das API-Rate-Limit anzuheben (60→5000 Requests/h). Konfiguration: **Admin-Settings → Erweitert → `macclient.github_token`** (verschlüsselt in `app_settings` gespeichert; der Key-Name stammt aus der Zeit des DMG-Downloads). `GITHUB_TOKEN` in `.env` dient nur noch als einmaliger Boot-Seed in die DB.
+
+Die **macOS-App** braucht das Token nicht: sie kommt aus dem [Mac App Store](https://apps.apple.com/app/id6797073919?mt=12), und ihre Version liest der Server aus der öffentlichen iTunes-Lookup-API ([lib/appstore-lookup.js](lib/appstore-lookup.js)).
 
 ### Update
 

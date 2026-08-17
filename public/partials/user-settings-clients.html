@@ -5,29 +5,37 @@
   250-LOC-Cap bleibt. Scope ist unveraendert `userSettingsCard`; die drei Zeilen
   lesen macRelease/androidRelease/extensionRelease aus [public/js/user-settings.js].
 -->
-    <!-- macOS-App-Download (schreibwerkstatt-focuseditor) -->
-    <div class="card-form-row card-form-row--devices" x-show="macRelease.available" x-cloak x-data="collapsible()">
+    <!--
+      macOS-App (schreibwerkstatt-focuseditor). Installationsweg ist der Mac App
+      Store (`storeUrl`, steht immer in der release.json-Antwort); ein Direkt-
+      Download gibt es nicht. Darum gaten Zeile und Store-Link auf `storeUrl`,
+      die Versions-/Groessen-Teile auf `available` (Store-Versions-Lookup).
+    -->
+    <div class="card-form-row card-form-row--devices" x-show="macRelease.storeUrl || macRelease.available" x-cloak x-data="collapsible()">
       <button type="button" class="collapsible-toggle" x-bind="trigger">
         <span class="history-chevron" x-bind="chevron" aria-hidden="true"></span>
         <svg class="icon icon--sm" aria-hidden="true"><use href="/icons.svg?v=696#laptop-minimal"/></svg>
         <span x-text="$app.t('profile.macApp.title')"></span>
-        <span class="lt-dict-count" x-text="macRelease.version"></span>
+        <span class="lt-dict-count" x-show="macRelease.available" x-text="macRelease.version"></span>
       </button>
       <div class="device-tokens-body" x-bind="panel" x-cloak>
         <p class="muted-msg muted-msg--sm" x-text="$app.t('profile.macApp.intro')"></p>
 
-        <div class="mac-app-meta muted-msg muted-msg--sm">
-          <span x-text="$app.t('profile.macApp.version') + ': ' + macRelease.version"></span>
-          <span x-show="macReleaseSizeMb()" x-text="' · ' + macReleaseSizeMb() + ' MB'"></span>
-          <span x-show="macRelease.publishedAt"
-                x-text="' · ' + new Date(macRelease.publishedAt).toLocaleDateString($store.shell.uiLocale, $app.tzOpts())"></span>
-        </div>
-
-        <p x-show="macRelease.notes" class="mac-app-notes muted-msg muted-msg--sm" x-text="macRelease.notes"></p>
+        <template x-if="macRelease.available">
+          <div>
+            <div class="mac-app-meta muted-msg muted-msg--sm">
+              <span x-text="$app.t('profile.macApp.version') + ': ' + macRelease.version"></span>
+              <span x-show="macReleaseSizeMb()" x-text="' · ' + macReleaseSizeMb() + ' MB'"></span>
+              <span x-show="macRelease.publishedAt"
+                    x-text="' · ' + new Date(macRelease.publishedAt).toLocaleDateString($store.shell.uiLocale, $app.tzOpts())"></span>
+            </div>
+            <p x-show="macRelease.notes" class="mac-app-notes muted-msg muted-msg--sm" x-text="macRelease.notes"></p>
+          </div>
+        </template>
 
         <div class="mac-app-download">
-          <a class="btn-compact" :href="macRelease.dmg?.downloadUrl" :download="macRelease.dmg?.name"
-             x-text="$app.t('profile.macApp.download')"></a>
+          <a class="btn-compact" x-show="macRelease.storeUrl" :href="macRelease.storeUrl"
+             target="_blank" rel="noopener noreferrer" x-text="$app.t('profile.macApp.store')"></a>
           <span x-show="!macReleaseIsMacPlatform()" class="muted-msg muted-msg--sm"
                 x-text="$app.t('profile.macApp.forMacOnly')"></span>
         </div>
