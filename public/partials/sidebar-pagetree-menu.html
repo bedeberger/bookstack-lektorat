@@ -65,6 +65,16 @@
           </button>
         </div>
       </template>
+      <template x-if="pageTreeMenuTarget.kind === 'page' && canEdit()">
+        <div>
+          <div class="context-menu-sep" role="separator"></div>
+          <button type="button" role="menuitem" class="context-menu-item context-menu-item--icon context-menu-item--danger"
+                  @click="pagetreeCtxDeletePage()">
+            <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#trash"/></svg>
+            <span x-text="t('pagetreeCtx.delete')"></span>
+          </button>
+        </div>
+      </template>
     </div>
   </template>
 </div>

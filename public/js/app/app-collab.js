@@ -245,6 +245,15 @@ export const appCollabMethods = {
     const others = [];
     for (const ch of changes) {
       if (!ch?.page_id) continue;
+      if (ch.kind === 'delete') {
+        if (this.currentPage?.id && ch.page_id === this.currentPage.id) {
+          touchedCurrent = ch;
+        } else {
+          this._removePageFromTree?.(ch.page_id);
+          others.push(ch);
+        }
+        continue;
+      }
       if (this.currentPage?.id && ch.page_id === this.currentPage.id) {
         touchedCurrent = ch;
       } else {
@@ -266,6 +275,7 @@ export const appCollabMethods = {
         pageId: others[0].page_id,
         isSelf: !!others[0].is_self,
         device: others[0].device_label || null,
+        kind: others[0].kind || 'update',
       });
     } else if (others.length > 1) {
       // Nur wenn ALLE Rows vom eigenen Account stammen, ist der Batch ein
@@ -285,6 +295,25 @@ export const appCollabMethods = {
     const name = change.last_editor_name || change.last_editor_email;
     const isSelf = !!change.is_self;
     const device = change.device_label || null;
+
+    if (change.kind === 'delete') {
+      // Aktuelle Seite wurde auf einem anderen Geraet / von einem anderen User
+      // geloescht. Editor schliessen, Seite aus dem Tree entfernen.
+      try { clearDraft?.(change.page_id); } catch {}
+      this.resetPage();
+      this._removePageFromTree?.(change.page_id);
+      this._showCollabToast({
+        user: name,
+        pageName: change.page_name,
+        pageId: change.page_id,
+        currentPage: true,
+        isSelf,
+        device,
+        kind: 'delete',
+      });
+      return;
+    }
+
     if (this.editMode && this.editDirty) {
       // Dirty-Editor: kein Auto-Reload — Banner setzen, naechster Save triggert
       // die optimistische DB-Concurrency-Pruefung (Phase 2).

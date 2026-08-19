@@ -1750,6 +1750,7 @@
   "pagetreeCtx.newPagePrompt": "Title of the new page",
   "pagetreeCtx.newPagePlaceholder": "Page title",
   "pagetreeCtx.newPageConfirm": "Create",
+  "pagetreeCtx.delete": "Delete page…",
   "calendar.prevMonth": "Previous month",
   "calendar.nextMonth": "Next month",
   "calendar.jumpPlaceholder": "Jump to month with entries…",

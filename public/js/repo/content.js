@@ -194,7 +194,9 @@ export const contentRepo = {
 
   // DELETE /content/pages/:id. Liefert null.
   async deletePage(id) {
-    return _write('DELETE', 'pages/' + id);
+    const deviceId = getDeviceId();
+    const path = 'pages/' + id + (deviceId ? '?device_id=' + encodeURIComponent(deviceId) : '');
+    return _write('DELETE', path);
   },
 
   // POST /content/pages/:id/move — Seite in anderes Buch verschieben.

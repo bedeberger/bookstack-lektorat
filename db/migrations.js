@@ -11052,6 +11052,30 @@ function _runMigrationsLocked() {
     logger.info('DB-Migration auf Version 272 abgeschlossen (Querverweise: Ziel-Typ table + book_settings.table_numbering).');
   }
 
+  if (version < 273) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS page_deletions (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id         INTEGER NOT NULL REFERENCES books(book_id) ON DELETE CASCADE,
+        page_id         INTEGER NOT NULL,
+        page_name       TEXT,
+        deleted_at      TEXT NOT NULL,
+        deleted_by_email TEXT,
+        device_id       TEXT
+      )
+    `);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_page_deletions_book_id ON page_deletions(book_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_page_deletions_deleted_at ON page_deletions(deleted_at)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_page_deletions_page_id ON page_deletions(page_id)');
+
+    const fkErrors273 = db.pragma('foreign_key_check');
+    if (fkErrors273.length) {
+      throw new Error(`Migration 273: foreign_key_check meldet ${fkErrors273.length} Verstoesse.`);
+    }
+    db.prepare('UPDATE schema_version SET version = 273').run();
+    logger.info('DB-Migration auf Version 273 abgeschlossen (page_deletions fuer Collab-Delete-Events).');
+  }
+
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);
   if (feColsCheck.length > 0 && !feColsCheck.includes('typ')) {

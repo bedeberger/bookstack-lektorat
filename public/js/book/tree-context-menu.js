@@ -1,8 +1,10 @@
 import { EVT } from '../events.js';
+import { clearDraft } from '../editor/draft-storage.js';
 import { contentRepo } from '../repo/content.js';
 import { localIsoDate } from '../utils.js';
 // Pagetree-Rechtsklick-Menü. Aktionen pro Node-Typ:
-//   page    → Öffnen, Editieren (Notebook), Teilen, Exportieren, Neues Kapitel
+//   page    → Öffnen, Editieren (Notebook), Teilen, Exportieren, Neues Kapitel,
+//             Löschen (danger, canEdit-gated)
 //   chapter → Öffnen (Header-Activate = Toggle + ggf. Kapitel-Review), Teilen,
 //             Exportieren, Neues Kapitel, Neue Seite, Aus-/Einschliessen
 //   Neues Kapitel wird hinter dem Ziel-Kapitel (bzw. dem Kapitel der Ziel-Seite)
@@ -14,7 +16,7 @@ import { localIsoDate } from '../utils.js';
 // `this` ist die Alpine-Root-Komponente.
 
 const MENU_W = 240;
-const MENU_H = 300;
+const MENU_H = 340;
 
 export const treeContextMenuMethods = {
   _openPagetreeContextMenu(ev, target) {
@@ -141,6 +143,38 @@ export const treeContextMenuMethods = {
     this._hidePagetreeContextMenu();
     if (!target || target.kind !== 'chapter') return;
     this.setChapterExcluded(target.id, !target.excluded);
+  },
+
+  // Seite aus dem Kontextmenü löschen (danger, bestätigungspflichtig). Die im
+  // Editor offene Seite delegiert an deleteCurrentPage — der räumt Editor-State
+  // + Draft ab und fällt aufs Kapitel zurück. Sonst: Server-Delete, Draft
+  // verwerfen, Tree via loadPages neu aufbauen (feuert pages:loaded → ein
+  // offener Buchorganizer rendert mit).
+  async pagetreeCtxDeletePage() {
+    const target = this.pageTreeMenuTarget;
+    this._hidePagetreeContextMenu();
+    if (!target || target.kind !== 'page' || !this.canEdit()) return;
+    const page = this._findTreePage(target.id);
+    if (!page) return;
+    if (this.currentPage && this.currentPage.id === page.id) {
+      await this.deleteCurrentPage();
+      return;
+    }
+    const ok = await this.appConfirm({
+      message: this.t('bookOrganizer.confirmDeletePage', { name: page.name }),
+      confirmLabel: this.t('common.delete'),
+      cancelLabel: this.t('common.cancel'),
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await contentRepo.deletePage(page.id);
+      try { clearDraft(page.id); } catch {}
+      await this.loadPages();
+    } catch (e) {
+      console.error('[pagetreeCtxDeletePage]', e);
+      this.setStatus(this.t('bookOrganizer.deleteFailed', { detail: e.message }));
+    }
   },
 
   // Neue Seite direkt im angeklickten Kapitel anlegen: Titel per appPrompt,

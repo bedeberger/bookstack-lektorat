@@ -71,15 +71,14 @@ function register(router) {
   });
 
   // GET /content/books/:book_id/changes?since=<iso>&device_id=<uuid> — Seiten, die
-  // seit `since` von einer ANDEREN Partei editiert wurden. „Andere Partei" =
-  // anderer User ODER ein anderes EIGENES Geraet (z.B. nativer Mac-Focus-Client).
-  // Nur der Echo des ANFRAGENDEN Geraets (gleiche device_id) wird ausgefiltert.
-  // Ohne `device_id` (Legacy-Client) faellt der Filter auf reine E-Mail-Exklusion
-  // zurueck. Polling-Endpoint fuer das Collab-Toast-Signal. Ohne `since` liefert er
-  // den Server-„jetzt"-Stempel + leeres Array (Baseline-Sync). Cap 200 Rows.
-  // Jede Change-Row traegt `is_self` (gleicher User, anderes Geraet) + das
-  // `device_label` des schreibenden Geraets, damit der Client Multi-Device-Edits
-  // nicht als Fremd-Edits formuliert.
+  // seit `since` von einer ANDEREN Partei editiert ODER geloescht wurden. „Andere
+  // Partei" = anderer User ODER ein anderes EIGENES Geraet (z.B. nativer Mac-Focus-
+  // Client). Nur der Echo des ANFRAGENDEN Geraets (gleiche device_id) wird
+  // ausgefiltert. Ohne `device_id` (Legacy-Client) faellt der Filter auf reine
+  // E-Mail-Exklusion zurueck. Polling-Endpoint fuer das Collab-Toast-Signal. Ohne
+  // `since` liefert er den Server-„jetzt"-Stempel + leeres Array (Baseline-Sync).
+  // Cap 200 Rows. Jede Change-Row traegt `kind` (`update`|`delete`), `is_self`
+  // (gleicher User, anderes Geraet) + das `device_label` des schreibenden Geraets.
   router.get('/books/:book_id/changes', aclParamGuard('viewer'), (req, res) => {
     const email = sessionEmail(req);
     const sinceRaw = (req.query?.since || '').toString().trim();
@@ -88,7 +87,8 @@ function register(router) {
     const since = !Number.isNaN(Date.parse(sinceRaw)) ? sinceRaw : nowIso;
     const reqDeviceId = (req.query?.device_id || '').toString();
     const hasDevice = _validDeviceId(reqDeviceId);
-    let rows = [];
+    let updates = [];
+    let deletions = [];
     try {
       // Mit device_id: nur ausfiltern, wenn der Edit von DIESEM Geraet stammt —
       // also gleiche E-Mail UND (device == mein Geraet ODER device unbekannt/NULL,
@@ -99,9 +99,9 @@ function register(router) {
                     AND (p.last_editor_device_id IS NULL OR p.last_editor_device_id = ?))`
         : `AND (? IS NULL OR p.last_editor_email <> ?)`;
       const selfArgs = hasDevice ? [email, reqDeviceId] : [email, email];
-      rows = db.prepare(`
+      updates = db.prepare(`
         SELECT p.page_id, p.page_name, p.chapter_id,
-               p.updated_at, p.last_editor_email,
+               p.updated_at AS changed_at, p.last_editor_email,
                u.display_name AS last_editor_name,
                d.label        AS last_editor_device_label
           FROM pages p
@@ -109,7 +109,7 @@ function register(router) {
           -- Geraete-Label nur fuer die EIGENEN Geraete des Anfragers (gleicher
           -- Join-Scope wie loadPage) — fremde Geraetenamen leaken nicht.
           LEFT JOIN app_users_devices d ON d.device_id = p.last_editor_device_id
-                                       AND d.user_email = ?
+                                        AND d.user_email = ?
          WHERE p.book_id = ?
            AND p.updated_at > ?
            AND p.last_editor_email IS NOT NULL
@@ -117,20 +117,49 @@ function register(router) {
          ORDER BY p.updated_at ASC
          LIMIT 200
       `).all(email, req.bookId, since, ...selfArgs);
+
+      const delSelfFilter = hasDevice
+        ? `AND NOT (deleted_by_email = ? AND (device_id IS NULL OR device_id = ?))`
+        : `AND (? IS NULL OR deleted_by_email <> ?)`;
+      const delSelfArgs = hasDevice ? [email, reqDeviceId] : [email, email];
+      deletions = db.prepare(`
+        SELECT page_id, page_name, deleted_at AS changed_at, deleted_by_email AS last_editor_email,
+               u.display_name AS last_editor_name,
+               d.label        AS last_editor_device_label
+          FROM page_deletions
+          LEFT JOIN app_users         u ON u.email = deleted_by_email
+          LEFT JOIN app_users_devices d ON d.device_id = device_id
+                                        AND d.user_email = ?
+         WHERE book_id = ?
+           AND deleted_at > ?
+           ${delSelfFilter}
+         ORDER BY deleted_at ASC
+         LIMIT 200
+      `).all(email, req.bookId, since, ...delSelfArgs);
     } catch (e) {
       return _fail(res, e, 'GET /content/books/:id/changes');
     }
+
+    const merged = [
+      ...updates.map(r => ({ ...r, kind: 'update' })),
+      ...deletions.map(r => ({ ...r, kind: 'delete' })),
+    ].sort((a, b) => {
+      const at = a.changed_at || '';
+      const bt = b.changed_at || '';
+      if (at !== bt) return at.localeCompare(bt);
+      return (a.kind === 'delete' ? 1 : 0) - (b.kind === 'delete' ? 1 : 0);
+    }).slice(0, 200);
+
     res.json({
       now: nowIso,
-      changes: rows.map(r => ({
+      changes: merged.map(r => ({
+        kind: r.kind,
         page_id: r.page_id,
         page_name: r.page_name || '',
         chapter_id: r.chapter_id || null,
-        updated_at: r.updated_at,
+        updated_at: r.changed_at,
         last_editor_email: r.last_editor_email,
         last_editor_name: r.last_editor_name || r.last_editor_email,
-        // Eigenes Zweit-Geraet vs. fremder ACL-User: der Client formuliert die
-        // Meldung danach („auf Mac-Client geaendert" statt „anderer User").
         is_self: !!email && r.last_editor_email === email,
         device_label: r.last_editor_device_label || null,
       })),

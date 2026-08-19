@@ -525,4 +525,26 @@ export const treeLoadMethods = {
     if (this._statsObserverState?.flushTimer) clearTimeout(this._statsObserverState.flushTimer);
     this._statsObserverState = null;
   },
+
+  // Entfernt eine Seite aus dem Root-Tree + Seitenliste (z.B. Remote-Delete
+  // aus dem Collab-Feed). Kein Server-Call.
+  _removePageFromTree(pageId) {
+    const id = Number(pageId);
+    if (!Number.isFinite(id)) return;
+    const nav = this.$store.nav;
+    const pi = nav.pages.findIndex(p => p.id === id);
+    if (pi >= 0) nav.pages.splice(pi, 1);
+    for (let i = nav.tree.length - 1; i >= 0; i--) {
+      const it = nav.tree[i];
+      if (it.type !== 'chapter') continue;
+      if (it.solo && it.pages?.[0]?.id === id) {
+        nav.tree.splice(i, 1);
+      } else {
+        const j = it.pages.findIndex(p => p.id === id);
+        if (j >= 0) it.pages.splice(j, 1);
+      }
+    }
+    if (this._pageIdOrderMap) this._pageIdOrderMap.delete(id);
+    this._refreshChapterStats();
+  },
 };
