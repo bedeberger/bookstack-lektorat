@@ -300,7 +300,7 @@ export const crudMethods = {
 
   async _deletePageRaw(id) {
     return await this._runMutation(async () => {
-      await contentRepo.deletePage(id);
+      await contentRepo.deletePage(id, { bookId: Alpine.store('nav').selectedBookId });
       this._forgetPageLocally(id);
       await this._reattachSortables();
     }, 'bookOrganizer.deleteFailed');

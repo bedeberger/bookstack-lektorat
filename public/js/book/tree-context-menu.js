@@ -168,7 +168,7 @@ export const treeContextMenuMethods = {
     });
     if (!ok) return;
     try {
-      await contentRepo.deletePage(page.id);
+      await contentRepo.deletePage(page.id, { bookId: page.book_id });
       try { clearDraft(page.id); } catch {}
       await this.loadPages();
     } catch (e) {

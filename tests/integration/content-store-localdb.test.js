@@ -133,12 +133,20 @@ test('localdb: searchPages (LIKE-Fallback)', async () => {
   assert.equal(bodyHits[0].name, 'Orwell');
 });
 
-test('localdb: deletePage entfernt Row + wirft NOT_FOUND auf Re-Delete', async () => {
+test('localdb: deletePage entfernt Row + schreibt page_deletions + wirft NOT_FOUND auf Re-Delete', async () => {
   const bookId = _seedBook();
-  const pageId = _seedPage(bookId, null);
-  await ctx.contentStore.deletePage(pageId);
+  const pageId = _seedPage(bookId, null, { name: 'Seite zum Loeschen' });
+  await ctx.contentStore.deletePage(pageId, null, { deletedBy: 'alice@example.com', deviceId: 'dev-123' });
   await assert.rejects(() => ctx.contentStore.loadPage(pageId), { code: 'NOT_FOUND' });
   await assert.rejects(() => ctx.contentStore.deletePage(pageId), { code: 'NOT_FOUND' });
+
+  const del = ctx.connection.db.prepare('SELECT * FROM page_deletions WHERE page_id = ?').get(pageId);
+  assert.ok(del, 'page_deletions-Eintrag fehlt');
+  assert.equal(del.book_id, bookId);
+  assert.equal(del.page_name, 'Seite zum Loeschen');
+  assert.equal(del.deleted_by_email, 'alice@example.com');
+  assert.equal(del.device_id, 'dev-123');
+  assert.ok(del.deleted_at);
 });
 
 test('localdb: savePage mit expected_updated_at = aktueller Stand → ok, setzt last_editor_email', async () => {

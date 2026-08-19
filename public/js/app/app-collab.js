@@ -18,6 +18,7 @@
 // geaendert", nicht „von anderen Usern geaendert".
 
 import { getDeviceId } from '../device-id.js';
+import { clearDraft } from '../editor/draft-storage.js';
 
 const COLLAB_POLL_MS = 5000;
 
@@ -342,13 +343,19 @@ export const appCollabMethods = {
   },
 
   // Toast-Text als Methode statt Template-Ternary-Kaskade: drei Faelle
-  // (aktuelle Seite / Batch / Einzelseite) mal Self-vs-Fremd.
+  // (aktuelle Seite / Batch / Einzelseite) mal Self-vs-Fremd, plus Delete.
   collabToastText() {
     const c = this.$store.collab.collabToast;
     if (!c) return '';
     const device = c.device || this.t('presence.device.unknown');
     const user = c.user || this.t('edit.conflict.unknownUser');
+    const isDelete = c.kind === 'delete';
     if (c.currentPage) {
+      if (isDelete) {
+        return c.isSelf
+          ? this.t('collab.toast.currentPageDeletedSelf', { device })
+          : this.t('collab.toast.currentPageDeleted', { user });
+      }
       return c.isSelf
         ? this.t('collab.toast.currentPageSelf', { device })
         : this.t('collab.toast.currentPage', { user });
@@ -359,6 +366,11 @@ export const appCollabMethods = {
         : this.t('collab.toast.batch', { count: c.count });
     }
     const page = c.pageName || '';
+    if (isDelete) {
+      return c.isSelf
+        ? this.t('collab.toast.otherPageDeletedSelf', { device, page })
+        : this.t('collab.toast.otherPageDeleted', { user, page });
+    }
     return c.isSelf
       ? this.t('collab.toast.otherPageSelf', { device, page })
       : this.t('collab.toast.otherPage', { user, page });

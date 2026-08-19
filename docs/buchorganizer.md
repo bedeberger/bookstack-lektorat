@@ -59,7 +59,7 @@ Der buch-skopierte Teil des States kommt aus **einer** Factory `freshState()` in
 - **`onBookChanged`** — Sortable destroyen, gesamten Card-State leeren. **Vor `loadPages`** — der nachfolgende `pages:loaded`-Listener triggert dann den neuen Snapshot.
 - **`onCardRefresh`** — nur `_rerender()`. **Kein `loadPages`** — Drag/Rename/CRUD mutieren `nav.tree` in-place, Server-Stand und Card-State sind synchron. `loadPages` würde Sidebar-Tree clearen und neu fetchen → Flicker.
 - **`onViewReset`** — Sortable destroyen + State leeren.
-- **`pages:loaded`-Listener** — separat über `extraListeners`. Triggert `_rerender()` nur, wenn die Karte sichtbar ist. **Kein `$watch(nav.tree)`** — eigene Reassignments im Tree würden Selbst-Reentry erzeugen.
+- **`pages:loaded`- + `page:removed`-Listener** — separat über `extraListeners`. Beide triggern `_rerender()` nur, wenn die Karte sichtbar ist: `pages:loaded` nach echten Server-Reloads (Buchwechsel, `loadPages`), `page:removed` nach einem Remote-Delete aus dem Collab-Feed (`tree/load.js#_removePageFromTree` entfernt die Seite dort bereits in-place aus `nav.tree`/`nav.pages`, ohne Reload — der Workstate würde die Zeile sonst weiter zeigen). **Kein `$watch(nav.tree)`** — eigene Reassignments im Tree würden Selbst-Reentry erzeugen.
 
 Tastatur (window-Listener via Lifecycle-Signal): Cmd/Ctrl+Z → `historyUndo`, Cmd/Ctrl+Shift+Z bzw. Cmd/Ctrl+Y → `historyRedo`. **Greift nicht** in INPUT/TEXTAREA (native Edit-Undo der Rename-Felder soll funktionieren) und nur bei sichtbarer Karte.
 

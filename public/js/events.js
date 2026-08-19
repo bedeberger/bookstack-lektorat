@@ -30,6 +30,11 @@ export const EVT = {
   CARD_REFRESH: 'card:refresh',                 // detail: { name }
   BOOK_SETTINGS_UPDATED: 'book:settings:updated', // detail: { bookId }
   PAGES_LOADED: 'pages:loaded',                 // kein detail
+  // Eine Seite wurde lokal aus nav.tree/nav.pages entfernt, OHNE vollen Reload
+  // (Remote-Delete aus dem Collab-Feed, tree/load.js#_removePageFromTree).
+  // Karten mit eigener Edit-Repräsentation des Baums (Buchorganizer) ziehen
+  // darauf ihren Snapshot nach — `pages:loaded` feuert hier bewusst nicht.
+  PAGE_REMOVED: 'page:removed',                 // detail: { pageId }
 
   // ── Command-Palette ──────────────────────────────────────────────────────
   PALETTE_OPEN: 'palette:open',                 // detail: { mode? }

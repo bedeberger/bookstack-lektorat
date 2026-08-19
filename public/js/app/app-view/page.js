@@ -251,7 +251,7 @@ export const pageMethods = {
     // danach dorthin zurückfallen statt leere Ansicht zu zeigen.
     const chapterId = page.chapter_id;
     try {
-      await contentRepo.deletePage(page.id);
+      await contentRepo.deletePage(page.id, { bookId: this.$store.nav.selectedBookId });
       try { clearDraft(page.id); } catch {}
       this.resetPage();
       await this.loadPages();

@@ -127,8 +127,11 @@ test('Snapshot-Spalten verboten (CLAUDE.md "Snapshot-Spalten verboten")', () => 
     'continuity_issue_figures.figur_name',
     'continuity_issue_chapters.kapitel',
     // chat_sessions.page_name: Snapshot von BookStack-Seitennamen, da chat
-    // auch nach Page-Löschung lesbar bleiben soll. Bewusst tolerier(t).
+    // auch nach Page-Löschung lesbar bleiben soll. Bewusst toleriert.
     'chat_sessions.page_name',
+    // page_deletions.page_name: Audit-Name der geloeschten Seite fuer den
+    // Collab-Toast; die Seite selbst ist bereits hard-deleted.
+    'page_deletions.page_name',
   ]);
 
   const offenders = [];

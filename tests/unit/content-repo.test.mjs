@@ -121,6 +121,31 @@ test('createBook → POST /content/books', async () => {
   assert.equal(out.id, 99);
 });
 
+test('deletePage invalidiert Seite + Tree-Cache (bookId gesetzt)', async () => {
+  // SW-SWR: ohne Tree-Bust liefert der naechste bookTree-Read die geloeschte
+  // Seite aus dem Cache zurueck (Geister-Seite). Tree-Bust muss wie bei
+  // createPage/movePage mitgegeben werden.
+  const calls = mockFetch(() => ok({ ok: true }));
+  await contentRepo.deletePage(7, { bookId: 42 });
+  assert.equal(calls[0].opts.method, 'DELETE');
+  assert.ok(calls[0].url.startsWith('/content/pages/7?device_id='));
+  assert.equal(postedMessages.length, 1);
+  assert.deepEqual(postedMessages[0], {
+    type: 'invalidate-content',
+    paths: ['pages/7', 'books/42/tree'],
+  });
+});
+
+test('deletePage ohne bookId invalidiert nur die Seite', async () => {
+  mockFetch(() => ok({ ok: true }));
+  await contentRepo.deletePage(7);
+  assert.equal(postedMessages.length, 1);
+  assert.deepEqual(postedMessages[0], {
+    type: 'invalidate-content',
+    paths: ['pages/7'],
+  });
+});
+
 test('GET-Fehler liefert Error mit status + error_code', async () => {
   mockFetch(() => new Response(
     JSON.stringify({ error_code: 'INVALID_PAGE_ID' }),

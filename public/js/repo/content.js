@@ -192,11 +192,15 @@ export const contentRepo = {
     return _write('POST', 'pages', body, inv);
   },
 
-  // DELETE /content/pages/:id. Liefert null.
-  async deletePage(id) {
+  // DELETE /content/pages/:id. Liefert null. `bookId` invalidiert zusaetzlich
+  // den Tree-Cache (SW-SWR wuerde die geloeschte Seite sonst als Geist zeigen,
+  // bis die Hintergrund-Revalidate durch ist — dasselbe Muster wie createPage).
+  async deletePage(id, { bookId } = {}) {
     const deviceId = getDeviceId();
     const path = 'pages/' + id + (deviceId ? '?device_id=' + encodeURIComponent(deviceId) : '');
-    return _write('DELETE', path);
+    const inv = ['pages/' + id];
+    if (bookId != null) inv.push('books/' + bookId + '/tree');
+    return _write('DELETE', path, undefined, inv);
   },
 
   // POST /content/pages/:id/move — Seite in anderes Buch verschieben.

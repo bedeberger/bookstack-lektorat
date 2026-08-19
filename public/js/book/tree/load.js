@@ -527,24 +527,31 @@ export const treeLoadMethods = {
   },
 
   // Entfernt eine Seite aus dem Root-Tree + Seitenliste (z.B. Remote-Delete
-  // aus dem Collab-Feed). Kein Server-Call.
+  // aus dem Collab-Feed). Kein Server-Call. Feuert EVT.PAGE_REMOVED, damit
+  // Karten mit eigener Edit-Repräsentation des Baums (Buchorganizer-
+  // workTree/soloPages) ihren Snapshot nachziehen — `pages:loaded` feuert hier
+  // nicht, weil kein Reload stattfindet.
   _removePageFromTree(pageId) {
     const id = Number(pageId);
     if (!Number.isFinite(id)) return;
     const nav = this.$store.nav;
+    let removed = false;
     const pi = nav.pages.findIndex(p => p.id === id);
-    if (pi >= 0) nav.pages.splice(pi, 1);
+    if (pi >= 0) { nav.pages.splice(pi, 1); removed = true; }
     for (let i = nav.tree.length - 1; i >= 0; i--) {
       const it = nav.tree[i];
       if (it.type !== 'chapter') continue;
       if (it.solo && it.pages?.[0]?.id === id) {
         nav.tree.splice(i, 1);
+        removed = true;
       } else {
         const j = it.pages.findIndex(p => p.id === id);
-        if (j >= 0) it.pages.splice(j, 1);
+        if (j >= 0) { it.pages.splice(j, 1); removed = true; }
       }
     }
+    if (!removed) return;
     if (this._pageIdOrderMap) this._pageIdOrderMap.delete(id);
     this._refreshChapterStats();
+    window.dispatchEvent(new CustomEvent(EVT.PAGE_REMOVED, { detail: { pageId: id } }));
   },
 };

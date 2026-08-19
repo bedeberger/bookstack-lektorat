@@ -107,3 +107,59 @@ test('Fehlendes Geraete-Label faellt auf den Unbekannt-Key zurueck', () => {
   ctx._applyCollabChanges([change(3, { device_label: null })]);
   assert.match(ctx.collabToastText(), /presence\.device\.unknown/);
 });
+
+const del = (id, over = {}) => ({
+  kind: 'delete',
+  page_id: id,
+  page_name: 'Seite ' + id,
+  updated_at: '2026-07-26T10:00:00.000Z',
+  last_editor_email: 'me@example.com',
+  last_editor_name: 'Ich',
+  is_self: true,
+  device_label: 'MacBook',
+  ...over,
+});
+
+test('Delete einer anderen Seite entfernt sie aus dem Tree + zeigt Delete-Toast', () => {
+  const ctx = makeCtx();
+  ctx.$store.nav = { pages: [{ id: 1, name: 'Seite 1' }], tree: [{ type: 'chapter', solo: true, pages: [{ id: 1, name: 'Seite 1' }] }] };
+  ctx._removePageFromTree = function (id) {
+    const nav = this.$store.nav;
+    const pi = nav.pages.findIndex(p => p.id === id);
+    if (pi >= 0) nav.pages.splice(pi, 1);
+    for (let i = nav.tree.length - 1; i >= 0; i--) {
+      const it = nav.tree[i];
+      if (it.type !== 'chapter') continue;
+      if (it.solo && it.pages?.[0]?.id === id) nav.tree.splice(i, 1);
+      else {
+        const j = it.pages.findIndex(p => p.id === id);
+        if (j >= 0) it.pages.splice(j, 1);
+      }
+    }
+  };
+  ctx._applyCollabChanges([del(1)]);
+  assert.equal(ctx.$store.nav.pages.length, 0);
+  assert.equal(ctx.$store.nav.tree.length, 0);
+  assert.match(ctx.collabToastText(), /^collab\.toast\.otherPageDeletedSelf:/);
+});
+
+test('Delete der aktuell offenen Seite schliesst den Editor + entfernt sie', () => {
+  const ctx = makeCtx({ currentPage: { id: 5 } });
+  let reset = false;
+  let removed = null;
+  ctx.resetPage = () => { reset = true; };
+  ctx._removePageFromTree = function (id) { removed = id; };
+  ctx._applyCollabChanges([del(5)]);
+  assert.equal(reset, true);
+  assert.equal(removed, 5);
+  assert.match(ctx.collabToastText(), /^collab\.toast\.currentPageDeletedSelf:/);
+});
+
+test('Delete durch fremden User nennt den User', () => {
+  const ctx = makeCtx();
+  ctx.$store.nav = { pages: [{ id: 2 }], tree: [{ type: 'chapter', solo: true, pages: [{ id: 2 }] }] };
+  ctx._removePageFromTree = function () {};
+  ctx._applyCollabChanges([del(2, { is_self: false, last_editor_email: 'alice@example.com', last_editor_name: 'Alice', device_label: null })]);
+  assert.match(ctx.collabToastText(), /^collab\.toast\.otherPageDeleted:/);
+  assert.match(ctx.collabToastText(), /Alice/);
+});

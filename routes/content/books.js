@@ -119,7 +119,7 @@ function register(router) {
       `).all(email, req.bookId, since, ...selfArgs);
 
       const delSelfFilter = hasDevice
-        ? `AND NOT (deleted_by_email = ? AND (device_id IS NULL OR device_id = ?))`
+        ? `AND NOT (deleted_by_email = ? AND (page_deletions.device_id IS NULL OR page_deletions.device_id = ?))`
         : `AND (? IS NULL OR deleted_by_email <> ?)`;
       const delSelfArgs = hasDevice ? [email, reqDeviceId] : [email, email];
       deletions = db.prepare(`
@@ -128,7 +128,7 @@ function register(router) {
                d.label        AS last_editor_device_label
           FROM page_deletions
           LEFT JOIN app_users         u ON u.email = deleted_by_email
-          LEFT JOIN app_users_devices d ON d.device_id = device_id
+          LEFT JOIN app_users_devices d ON d.device_id = page_deletions.device_id
                                         AND d.user_email = ?
          WHERE book_id = ?
            AND deleted_at > ?

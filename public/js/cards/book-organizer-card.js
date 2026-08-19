@@ -10,10 +10,11 @@
 // dieselben Items, die wir mutieren, und re-rendert nur die betroffenen Stellen
 // via Alpine-Deep-Reactivity.
 //
-// Re-Snapshot der Card-Visualisierung passiert ausschliesslich über das
-// `pages:loaded`-Event aus tree.js (echte Server-Reloads, z.B. Buchwechsel) —
-// nicht über einen $watch der Tree-Identität, sonst würden eigene
-// Reassignments im Tree zur Selbst-Reentry führen.
+// Re-Snapshot der Card-Visualisierung passiert über die Events `pages:loaded`
+// (echte Server-Reloads, z.B. Buchwechsel) und `page:removed` (Remote-Delete
+// aus dem Collab-Feed — `_removePageFromTree` entfernt die Seite dort bereits
+// aus nav.tree/nav.pages) — nicht über einen $watch der Tree-Identität, sonst
+// würden eigene Reassignments im Tree zur Selbst-Reentry führen.
 //
 // Methoden-Pool kommt aus ../book-organizer.js (Slices: dnd, persist, mirror,
 // crud, history, view).
@@ -22,6 +23,7 @@ import { setupCardLifecycle } from './card-lifecycle.js';
 import { loadSortable } from '../lazy-libs.js';
 import { bookOrganizerMethods } from '../book-organizer.js';
 import { MAX_CHAPTER_DEPTH } from '../book-organizer/constants.js';
+import { EVT } from '../events.js';
 
 // Buch-skopierter State — SSoT fuer Initial-Wert, `book:changed` und
 // `view:reset`. Factory (keine Konstante): Object.assign wuerde sonst dieselben
@@ -97,6 +99,14 @@ export function registerBookOrganizerCard() {
             // Buchwechsel bei offener Karte: `book:changed` hat den Slice-State
             // geleert, hier kommt der des neuen Buchs.
             this.loadRedaktion();
+          } },
+          // Remote-Delete (Collab-Feed): `_removePageFromTree` hat die Seite
+          // bereits aus nav.tree/nav.pages entfernt (In-Place, kein Reload →
+          // kein pages:loaded). Der Workstate muss trotzdem nachgezogen werden,
+          // sonst bleibt die geloeschte Seite als Zeile stehen.
+          { type: EVT.PAGE_REMOVED, handler: async () => {
+            if (!window.__app.showBookOrganizerCard) return;
+            await this._rerender();
           } },
         ],
       });
