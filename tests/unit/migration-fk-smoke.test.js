@@ -104,6 +104,32 @@ test('Alle FK-Spalten haben einen Index (Performance)', () => {
     `FK-Spalten ohne Index (Performance-Falle): ${JSON.stringify(real)}`);
 });
 
+test('Keine SET-NULL-FK-Spalte, die ein CHECK als NOT NULL fordert', () => {
+  // `ON DELETE SET NULL` und ein CHECK, der dieselbe Spalte als gesetzt fordert,
+  // schliessen sich aus: die FK-Aktion nullt die Spalte und verletzt dabei den
+  // CHECK — die loeschende Transaktion bricht ab. Der Fehler zeigt sich NICHT
+  // beim Anlegen, sondern erst beim Loeschen des Elternsatzes, und dann fuer
+  // JEDEN Loeschweg, der die Kette anfasst (Seite, Kapitel, Buch, Konto).
+  // Darum ein statischer Tripwire ueber das ganze Schema statt Einzeltests.
+  const tables = db.prepare(
+    "SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+  ).all();
+
+  const conflicts = [];
+  for (const t of tables) {
+    if (!t.sql || !/CHECK/i.test(t.sql)) continue;
+    for (const fk of db.pragma(`foreign_key_list("${t.name}")`)) {
+      if (fk.on_delete !== 'SET NULL') continue;
+      // Grob, aber genau die gefaehrliche Form: der CHECK verlangt irgendwo,
+      // dass diese Spalte gesetzt ist.
+      const re = new RegExp(`\\b${fk.from}\\s+IS NOT NULL`, 'i');
+      if (re.test(t.sql)) conflicts.push(`${t.name}.${fk.from} → ${fk.table} (SET NULL vs. CHECK)`);
+    }
+  }
+  assert.deepEqual(conflicts, [],
+    `SET NULL trifft NOT-NULL-CHECK — dieses Loeschen schlaegt zur Laufzeit fehl: ${JSON.stringify(conflicts)}`);
+});
+
 test('Snapshot-Spalten verboten (CLAUDE.md "Snapshot-Spalten verboten")', () => {
   // Display-Namen (chapter_name, page_name, book_name, kapitel, seite) gehören
   // NICHT in Tabellen — Wahrheit lebt in chapters/pages/books/figures.

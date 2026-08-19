@@ -278,6 +278,9 @@ export const crudMethods = {
     if (ok && createdId != null) this._recordCreateChapter(createdId, name);
   },
 
+  // Der Organizer loescht die Seite NICHT, die im Editor offen ist — dort raeumt
+  // `deleteCurrentPage` Editor-State und Kapitel-Rueckfall mit ab, was diese
+  // Karte nicht kann. Bewusste Weigerung statt stiller Teil-Loeschung.
   async deletePage(id) {
     const root = window.__app;
     if (root.currentPage && root.currentPage.id === id) {
@@ -286,59 +289,37 @@ export const crudMethods = {
     }
     const page = this._findPage(id);
     if (!page) return;
-    const ok = await root.appConfirm({
-      message: root.t('bookOrganizer.confirmDeletePage', { name: page.name }),
-      confirmLabel: root.t('common.delete'),
-      cancelLabel: root.t('common.cancel'),
-      danger: true,
-    });
-    if (!ok) return;
-    await this._deletePageRaw(id);
-    // Delete ist nicht reversibel → History invalidieren.
-    this._clearHistory();
+    const ok = await this._deletePageRaw(id, { name: page.name, confirm: true });
+    // Delete ist nicht reversibel → History invalidieren. Nur nach echtem
+    // Loeschen: ein Abbruch in der Rueckfrage darf den Undo-Stack nicht raeumen.
+    if (ok) this._clearHistory();
   },
 
-  async _deletePageRaw(id) {
-    return await this._runMutation(async () => {
-      await contentRepo.deletePage(id, { bookId: Alpine.store('nav').selectedBookId });
-      this._forgetPageLocally(id);
-      await this._reattachSortables();
-    }, 'bookOrganizer.deleteFailed');
+  // Ohne Rueckfrage per Default — der History-Undo eines `create-page` loescht
+  // die Seite wieder und darf dafuer keinen Dialog zeigen.
+  //
+  // Der Loeschvorgang selbst liegt beim Root (`deletePageById`): EINE Methode
+  // fuer alle drei Loeschorte (Sidebar-Kontextmenue, Editor, diese Karte), inkl.
+  // Server-Call, Entwurfs-Cleanup, Fehlermeldung und Store-Pflege. Hier bleibt
+  // nur der Saving-Flag der Karte; ihr Workstate zieht ueber den
+  // `page:removed`-Listener nach — derselbe Weg wie beim Remote-Delete.
+  async _deletePageRaw(id, opts = {}) {
+    this.organizerSaving = true;
+    try {
+      return await window.__app.deletePageById(id, { confirm: false, ...opts });
+    } finally {
+      this.organizerSaving = false;
+      this.organizerStatus = '';
+    }
   },
 
-  // Entfernt eine Seite aus dem lokalen Store/Tree + Maps, OHNE Server-Call.
-  // Geteilt von _deletePageRaw (Seite geloescht) und movePageToBook (Seite hat
-  // dieses Buch verlassen). Rebuild der Maps + Chapter-Stats inklusive.
+  // Entfernt eine Seite aus Store + Tree, OHNE Server-Call. Die Mutation liegt
+  // beim Root (`_removePageFromTree`, SSoT): sie dispatcht `page:removed`, und
+  // der Card-Listener zieht Workstate, Order-Maps und Diary-Cache nach.
+  // Bleibt als eigene Methode fuer movePageToBook — dort verlaesst die Seite
+  // dieses Buch, ohne geloescht zu werden.
   _forgetPageLocally(id) {
-    const nav = Alpine.store('nav');
-    const pi = nav.pages.findIndex(p => p.id === id);
-    if (pi >= 0) nav.pages.splice(pi, 1);
-    for (let i = nav.tree.length - 1; i >= 0; i--) {
-      const it = nav.tree[i];
-      if (it.type !== 'chapter') continue;
-      if (it.solo && it.pages?.[0]?.id === id) {
-        nav.tree.splice(i, 1);
-      } else if (!it.solo) {
-        const j = it.pages.findIndex(p => p.id === id);
-        if (j >= 0) it.pages.splice(j, 1);
-      }
-    }
-    // Rekursiv durch workTree.subchapters — sonst bleiben Sub-Kapitel-Pages sichtbar.
-    const removeFromTree = (list) => {
-      for (const c of list) {
-        const j = c.pages.findIndex(p => p.id === id);
-        if (j >= 0) { c.pages.splice(j, 1); return true; }
-        if (removeFromTree(c.subchapters || [])) return true;
-      }
-      return false;
-    };
-    if (!removeFromTree(this.workTree)) {
-      const si = this.soloPages.findIndex(p => p.id === id);
-      if (si >= 0) this.soloPages.splice(si, 1);
-    }
-    this._rebuildPageOrderMaps();
-    this._invalidateDiaryCache();
-    this._refreshChapterStats();
+    window.__app._removePageFromTree(id);
   },
 
   // Seite in ein anderes Buch verschieben. Bestaetigung mit Warnung (Buchwelt-

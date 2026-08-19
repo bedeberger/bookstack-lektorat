@@ -1,5 +1,5 @@
 // Teil von appViewMethods (siehe Facade app-view.js).
-import { clearDraft, contentRepo, decorateMentions, escHtml, fetchJson, getDeviceId, htmlToText, readDraft, setLastPageId } from './_shared.js';
+import { EVT, clearDraft, contentRepo, decorateMentions, escHtml, fetchJson, getDeviceId, htmlToText, readDraft, setLastPageId } from './_shared.js';
 
 export const pageMethods = {
   async selectPage(p) {
@@ -233,38 +233,79 @@ export const pageMethods = {
   },
 
 
-  // Löscht die aktuell offene leere Seite. Nur sinnvoll für `currentPageEmpty`;
-  // UI rendert den Button auch nur dann. Race: User triggert Delete, während
-  // selectPage noch lädt → bestätigte ID einfrieren und beim Bestätigen prüfen.
+  // EINZIGER Loeschweg einer Seite im Frontend — Sidebar-Kontextmenue, Editor
+  // und Buchorganizer laufen alle hierher. Traegt Rueckfrage, Server-Call,
+  // Entwurfs-Cleanup, Editor-Schliessung und das lokale Entfernen aus dem Store;
+  // die Aufrufer behalten nur ihren eigenen Nachlauf (Editor: Kapitel-Rueckfall,
+  // Organizer: History-Invalidierung).
+  //
+  // Kein `loadPages()`: entfernt wird in-place aus `nav.pages`/`nav.tree`
+  // (`_removePageFromTree`, dieselbe SSoT wie der Remote-Delete des Collab-Feeds).
+  // Ein Refetch wuerde den Sidebar-Tree leeren und neu aufbauen — sichtbares
+  // Flackern fuer eine Information, die der Client schon hat.
+  //
+  // Liefert true, wenn die Seite wirklich weg ist (der Aufrufer haengt seinen
+  // Nachlauf daran); false bei Abbruch in der Rueckfrage UND bei Serverfehler —
+  // die Fehlermeldung steht dann schon im Status.
+  //
+  // `verify` laeuft NACH der Rueckfrage: der Dialog ist asynchron, waehrenddessen
+  // kann eine andere Seite geoeffnet worden sein. Aufrufer, deren Ziel „die
+  // aktuelle Seite" ist, pruefen darin, dass es noch dieselbe ist.
+  async deletePageById(pageId, { name = '', confirm = true, verify = null } = {}) {
+    if (!pageId || !this.canEdit()) return false;
+    if (confirm) {
+      const ok = await this.appConfirm({
+        message: this.t('bookOrganizer.confirmDeletePage', { name }),
+        confirmLabel: this.t('common.delete'),
+        cancelLabel: this.t('common.cancel'),
+        danger: true,
+      });
+      if (!ok) return false;
+    }
+    if (verify && !verify()) return false;
+    try {
+      await contentRepo.deletePage(pageId, { bookId: this.$store.nav.selectedBookId });
+    } catch (e) {
+      console.error('[deletePageById]', e);
+      this.setStatus(this.t('bookOrganizer.deleteFailed', { detail: e.message }));
+      return false;
+    }
+    try { clearDraft(pageId); } catch {}
+    // Offene Seite: erst den Editor abbauen, dann die Zeile ziehen — gleiche
+    // Reihenfolge wie der Remote-Delete-Pfad (app-collab.js), sonst rendert der
+    // Editor kurz eine Seite, die es im Tree nicht mehr gibt.
+    if (this.currentPage?.id === pageId) this.resetPage();
+    this._removePageFromTree(pageId);
+    // Loeschen aendert die Verfuegbarkeit von Querverweis-Zielen. Der Ziel-Picker
+    // cacht seine Liste je Buch; ohne dieses Signal zeigte er die geloeschte
+    // Seite bis zum Buchwechsel weiter an.
+    window.dispatchEvent(new CustomEvent(EVT.XREFS_CHANGED,
+      { detail: { bookId: this.$store.nav.selectedBookId ?? null } }));
+    return true;
+  },
+
+
+  // Löscht die aktuell offene Seite. Zwei Aufrufer: der Knopf im Leer-Zustand
+  // des Editors (nur bei `currentPageEmpty` gerendert) und das Sidebar-Kontext-
+  // menü, wenn dessen Ziel die offene Seite ist. Eigener Nachlauf gegenüber
+  // `deletePageById`: der Rückfall aufs Kapitel.
   async deleteCurrentPage() {
     const page = this.currentPage;
     if (!page || !this.canEdit()) return;
-    const ok = await this.appConfirm({
-      message: this.t('bookOrganizer.confirmDeletePage', { name: page.name }),
-      confirmLabel: this.t('common.delete'),
-      cancelLabel: this.t('common.cancel'),
-      danger: true,
-    });
-    if (!ok) return;
-    if (this.currentPage?.id !== page.id) return;
-    // Kapitel der gelöschten Seite merken (resetPage nullt currentPage) —
+    // Kapitel der gelöschten Seite merken (deletePageById nullt currentPage) —
     // danach dorthin zurückfallen statt leere Ansicht zu zeigen.
     const chapterId = page.chapter_id;
-    try {
-      await contentRepo.deletePage(page.id, { bookId: this.$store.nav.selectedBookId });
-      try { clearDraft(page.id); } catch {}
-      this.resetPage();
-      await this.loadPages();
-      // Auf das Kapitel zurückfallen (wie ein Klick auf den Kapitel-Header):
-      // leeres Kapitel → Kapitel-Review-Karte (neue Seite anlegbar), sonst
-      // Review/Expand. Solo-Seiten (kein chapter_id) bleiben ohne Fallback.
-      if (chapterId != null) {
-        const item = this._findTreeChapter(chapterId);
-        if (item) await this._onChapterHeaderActivate(item);
-      }
-    } catch (e) {
-      console.error('[deleteCurrentPage]', e);
-      this.setStatus(this.t('bookOrganizer.saveFailed', { detail: e.message }));
+    const ok = await this.deletePageById(page.id, {
+      name: page.name,
+      verify: () => this.currentPage?.id === page.id,
+    });
+    if (!ok) return;
+    // Auf das Kapitel zurückfallen (wie ein Klick auf den Kapitel-Header):
+    // leeres Kapitel → Kapitel-Review-Karte (neue Seite anlegbar), sonst
+    // Review/Expand. Solo-Seiten (kein chapter_id) bleiben ohne Fallback.
+    if (chapterId != null) {
+      const item = this._findTreeChapter(chapterId);
+      if (item) await this._onChapterHeaderActivate(item);
     }
   },
 

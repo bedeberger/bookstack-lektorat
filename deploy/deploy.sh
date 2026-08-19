@@ -126,6 +126,58 @@ else
   chown -R "$OWNER:$OWNER" node_modules
 fi
 
+# Headless-Chromium fuer das serverseitige Diagramm-Rendering
+# (lib/mermaid-render.js) — es liefert die Export-Bilder UND das SVG fuer die
+# lesenden Bildschirm-Oberflaechen. Fehlt der Browser, zeigen Exporte nur den
+# Quelltext und die Leseansichten ziehen den 3,4-MB-mermaid-Bundle nach.
+#
+# Why hier und nicht als deploy/migrations/-Einmalscript: die Browser-Revision
+# haengt an der installierten Playwright-Version. Ein npm-Upgrade zieht eine
+# neue Revision, und ein bereits abgehakter Migrations-Marker liesse das
+# Rendern danach still ausfallen — es ist non-fatal, es faellt also niemandem
+# auf. Darum bei JEDEM Deploy pruefen, aber nur bei Bedarf installieren.
+#
+# Geprueft wird mit einem echten Launch, nicht mit einem Pfad-Test: das deckt
+# die fehlende Binary UND eine fehlende System-Lib in einem Griff ab, und zwar
+# genau so, wie die App es tut (--no-sandbox, weil der Dienst im LXC laeuft).
+#
+# HOME des App-Users ist Pflicht: Playwright sucht unter
+# $HOME/.cache/ms-playwright, und systemd setzt HOME aus dem User=-Eintrag der
+# Unit. Ein Install als root landete in /root/.cache und bliebe fuer den Dienst
+# unsichtbar. Der CLI kommt aus dem deployten Baum (nicht via `npx` aus dem
+# Netz), damit die Revision zwingend zur installierten `playwright`-Version passt.
+#
+# Nicht-fatal wie veraPDF/Ghostscript: ein fehlgeschlagener Browser-Download
+# darf keinen Deploy verlieren.
+PW_BIN="$INSTALL_DIR/node_modules/.bin/playwright"
+APP_HOME="$(getent passwd "$OWNER" | cut -d: -f6)"
+PW_PROBE="require('playwright').chromium.launch({args:['--no-sandbox','--disable-dev-shm-usage']}).then(b=>b.close())"
+# node/npx liegen je nach Host nicht in /usr/bin (nvm). `su` setzt PATH neu,
+# also das Verzeichnis des hier laufenden node explizit mitgeben — sonst meldet
+# die Probe "kein Chromium", wo nur die Shell kein node findet.
+PW_NODE_DIR="$(dirname "$(command -v node || echo /usr/bin/node)")"
+PW_ENV="PATH=$PW_NODE_DIR:/usr/local/bin:/usr/bin:/bin HOME='$APP_HOME'"
+
+# Demo nur mit Export-Werkzeugen: Chromium sind ~170 MB, dieselbe Abwaegung wie
+# bei den Deploy-Migrations (veraPDF/Ghostscript/EPUBCheck).
+if [ "$FLAVOUR" != "prod" ] && [ ! -f "$INSTALL_DIR/.with-export-tools" ]; then
+  echo "→ Headless-Chromium uebersprungen (Demo ohne --with-export-tools)"
+elif [ ! -x "$PW_BIN" ] || [ -z "$APP_HOME" ]; then
+  echo "⚠ Headless-Chromium nicht geprueft (playwright-CLI oder HOME von $OWNER fehlt)"
+elif su -s /bin/bash "$OWNER" -c "cd '$INSTALL_DIR' && $PW_ENV node -e \"$PW_PROBE\"" >/dev/null 2>&1; then
+  echo "→ Headless-Chromium vorhanden"
+else
+  echo "→ Headless-Chromium fehlt fuer $OWNER – wird installiert"
+  # System-Libs als root (apt-get, idempotent), Browser-Download als App-User.
+  "$PW_BIN" install-deps chromium || echo "⚠ playwright install-deps fehlgeschlagen – System-Libs pruefen"
+  if su -s /bin/bash "$OWNER" -c "cd '$INSTALL_DIR' && $PW_ENV '$PW_BIN' install chromium"; then
+    echo "✓ Headless-Chromium installiert ($APP_HOME/.cache/ms-playwright)"
+  else
+    echo "⚠ Chromium-Install fehlgeschlagen – Diagramme erscheinen als Quelltext."
+    echo "  Behebung von Hand: su -s /bin/bash $OWNER -c \"cd $INSTALL_DIR && HOME=$APP_HOME ./node_modules/.bin/playwright install chromium\""
+  fi
+fi
+
 # Service-Unit startet via `node server.js` (nicht `npm start`) → das prestart-Hook
 # läuft auf Prod nie. Darum den Shell-Cache-Hash hier explizit aus dem deployten
 # Asset-Stand regenerieren. Idempotent: rsync lieferte exakt die CI-getesteten

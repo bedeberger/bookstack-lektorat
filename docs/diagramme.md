@@ -209,6 +209,18 @@ nicht das Rendern.
   läuft ein Timeout ab oder ist der Code ungültig, liefert das Modul `null` und
   der Exporter lässt den Quelltext stehen. Muster wie veraPDF/Ghostscript.
   Die Diagnose „Chromium fehlt" steht **einmal** im Log, nicht pro Diagramm.
+- **Den Browser stellt der Deploy sicher, nicht eine Deploy-Migration**
+  ([deploy/deploy.sh](../deploy/deploy.sh)): ein echter Probe-Launch als
+  App-User, und nur wenn der fehlschlägt, `playwright install-deps` (root) +
+  `playwright install chromium` (App-User). **Why bei jedem Deploy:** die
+  Browser-Revision hängt an der installierten Playwright-Version — ein
+  npm-Upgrade zieht eine neue, und ein abgehakter Migrations-Marker liesse das
+  Rendern danach still ausfallen. Genau weil es non-fatal ist, fällt es
+  niemandem auf. **`HOME` des App-Users ist Pflicht** (Playwright sucht unter
+  `$HOME/.cache/ms-playwright`, systemd setzt `HOME` aus `User=`); ein Install
+  als root landet in `/root/.cache` und bleibt für den Dienst unsichtbar. Auf
+  der Demo-Instanz nur mit `.with-export-tools` — dort fällt der Bildschirm auf
+  den Client-Bundle zurück.
 - Der Browser schliesst sich nach 60 s Leerlauf.
 
 **Cache:** `mermaid_cache` (Migration 264), inhaltsadressiert über

@@ -206,7 +206,7 @@ Ein Token teilt sich macOS und Android bewusst (dasselbe Device-Token darf laut 
 bash deploy/install-demo.sh --domain demo.example.com
 ```
 
-Der `pct create`-Aufruf zum Anlegen des LXC steht als Kommentar im Kopf des Scripts. Überschreibbar per Env-Var: `INSTALL_DIR`, `SERVICE`, `PORT`, `RUN_USER`, `DEMO_BUDGET_USD`. Optional `--with-export-tools` für veraPDF/Ghostscript/ICC/EPUBCheck (~200 MB inkl. JRE; ohne das laufen PDF-/EPUB-Export weiterhin, nur ohne Normvalidierung).
+Der `pct create`-Aufruf zum Anlegen des LXC steht als Kommentar im Kopf des Scripts. Überschreibbar per Env-Var: `INSTALL_DIR`, `SERVICE`, `PORT`, `RUN_USER`, `DEMO_BUDGET_USD`. Optional `--with-export-tools` für veraPDF/Ghostscript/ICC/EPUBCheck (~200 MB inkl. JRE) plus das Headless-Chromium des serverseitigen Diagramm-Renderings (~170 MB); ohne das laufen PDF-/EPUB-Export weiterhin, nur ohne Normvalidierung, und Diagramme erscheinen im Export als Quelltext (am Bildschirm rendert der Client-Bundle).
 
 Was das Script tut:
 
@@ -279,7 +279,7 @@ Was der Demo-Deploy **anders** macht als Prod (alles in `deploy.sh` am `SW_FLAVO
 - **Kein DB-Backup vorher** — der Golden-Snapshot ist die Sicherung. Ein `capture` an dieser Stelle wäre sogar schädlich: es würde festschreiben, was der letzte Reviewer hinterlassen hat.
 - **Zusätzliche rsync-Excludes** für `demo-golden.db`, `.demo-instance` und `.with-export-tools`. **Why:** diese Dateien leben im Installationsverzeichnis, stehen aber nicht im Repo — ohne Exclude räumt `--delete` sie beim ersten Deploy weg, und `demo-reset.sh` verweigert danach jeden Reset, weil sein Marker-Guard fehlt.
 - **Reset-Timer statt Backup-Timer**, Units über [deploy/demo-units.sh](deploy/demo-units.sh) (geteilte SSoT mit `install-demo.sh` — sonst zwei sed-Blöcke mit derselben heiklen Ersetzungsreihenfolge).
-- **Deploy-Migrations nur mit Marker:** die Scripts unter `deploy/migrations/` installieren veraPDF/Ghostscript/EPUBCheck (~200 MB inkl. JRE). Auf einer bewusst schlanken Demo laufen sie nur, wenn `install-demo.sh --with-export-tools` den Marker `.with-export-tools` gesetzt hat.
+- **Deploy-Migrations nur mit Marker:** die Scripts unter `deploy/migrations/` installieren veraPDF/Ghostscript/EPUBCheck (~200 MB inkl. JRE). Auf einer bewusst schlanken Demo laufen sie nur, wenn `install-demo.sh --with-export-tools` den Marker `.with-export-tools` gesetzt hat. **Dasselbe Gate hält das Headless-Chromium** des serverseitigen Diagramm-Renderings (~170 MB) von der Demo fern — dort fällt die Leseansicht auf den mermaid-Client-Bundle zurück, siehe [docs/diagramme.md](docs/diagramme.md).
 
 **Der Golden-Snapshot altert mit dem Schema und wird nie automatisch neu aufgenommen.** Ein Reset setzt eine DB mit älterer `schema_version` ein; die Migrationen laufen beim nächsten Serverstart erneut durch, das ist unkritisch. Aber der *Inhalt* bleibt auf dem Stand des letzten `capture` — nach jeder bewussten Verbesserung des Demo-Inhalts (und vor einer Store-Einreichung) einmal `bash deploy/demo-reset.sh capture` aufrufen. Der Job gibt am Ende `demo-reset.sh status` aus, damit man das Alter im Actions-Log sieht.
 

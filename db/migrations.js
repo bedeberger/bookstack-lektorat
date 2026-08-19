@@ -11076,6 +11076,71 @@ function _runMigrationsLocked() {
     logger.info('DB-Migration auf Version 273 abgeschlossen (page_deletions fuer Collab-Delete-Events).');
   }
 
+  if (version < 274) {
+    // ideen.page_id/chapter_id: SET NULL → CASCADE.
+    //
+    // Der XOR-CHECK (genau EIN Anker: Seite ODER Kapitel) und `ON DELETE SET
+    // NULL` widersprechen sich: die FK-Aktion nullt den einzigen gesetzten Anker
+    // und verletzt damit denselben CHECK. Die Idee ist an ihren Anker gebunden —
+    // es gibt keinen Buch-Scope, in den sie zurueckfallen koennte (die Ideen-Liste
+    // laedt ausschliesslich per page_id/chapter_id, eine ankerlose Zeile waere
+    // unerreichbar). Also faellt sie mit ihrem Anker, wie Seiten-Revisionen und
+    // page_stats. Muss auf Schema-Ebene stehen und nicht als Vorstufe im
+    // Loeschpfad: beim Buch-Loeschen feuert die Kette aus books CASCADE, dort
+    // greift kein Handler dazwischen.
+    db.pragma('foreign_keys = OFF');
+
+    // Pre-Cleanup: Zeilen, deren Anker schon fehlt (FK-Verletzungen aus Zeiten
+    // ohne aktives foreign_keys). Unter CASCADE-Semantik sind sie geloescht.
+    const ankerlos274 = db.prepare(`
+      DELETE FROM ideen
+       WHERE (page_id    IS NOT NULL AND page_id    NOT IN (SELECT page_id    FROM pages))
+          OR (chapter_id IS NOT NULL AND chapter_id NOT IN (SELECT chapter_id FROM chapters))
+    `).run().changes;
+    if (ankerlos274) logger.info(`Migration 274: ${ankerlos274} Ideen ohne existierenden Anker entfernt.`);
+
+    db.exec('DROP TABLE IF EXISTS ideen_new');
+    db.exec(`
+      CREATE TABLE ideen_new (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id     INTEGER NOT NULL REFERENCES books(book_id)       ON DELETE CASCADE,
+        page_id     INTEGER          REFERENCES pages(page_id)       ON DELETE CASCADE,
+        chapter_id  INTEGER          REFERENCES chapters(chapter_id) ON DELETE CASCADE,
+        user_email  TEXT    NOT NULL,
+        content     TEXT    NOT NULL,
+        erledigt    INTEGER NOT NULL DEFAULT 0,
+        erledigt_at TEXT,
+        created_at  TEXT    NOT NULL,
+        updated_at  TEXT    NOT NULL,
+        CHECK ((page_id IS NOT NULL AND chapter_id IS NULL)
+            OR (page_id IS NULL AND chapter_id IS NOT NULL)),
+        FOREIGN KEY (user_email) REFERENCES app_users(email) ON DELETE CASCADE
+      )
+    `);
+    db.exec(`
+      INSERT INTO ideen_new (id, book_id, page_id, chapter_id, user_email, content,
+                             erledigt, erledigt_at, created_at, updated_at)
+      SELECT id, book_id, page_id, chapter_id, user_email, content,
+             erledigt, erledigt_at, created_at, updated_at
+      FROM ideen
+    `);
+    db.exec('DROP TABLE ideen');
+    db.exec('ALTER TABLE ideen_new RENAME TO ideen');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_ideen_page_user    ON ideen(page_id, user_email)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_ideen_chapter_user ON ideen(chapter_id, user_email)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_ideen_book_user    ON ideen(book_id, user_email)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_ideen_user_email   ON ideen(user_email)');
+
+    db.pragma('foreign_keys = ON');
+
+    const fkErrors274 = db.pragma('foreign_key_check');
+    if (fkErrors274.length) {
+      throw new Error(`Migration 274: foreign_key_check meldet ${fkErrors274.length} Verstoesse: ${JSON.stringify(fkErrors274.slice(0, 5))}`);
+    }
+    db.prepare('UPDATE schema_version SET version = 274').run();
+    logger.info('DB-Migration auf Version 274 abgeschlossen (ideen.page_id/chapter_id ON DELETE CASCADE — SET NULL verletzte den XOR-CHECK und blockierte jedes Seiten-/Kapitel-/Buch-Loeschen).');
+  }
+
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);
   if (feColsCheck.length > 0 && !feColsCheck.includes('typ')) {

@@ -100,12 +100,17 @@ export function registerBookOrganizerCard() {
             // geleert, hier kommt der des neuen Buchs.
             this.loadRedaktion();
           } },
-          // Remote-Delete (Collab-Feed): `_removePageFromTree` hat die Seite
-          // bereits aus nav.tree/nav.pages entfernt (In-Place, kein Reload →
-          // kein pages:loaded). Der Workstate muss trotzdem nachgezogen werden,
-          // sonst bleibt die geloeschte Seite als Zeile stehen.
+          // Seite ist aus dem Store verschwunden — durch ein Loeschen (Root:
+          // `deletePageById`), einen Remote-Delete aus dem Collab-Feed oder einen
+          // Move in ein anderes Buch. `_removePageFromTree` hat nav.tree/nav.pages
+          // schon bereinigt (In-Place, kein Reload → kein pages:loaded); hier
+          // folgen die daraus ABGELEITETEN Sichten, sonst bleibt die Zeile stehen
+          // bzw. zeigen Order-Maps und Diary-Kalender auf eine Seite, die es
+          // nicht mehr gibt.
           { type: EVT.PAGE_REMOVED, handler: async () => {
             if (!window.__app.showBookOrganizerCard) return;
+            this._rebuildPageOrderMaps();
+            this._invalidateDiaryCache();
             await this._rerender();
           } },
         ],

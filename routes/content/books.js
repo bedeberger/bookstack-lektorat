@@ -7,6 +7,7 @@ const bookOrder = require('../../db/book-order');
 const bookPresence = require('../../db/book-presence');
 const pagePresence = require('../../db/page-presence');
 const appUsersDevices = require('../../db/app-users-devices');
+const pageDeletions = require('../../db/page-deletions');
 const bookAccess = require('../../db/book-access');
 const { db } = require('../../db/connection');
 const { toIntId } = require('../../lib/validate');
@@ -177,7 +178,17 @@ function register(router) {
   // NACH der letzten gelieferten Seite) + `has_more`. Der Client paged mit diesem
   // Cursor weiter, bis has_more=false. Push laeuft ueber den bestehenden
   // PUT /content/pages/:id (409 PAGE_CONFLICT → Block-Merge clientseitig).
-  // Geloeschte Seiten: Client reconciled ueber GET /content/books/:id/tree.
+  //
+  // Geloeschte Seiten stehen in `deleted` (page_deletions). Sie haben eine EIGENE
+  // Zeitachse (`deleted_at`) und lassen sich nicht in den Seiten-Keyset-Cursor
+  // einreihen — darum gefiltert nach dem `since` DIESER Anfrage, unabhaengig von
+  // der Seiten-Paginierung. Anwenden ist idempotent (eine bereits entfernte Seite
+  // erneut zu entfernen ist ein No-op), Doppel-Lieferung ueber mehrere Seiten des
+  // Pull also unschaedlich. Ohne `since` (Voll-Pull/Baseline) bleibt die Liste
+  // leer: der Spiegel wird gerade neu aufgebaut und kennt die Seite nicht.
+  // `deleted_has_more` heisst „gedeckelt" — dann bleibt GET /content/books/:id/tree
+  // die vollstaendige Reconciliation. Anders als /changes NICHT self-exkludierend:
+  // der lokale Spiegel muss auch die eigenen Loeschungen nachziehen.
   router.get('/books/:book_id/sync', aclParamGuard('viewer'), async (req, res) => {
     const sinceRaw = (req.query?.since || '').toString().trim();
     const since = sinceRaw && !Number.isNaN(Date.parse(sinceRaw)) ? sinceRaw : null;
@@ -199,11 +210,18 @@ function register(router) {
         updated_at: p.updated_at,
         html: p.html,
       }));
+      const delRows = pageDeletions.listDeletionsSince(req.bookId, since, limit);
+      const deletedHasMore = delRows.length > limit;
+      const deleted = delRows.slice(0, limit).map(r => ({
+        page_id: r.page_id,
+        page_name: r.page_name || '',
+        deleted_at: r.deleted_at,
+      }));
       const last = wanted.length ? wanted[wanted.length - 1] : null;
       const cursor = last
         ? { since: last.updated_at, since_id: last.id }
         : { since: sinceRaw || null, since_id: sinceId };
-      res.json({ now: nowIso, pages, has_more: hasMore, cursor });
+      res.json({ now: nowIso, pages, deleted, has_more: hasMore, deleted_has_more: deletedHasMore, cursor });
     } catch (e) { _fail(res, e, 'GET /content/books/:id/sync'); }
   });
 

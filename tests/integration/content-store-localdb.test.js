@@ -149,6 +149,56 @@ test('localdb: deletePage entfernt Row + schreibt page_deletions + wirft NOT_FOU
   assert.ok(del.deleted_at);
 });
 
+// Regression: `ideen` ankert per XOR-CHECK an genau EINER Seite ODER genau einem
+// Kapitel. Stand die FK-Aktion auf SET NULL, nullte das Loeschen den einzigen
+// Anker und verletzte damit denselben CHECK — die ganze Transaktion brach ab und
+// KEIN Seiten-, Kapitel- oder Buch-Loeschen mit angehaengter Idee ging mehr durch.
+// Seit Migration 274 CASCADE: die Idee faellt mit ihrem Anker.
+function _seedIdee(bookId, { pageId = null, chapterId = null } = {}) {
+  const now = new Date().toISOString();
+  const r = ctx.connection.db.prepare(`
+    INSERT INTO ideen (book_id, page_id, chapter_id, user_email, content, created_at, updated_at)
+    VALUES (?, ?, ?, 'alice@example.com', 'Notiz', ?, ?)
+  `).run(bookId, pageId, chapterId, now, now);
+  return r.lastInsertRowid;
+}
+const _ideeExists = (id) =>
+  !!ctx.connection.db.prepare('SELECT 1 FROM ideen WHERE id = ?').get(id);
+
+test('localdb: deletePage mit angehaengter Seiten-Idee loescht die Idee mit (XOR-CHECK vs. FK-Aktion)', async () => {
+  const bookId = _seedBook();
+  const pageId = _seedPage(bookId, null, { name: 'Seite mit Idee' });
+  const ideeId = _seedIdee(bookId, { pageId });
+
+  await ctx.contentStore.deletePage(pageId, null, { deletedBy: 'alice@example.com' });
+
+  await assert.rejects(() => ctx.contentStore.loadPage(pageId), { code: 'NOT_FOUND' });
+  assert.equal(_ideeExists(ideeId), false, 'Idee muss mit ihrer Seite fallen');
+});
+
+test('localdb: deleteChapter mit angehaengter Kapitel-Idee loescht die Idee mit', async () => {
+  const bookId = _seedBook();
+  const chapterId = _seedChapter(bookId);
+  const ideeId = _seedIdee(bookId, { chapterId });
+
+  await ctx.contentStore.deleteChapter(chapterId, null);
+
+  assert.equal(_ideeExists(ideeId), false, 'Idee muss mit ihrem Kapitel fallen');
+});
+
+test('localdb: deleteBook raeumt Seiten- UND Kapitel-Ideen des Buchs', async () => {
+  const bookId = _seedBook();
+  const chapterId = _seedChapter(bookId);
+  const pageId = _seedPage(bookId, chapterId);
+  const pageIdee = _seedIdee(bookId, { pageId });
+  const chapterIdee = _seedIdee(bookId, { chapterId });
+
+  await ctx.contentStore.deleteBook(bookId, null);
+
+  assert.equal(_ideeExists(pageIdee), false);
+  assert.equal(_ideeExists(chapterIdee), false);
+});
+
 test('localdb: savePage mit expected_updated_at = aktueller Stand → ok, setzt last_editor_email', async () => {
   const bookId = _seedBook();
   const pageId = _seedPage(bookId, null);
