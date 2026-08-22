@@ -1,6 +1,12 @@
-// Unit-Tests für public/js/editor/notebook/history.js — Notebook-Undo/Redo.
+// Unit-Tests für public/js/editor/notebook/history.js — die KARTEN-GLUE um den
+// geteilten Undo/Redo-Kern.
 //
-// Session-scoped Stack: Baseline → Push (debounced) → Undo/Redo → Clear.
+// Stack-Mechanik (Dedupe, Deckel, Redo-Ast, Debounce, `inputType`-Vertrag) liegt
+// im Kern und wird in edit-history.test.mjs geprüft. Hier steht nur, was die
+// Notebook-Karte beiträgt: Container-Lookup, die Mount-Pipeline
+// (`mountEditorHtml` → Block-Normalisierung + Caret-Slot), Dirty-Flag +
+// Draft/Autosave und das `editMode`-Gate.
+//
 // Tests greifen direkt auf `notebookHistoryMethods` zu, mocken `_getEditEl`,
 // `_scheduleDraftSave`, `_scheduleAutosave` + `window.__app`.
 // Test-Fixtures setzen `innerHTML` mit statischen, im Test-Source eingebetteten
@@ -23,6 +29,9 @@ function makeCtx() {
   const app = { editMode: true, focusActive: false, editDirty: false };
   window.__app = app;
   const ctx = {
+    // Spiegel des Karten-States (cards/editor-notebook-card.js): Instanz
+    // entsteht beim ersten Zugriff.
+    _editHistory: null,
     _getEditEl: () => el,
     _scheduleDraftSave: () => { ctx._draftCalls++; },
     _scheduleAutosave: () => { ctx._autosaveCalls++; },
@@ -35,69 +44,24 @@ function makeCtx() {
 
 function setHtml(el, html) { el.innerHTML = html; }
 
-test('_historyReset legt Baseline mit idx=0', () => {
+test('_historyReset legt Baseline — Undo/Redo noch nicht möglich', () => {
   const { ctx } = makeCtx();
   ctx._historyReset('<p>a</p>');
-  assert.equal(ctx._undoStack.length, 1);
-  assert.equal(ctx._undoIdx, 0);
-  assert.equal(ctx._undoStack[0].html, '<p>a</p>');
   assert.equal(ctx.notebookCanUndo(), false);
   assert.equal(ctx.notebookCanRedo(), false);
 });
 
-test('_historyPushNow dedupt gegen Top', () => {
+test('Push + Undo/Redo laufen über die Karten-Methoden', () => {
   const { ctx, el } = makeCtx();
   ctx._historyReset(el.innerHTML);
+  setHtml(el, '<p>v2</p>');
   ctx._historyPushNow();
-  assert.equal(ctx._undoStack.length, 1, 'kein Dup-Push bei unverändertem HTML');
-});
-
-test('_historyPushNow pusht neue Variante + bewegt idx', () => {
-  const { ctx, el } = makeCtx();
-  ctx._historyReset(el.innerHTML);
-  setHtml(el, '<p>start a</p>');
-  ctx._historyPushNow();
-  assert.equal(ctx._undoStack.length, 2);
-  assert.equal(ctx._undoIdx, 1);
   assert.equal(ctx.notebookCanUndo(), true);
-  assert.equal(ctx.notebookCanRedo(), false);
-});
-
-test('notebookUndo restored vorherigen Snapshot', () => {
-  const { ctx, el } = makeCtx();
-  ctx._historyReset(el.innerHTML);
-  setHtml(el, '<p>edited</p>');
-  ctx._historyPushNow();
   ctx.notebookUndo();
   assert.equal(el.innerHTML, '<p>start</p>');
-  assert.equal(ctx._undoIdx, 0);
   assert.equal(ctx.notebookCanRedo(), true);
-});
-
-test('notebookRedo bewegt idx vor + restored', () => {
-  const { ctx, el } = makeCtx();
-  ctx._historyReset(el.innerHTML);
-  setHtml(el, '<p>v2</p>');
-  ctx._historyPushNow();
-  ctx.notebookUndo();
   ctx.notebookRedo();
   assert.equal(el.innerHTML, '<p>v2</p>');
-  assert.equal(ctx._undoIdx, 1);
-});
-
-test('Push nach Undo droppt Redo-Tail', () => {
-  const { ctx, el } = makeCtx();
-  ctx._historyReset(el.innerHTML);
-  setHtml(el, '<p>v2</p>');
-  ctx._historyPushNow();
-  setHtml(el, '<p>v3</p>');
-  ctx._historyPushNow();
-  ctx.notebookUndo();
-  ctx.notebookUndo();
-  setHtml(el, '<p>branch</p>');
-  ctx._historyPushNow();
-  assert.equal(ctx._undoStack.length, 2, 'Redo-Tail gedroppt, neue Spitze');
-  assert.equal(ctx.notebookCanRedo(), false);
 });
 
 test('Restore markiert dirty + ruft Draft+Autosave', () => {
@@ -122,20 +86,30 @@ test('Undo no-op bei !editMode', () => {
   assert.equal(el.innerHTML, '<p>v2</p>', 'kein Restore wenn editMode off');
 });
 
-test('Undo no-op bei focusActive (Notebook-only)', () => {
+test('Undo wirkt AUCH bei focusActive — der Fokusmodus fährt auf dieser Historie', () => {
+  // Der Fokusmodus ist in der SPA kein eigener Editor, sondern derselbe
+  // Edit-Vorgang auf einem gespiegelten Container: `_getEditEl` löst dorthin
+  // auf und `@input="_markEditDirty()"` schiebt die Snapshots schon hier herein.
+  // Ein Gate auf `!focusActive` liess den Stack zwar volllaufen, machte ihn im
+  // Fokusmodus aber unbenutzbar — dort griff dann der browsereigene Undo-Stack,
+  // der unter WebKit eine ganze Tippstrecke als EINEN Schritt führt.
   const { ctx, el, app } = makeCtx();
   ctx._historyReset(el.innerHTML);
   setHtml(el, '<p>v2</p>');
   ctx._historyPushNow();
   app.focusActive = true;
   ctx.notebookUndo();
-  assert.equal(el.innerHTML, '<p>v2</p>', 'Focus-Modus kapselt Notebook-Undo aus');
+  assert.equal(el.innerHTML, '<p>start</p>');
+  app.focusActive = true;
+  ctx.notebookRedo();
+  assert.equal(el.innerHTML, '<p>v2</p>');
 });
 
 test('Undo normalisiert orphan-Text-Snapshot in <p> (Block-Konsistenz)', () => {
   // Reproduziert den Korruptions-Fall: ein Snapshot fängt einen transienten
   // contenteditable-Stand ohne <p>-Wrapper ein (z.B. nach Select-all+Tippen).
-  // Restore muss den Block normalisieren statt orphan-Text zu reinstanzieren.
+  // Restore muss den Block normalisieren statt orphan-Text zu reinstanzieren —
+  // das leistet die injizierte Mount-Pipeline, nicht der Kern.
   const { ctx, el } = makeCtx();
   ctx._historyReset(el.innerHTML);
   setHtml(el, 'orphan ohne block');
@@ -157,24 +131,20 @@ test('Restore ergänzt Caret-Slot <br> in leerem trailing <p>', () => {
   assert.equal(el.innerHTML, '<p>text</p><p><br></p>', 'leerer trailing <p> bekommt Caret-Slot');
 });
 
-test('_historyClear setzt idx=-1', () => {
+test('_historyClear beendet die Session-Historie', () => {
   const { ctx, el } = makeCtx();
   ctx._historyReset(el.innerHTML);
   setHtml(el, '<p>v2</p>');
   ctx._historyPushNow();
   ctx._historyClear();
-  assert.equal(ctx._undoStack.length, 0);
-  assert.equal(ctx._undoIdx, -1);
   assert.equal(ctx.notebookCanUndo(), false);
+  assert.equal(ctx.notebookCanRedo(), false);
 });
 
-test('Cap auf 100 — älteste fallen raus', () => {
+test('Karten-Methoden funktionieren ohne vorherigen Reset (Instanz entsteht lazy)', () => {
   const { ctx, el } = makeCtx();
-  ctx._historyReset('<p>0</p>');
-  for (let i = 1; i <= 150; i++) {
-    setHtml(el, `<p>v${i}</p>`);
-    ctx._historyPushNow();
-  }
-  assert.equal(ctx._undoStack.length, 100);
-  assert.equal(ctx._undoStack[ctx._undoStack.length - 1].html, '<p>v150</p>');
+  assert.equal(ctx.notebookCanUndo(), false);
+  setHtml(el, '<p>v2</p>');
+  assert.doesNotThrow(() => ctx._historyPushSoon());
+  assert.doesNotThrow(() => ctx.notebookUndo());
 });

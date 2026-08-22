@@ -28,6 +28,7 @@ import { setEditorHost } from '../shared/editor-host.js';
 import { isNoChange } from '../shared/save-pipeline.js';
 import { stripLektoratMarks } from '../shared/html-clean.js';
 import { handleEditorPastePlain, handleEditorCopy, handleEditorCut } from '../shared/paste.js';
+import { createEditHistory } from '../shared/edit-history.js';
 
 const DEFAULT_AUTOSAVE_MS = 1500;
 
@@ -118,7 +119,14 @@ function makeHost(bridge, scheduleSave) {
 }
 
 // Mountet den Standalone-Focus-Editor. Liefert ein Handle:
-//   { host, controller, save(), destroy() }
+//   { host, controller, save(), setPage(), setGranularity(), destroy(),
+//     undo(), redo(), canUndo(), canRedo() }
+//
+// Undo/Redo liegt zusaetzlich programmatisch am Handle, weil im macOS-Client
+// Cmd+Z NIE in der WebView ankommt: das AppKit-Menue „Bearbeiten ▸ Widerrufen"
+// verbraucht das Tastenkuerzel, bevor die WebView ein `keydown` sieht
+// (nachgemessen). Die Schale verdrahtet ihre Menuepunkte darum hierauf — analog
+// zum Format-Menue (Cmd+B/I/U).
 export async function mountStandaloneFocus({ mount, bridge, autosaveMs = DEFAULT_AUTOSAVE_MS }) {
   if (!mount) throw new Error('mountStandaloneFocus: mount element required');
   if (!bridge || typeof bridge.loadPage !== 'function' || typeof bridge.savePage !== 'function') {
@@ -150,6 +158,21 @@ export async function mountStandaloneFocus({ mount, bridge, autosaveMs = DEFAULT
   host.renderedPageHtml = content.innerHTML;
   host.originalHtml = content.innerHTML;
 
+  // Eigene Undo/Redo-Historie (geteilter Kern, siehe shared/edit-history.js).
+  // Zwingend eigene Instanz: hier gibt es keine Notebook-Karte, an deren
+  // Session-Historie der SPA-Fokusmodus haengt.
+  //
+  // `mountHtml` ist GENAU die Mount-Pipeline dieses Moduls (innerHTML +
+  // collapseSoftNewlines), nicht die des Notebooks. Zwei Gruende: der Restore
+  // darf nicht anders normalisieren als der Mount, und `shared/mount-html.js`
+  // zoege cite-/xref-/mermaid-/table-html in die Import-Closure und damit ins
+  // OTA-Bundle des Clients.
+  const history = createEditHistory({
+    getRoot: () => content,
+    mountHtml: (el, html) => { el.innerHTML = html; collapseSoftNewlines(el); },
+  });
+  history.reset(content.innerHTML);
+
   // Controller = Engine-Methoden (wie die SPA-Karte / Test-Harness) + Sub-State.
   // exitFocusMode standalone-überschrieben: kein Lese-Modus → Escape speichert.
   const controller = {
@@ -163,10 +186,20 @@ export async function mountStandaloneFocus({ mount, bridge, autosaveMs = DEFAULT
     async exitFocusMode() {
       try { await host.quickSave(); } catch (_) {}
     },
+    // Ueberschreibt die SPA-Defaults aus focusCardMethods (die auf die
+    // Notebook-Karte zeigen, die es hier nicht gibt). Aufrufer ist der
+    // Tastengriff in listeners.js#onHistoryKey.
+    focusUndo() { history.undo(); },
+    focusRedo() { history.redo(); },
+    focusCanUndo() { return history.canUndo(); },
+    focusCanRedo() { return history.canRedo(); },
   };
 
-  // Eingaben markieren dirty (Engine ruft _markEditDirty nur bei Inline-Format).
-  content.addEventListener('input', () => host._markEditDirty());
+  // Eingaben markieren dirty (Engine ruft _markEditDirty nur bei Inline-Format)
+  // und schieben einen entprellten Snapshot in die Historie. `pushSoon` ist
+  // waehrend eines laufenden Restores ein No-op — das vom Restore selbst
+  // gefeuerte `input` wird also nicht zum neuen Stack-Eintrag.
+  content.addEventListener('input', () => { host._markEditDirty(); history.pushSoon(); });
 
   // Einfügen immer als reiner Text — Formatierung aus der Zwischenablage wird
   // im ablenkungsfreien Focus-Editor grundsätzlich verworfen.
@@ -197,8 +230,20 @@ export async function mountStandaloneFocus({ mount, bridge, autosaveMs = DEFAULT
       host.renderedPageHtml = content.innerHTML;
       host.originalHtml = content.innerHTML;
       host.editDirty = false;
+      // Historie ist PRO SEITE: neue Seite = neue Baseline, alte Schritte weg.
+      // Bewusst der einzige Reset-Punkt neben dem Mount — insbesondere NICHT
+      // beim Speichern: hier wird ununterbrochen weitergeschrieben und alle
+      // 1,5 s automatisch gespeichert, ein Clear am Save nähme dem User genau
+      // die Schritte weg, die er zurückholen will.
+      history.reset(content.innerHTML);
       controller.enterFocusMode();
     },
+    // Programmatische Undo/Redo-Einstiegspunkte fuer das AppKit-Menue der
+    // Schale (Cmd+Z erreicht die WebView nicht, siehe Modulkopf).
+    undo() { return history.undo(); },
+    redo() { return history.redo(); },
+    canUndo() { return history.canUndo(); },
+    canRedo() { return history.canRedo(); },
     // Fokus-Granularität live umschalten — für fremde Schalen (nativer
     // macOS-Client), die die Stufe zur Laufzeit ändern. Spiegelt das
     // $watch-Verhalten der SPA-Karte: Host-Feld setzen, die `focus-mode--`-
@@ -219,6 +264,7 @@ export async function mountStandaloneFocus({ mount, bridge, autosaveMs = DEFAULT
     async destroy() {
       clearTimeout(saveTimer);
       try { await host.quickSave(); } catch (_) {}
+      history.clear();          // offener Debounce-Timer mit weg (Leak-Freiheit)
       controller._focusTeardown();
       controller._focusState = 'idle';
       setEditorHost(null);

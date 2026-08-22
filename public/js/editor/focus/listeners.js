@@ -18,7 +18,7 @@ import { consumeProgrammaticScroll, resolveScrollBox } from './typewriter.js';
 import { makeCursorHide } from './cursor-hide.js';
 import { makeViewportSync } from './viewport.js';
 import { editorHost } from '../shared/editor-host.js';
-import { bindInlineFormattingShortcuts } from '../shared/shortcuts.js';
+import { bindInlineFormattingShortcuts, matchHistoryCommand } from '../shared/shortcuts.js';
 import { insertSoftBreak } from '../shared/soft-break.js';
 import { collapseSoftNewlines } from './soft-newlines.js';
 
@@ -311,6 +311,32 @@ export function installFocusListeners({ ctrl, container }) {
     insertSoftBreak(container);
   };
 
+  // Undo/Redo im Fokusmodus — MUSS abgefangen werden, `preventDefault` ist Teil
+  // des Verhaltens und keine Formalie. Zwei Gründe, beide unabhängig tragend:
+  //   - Ohne preventDefault liefen eigener und Browser-Stack parallel und ein
+  //     Cmd+Z wirkte doppelt (erst unser Schritt, dann der des Browsers).
+  //   - WebKit (Safari/iOS/WKWebView) hält seinen TypingCommand bis zum nächsten
+  //     echten Mausklick offen: eine ganze Tippstrecke ist dort EIN Undo-Schritt
+  //     (gemessen, siehe shared/edit-history.js). Genau die Körnung, die dieser
+  //     Handler ersetzt — und die Chromium-Tests strukturell nicht sehen.
+  // Am Container, nicht am Window: der Handler muss VOR dem delegierten
+  // Keydown-Dispatcher der Toolbar-Karte laufen (document-Level, Bubble-Phase),
+  // sonst behandelten beide dasselbe Event. `stopPropagation` erledigt das und
+  // deckt zugleich die Standalone-Schale ab, die gar keine Toolbar-Karte hat.
+  //
+  // Die Historie selbst liegt beim Aufrufer: in der SPA ist das die Session-
+  // Historie der Notebook-Karte (derselbe Edit-Vorgang, gespiegelter Container),
+  // in der fremden Schale die eigene Instanz aus focus/standalone.js.
+  const onHistoryKey = (e) => {
+    if (!isActive()) return;
+    const cmd = matchHistoryCommand(e);
+    if (!cmd) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (cmd === 'undo') ctrl.focusUndo?.();
+    else ctrl.focusRedo?.();
+  };
+
   const onPointerMove = () => { if (isActive()) showCursor(); };
 
   // Klick in die leere Seitenfläche der Schreibspalte. Das Target ist genau dann
@@ -371,6 +397,7 @@ export function installFocusListeners({ ctrl, container }) {
   document.addEventListener('selectionchange', onSelection, { signal });
   container.addEventListener('input', onInput, { signal });
   container.addEventListener('keydown', onSoftBreak, { signal });
+  container.addEventListener('keydown', onHistoryKey, { signal });
   container.addEventListener('compositionstart', onCompositionStart, { signal });
   container.addEventListener('compositionend', onCompositionEnd, { signal });
   // Scroll-Events bubbeln nicht — der Listener hängt darum am `document` in der
