@@ -602,3 +602,73 @@ test('Leerschlag an der Umbruchkante: Wort bleibt stehen, kein &nbsp;', async ({
   expect(afterChar.height, 'Zeichen nach der Kante bricht nicht um').toBeGreaterThan(fitted.height);
   guard.assertClean('Umbruchkante');
 });
+
+// --- Undo/Redo im Fokusmodus der SPA ---------------------------------------
+//
+// Zweite betroffene Oberflaeche neben dem nativen Client: die Web-SPA im
+// Fokusmodus (Safari/iOS trifft dieselbe WebKit-Undo-Koernung, siehe
+// tests/e2e/focus-undo.webkit.spec.js). Hier gegen die ECHTE App, weil genau das
+// die Konstellation ist, die kein Harness abbildet: der Fokusmodus haengt an der
+// Session-Historie der NOTEBOOK-Karte (gespiegelter Container, `_getEditEl` loest
+// dorthin auf, `@input="_markEditDirty()"` schiebt die Snapshots dorthin) — ein
+// Fixture ohne Alpine-Root und ohne Notebook-Karte kann das nicht zeigen.
+//
+// Der Kern: `notebookUndo`/`notebookRedo` trugen ein `|| app.focusActive`-Gate.
+// Der Stack lief also voll, war im Fokusmodus aber unbenutzbar, und es griff der
+// browsereigene Stack — unter WebKit mit einer ganzen Tippstrecke pro Schritt.
+test('Fokusmodus: Undo/Redo laufen auf der Session-Historie der Notebook-Karte', async ({ page }) => {
+  const guard = attachConsoleGuard(page);
+  await enterFocus(page);
+  await placeCaret(page, 0);
+
+  await page.keyboard.type(' ERSTERBLOCK');
+  await page.waitForTimeout(650);       // ueber den Debounce → Schrittgrenze
+  await page.keyboard.type(' ZWEITERBLOCK');
+  await page.waitForTimeout(650);
+
+  // Das Gate sass hier: im Fokusmodus meldete die Karte nie „undo moeglich".
+  expect(await page.evaluate(() => window.__app.notebookCanUndo()), 'Historie im Fokusmodus leer').toBe(true);
+
+  const text = () => page.evaluate((sel) => document.querySelector(sel).textContent, FOCUS);
+  await page.evaluate(() => window.__app.notebookUndo());
+  await page.waitForTimeout(120);
+
+  let t = await text();
+  expect(t, 'Undo nahm die letzte Tippstrecke nicht zurueck').not.toContain('ZWEITERBLOCK');
+  expect(t, 'Undo nahm zu viel zurueck').toContain('ERSTERBLOCK');
+
+  await page.evaluate(() => window.__app.notebookRedo());
+  await page.waitForTimeout(120);
+  expect(await text(), 'Redo im Fokusmodus wirkungslos').toContain('ZWEITERBLOCK');
+
+  // Der Fokus-Editor darf danach nicht ohne Markierung dastehen (Invariante 18).
+  expect(await page.locator('.focus-paragraph-active').count()).toBe(1);
+  guard.assertClean('Fokus-Undo');
+});
+
+test('Fokusmodus: Cmd/Ctrl+Z wird im Editor konsumiert (kein zweiter Stack)', async ({ page }) => {
+  const guard = attachConsoleGuard(page);
+  await enterFocus(page);
+  await placeCaret(page, 0);
+
+  await page.evaluate(() => {
+    window.__zSeen = [];
+    document.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') window.__zSeen.push(e.defaultPrevented);
+    });
+  });
+
+  await page.keyboard.type(' TIPPSTRECKE');
+  await page.waitForTimeout(650);
+  await page.keyboard.press('ControlOrMeta+z');
+  await page.waitForTimeout(150);
+
+  // Der Container-Handler verbraucht das Event (stopPropagation); kommt es dennoch
+  // am document an, MUSS defaultPrevented gesetzt sein — sonst laeuft der
+  // Browser-Undo zusaetzlich und ein Cmd+Z wirkt doppelt.
+  const seen = await page.evaluate(() => window.__zSeen);
+  expect(seen.every(Boolean), 'Cmd+Z lief unverbraucht zum Browser durch').toBe(true);
+  expect(await page.evaluate((sel) => document.querySelector(sel).textContent, FOCUS))
+    .not.toContain('TIPPSTRECKE');
+  guard.assertClean('Fokus-Undo-Taste');
+});

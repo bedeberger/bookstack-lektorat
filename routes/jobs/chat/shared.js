@@ -130,7 +130,21 @@ function _handleChatPost(req, res, { jobType, sessionSelect, labelFn, runFn }) {
   res.json({ jobId });
 }
 
+// Zeichenbudget des Figuren-Blocks im Chat-System-Prompt. `getFiguren`
+// (routes/jobs/shared/queries.js) liefert Volldossiers — Szenen, Schauplätze,
+// Beziehungen und Lebensereignisse je Figur. Bei einem ausanalysierten Buch sind das
+// mehrere Hunderttausend Zeichen, ein Mehrfaches jedes Kontextfensters: ungekappt
+// scheitert der Call am Preflight (lib/ai/shared.js#assertPromptFitsContext), bevor
+// eine Zeile Buchtext oder ein Werkzeug-Ergebnis im Prompt steht.
+// Ein Viertel des Input-Budgets: der Block ist Stufe 1 der Kosten-Leiter und darf
+// spürbar kosten, aber nie den Platz für Buchtext (klassisch) bzw. Werkzeug-Ergebnisse
+// (agentisch) auffressen. Kappung + Offenlegung macht
+// public/js/prompts/chat.js#buildFigurenBlock — geteilt von allen drei Chat-Prompts.
+function figurenBlockChars(aiCfg) {
+  return Math.max(6000, Math.floor((aiCfg?.inputBudgetChars || 0) * 0.25));
+}
+
 module.exports = {
-  _sanitizeVorschlaege, _parseChatResponse, _handleChatPost,
+  _sanitizeVorschlaege, _parseChatResponse, _handleChatPost, figurenBlockChars,
   bookPageCache, BOOK_PAGE_CACHE_TTL_MS, BOOK_PAGE_CACHE_MAX, invalidateBookPageCache,
 };

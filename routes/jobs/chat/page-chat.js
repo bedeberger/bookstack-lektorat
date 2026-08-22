@@ -13,7 +13,7 @@ const {
 const contentStore = require('../../../lib/content-store');
 const { generateSessionTitle } = require('../chat-title');
 const { recordChatLedgerForMessage } = require('../../../db/cost-ledger');
-const { _parseChatResponse } = require('./shared');
+const { _parseChatResponse, figurenBlockChars } = require('./shared');
 
 async function runChatJob(jobId, sessionId, userMsgId, message, userEmail, userToken) {
   const logger = makeJobLogger(jobId);
@@ -57,7 +57,10 @@ async function runChatJob(jobId, sessionId, userMsgId, message, userEmail, userT
     const openingPageText = (session.opening_page_text && session.opening_page_text.trim() && session.opening_page_text.trim() !== pageText.trim())
       ? session.opening_page_text
       : null;
-    const systemPrompt = buildChatSystemPrompt(session.page_name || 'Unbekannte Seite', pageText, figuren, review, chatSysPrompt, openingPageText);
+    // Figuren sind hier kapitel-gefiltert, aber ebenfalls Volldossiers → gebudgetet
+    // (gleicher Deckel wie im Buch-Chat, siehe figurenBlockChars).
+    const systemPrompt = buildChatSystemPrompt(session.page_name || 'Unbekannte Seite', pageText, figuren, review,
+      chatSysPrompt, openingPageText, null, null, { figurenMaxChars: figurenBlockChars(aiCfg) });
 
     // Konversationshistorie aufbauen
     const historyWithoutLast = buildChatMessageHistory(session.id).slice(0, -1);

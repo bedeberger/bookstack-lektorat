@@ -23,7 +23,7 @@ const { setContext } = require('../../../lib/log-context');
 const appSettings = require('../../../lib/app-settings');
 const { recordChatLedgerForMessage } = require('../../../db/cost-ledger');
 const {
-  _parseChatResponse,
+  _parseChatResponse, figurenBlockChars,
   bookPageCache, BOOK_PAGE_CACHE_TTL_MS, BOOK_PAGE_CACHE_MAX,
 } = require('./shared');
 
@@ -128,9 +128,15 @@ async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, u
     // aiCfg.inputBudgetChars = (context_window − max_tokens_out − Sicherheitspuffer) · chars_per_token
     // pro effektivem Provider. Davon noch Platz für System-Prompt und History reservieren.
     const SYSTEM_OVERHEAD_CHARS = 8000;   // ~2k Tokens für System-Prompt-Overhead
+    // Der Figuren-Block wird RESERVIERT, nicht geschätzt: er steht im selben Prompt
+    // und war die Grösse, die den Call vor jedem Buchtext am Kontextfenster scheitern
+    // liess. Reserviert wird sein Deckel (nicht die tatsächliche Länge) — der Block
+    // entsteht erst unten, und ein zu knapp gerechnetes Textbudget ist teurer als ein
+    // paar ungenutzte Zeichen.
+    const FIGUREN_MAX_CHARS = figurenBlockChars(aiCfg);
     const TEXT_CHAR_BUDGET = Math.max(
       20000,
-      Math.floor((aiCfg.inputBudgetChars - historyChars - SYSTEM_OVERHEAD_CHARS) * 0.98)
+      Math.floor((aiCfg.inputBudgetChars - historyChars - SYSTEM_OVERHEAD_CHARS - FIGUREN_MAX_CHARS) * 0.98)
     );
 
     // ── Retrieval: Mini-RAG mit Keyword-Fallback ────────────────────────────────
@@ -241,7 +247,8 @@ async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, u
     // ── System-Prompt + KI-Aufruf ───────────────────────────────────────────────
     const figuren = getFiguren(session.book_id, userEmail);
     const review  = getLatestReview(session.book_id, userEmail);
-    const systemPrompt = buildBookChatSystemPrompt(session.book_name || '', selectedPages, figuren, review, bookChatSys, { excerpt: retrievalMode === 'semantic' });
+    const systemPrompt = buildBookChatSystemPrompt(session.book_name || '', selectedPages, figuren, review, bookChatSys,
+      { excerpt: retrievalMode === 'semantic', figurenMaxChars: FIGUREN_MAX_CHARS });
     const contextInfo = {
       pages:      selectedPages.map(p => ({ name: p.name, id: p.id, slug: p.slug, book_slug: p.book_slug })),
       totalPages,
@@ -462,11 +469,14 @@ const runBookChatJobAgent = makeAgenticChatJob({
       && (t.name !== 'generate_image' || imgOn) && (t.name !== 'search_similar' || embOn));
     // Der Prompt darf nur empfehlen, was tatsaechlich angeboten wird — sonst
     // verbrennt das Modell Runden an Werkzeugen, die es nicht hat.
+    const figurenMaxChars = figurenBlockChars(aiCfg);
     const systemPrompt = buildBookChatAgentSystemPrompt(
       session.book_name || '', figuren, review, bookChatSys, maxToolIter,
-      { passages: preContext?.hits || [], semantic: embOn, toolNames: tools.map(t => t.name) },
+      { passages: preContext?.hits || [], semantic: embOn, toolNames: tools.map(t => t.name), figurenMaxChars },
     );
     logger.info(`Werkzeugsatz: ${toolSet} (${tools.length} Werkzeuge), max ${maxToolIter} Iterationen, Provider=${provider}/${providerClass(provider, { userEmail })}.`);
+    logger.info(`System-Prompt: ${systemPrompt.reduce((n, b) => n + (b.text?.length || 0), 0)} Zeichen `
+      + `(Figuren: ${figuren.length}, Block-Deckel ${figurenMaxChars} Zeichen), Input-Budget ${aiCfg.inputBudgetChars} Zeichen.`);
     return {
       systemPrompt,
       tools,

@@ -6,6 +6,102 @@ import { _obj, _str } from './schema-utils.js';
 import { SYSTEM_CHAT, SYSTEM_BOOK_CHAT } from './core.js';
 
 /**
+ * Figuren-Block der Chat-Prompts — gebudgetet.
+ *
+ * `getFiguren` (routes/jobs/shared/queries.js) liefert VOLLDOSSIERS: neben den
+ * Stammdaten auch Lebensereignisse, Beziehungen, Schauplätze und Szenen jeder
+ * Figur. Das ist die grösste unkontrollierte Grösse im Chat-Prompt — bei einem
+ * ausanalysierten Buch mit über hundert Figuren sind das mehrere Hunderttausend
+ * Zeichen. Ungekappt sprengt allein dieser Block das Kontextfenster, bevor eine
+ * einzige Zeile Buchtext oder ein Werkzeug-Ergebnis im Prompt steht; der Call
+ * scheitert dann am Preflight (lib/ai/shared.js#assertPromptFitsContext) — und
+ * zwar bei JEDEM Provider, ein 200k-Fenster reicht dafür genauso wenig.
+ *
+ * Drei Stufen, in dieser Reihenfolge:
+ *   'voll'    — die Dossiers passen ins Budget (kleines Ensemble: unverändert)
+ *   'stamm'   — nur Stammdaten je Figur, die Detaillisten als ANZAHL
+ *   'gekappt' — Stammdaten bis zum Budget, der Rest offengelegt
+ *
+ * GERATEN WIRD NICHTS: was der Block nicht trägt, wird als fehlend AUSGEWIESEN —
+ * sonst hält das Modell ein gekapptes Ensemble für das ganze. `detailTools: true`
+ * (agentischer Pfad) nennt die Werkzeuge, über die die Details einzeln nachzuladen
+ * sind; ohne Werkzeuge bleibt es beim Hinweis.
+ *
+ * Reihenfolge ist die von `getFiguren` (figures.sort_order, Hauptfiguren zuerst) —
+ * beim Kappen fällt damit das Nebenpersonal weg, nicht die Hauptfigur.
+ *
+ * @param {Array}  figuren  Ergebnis von getFiguren (kann leer/null sein)
+ * @param {Object} opts     { maxChars, detailTools }
+ * @returns {{ text, mode, shown, total, chars }|null}  null = kein Block
+ */
+export const FIGUREN_BLOCK_DEFAULT_MAX_CHARS = 40000;
+const FIGUREN_DETAIL_KEYS = ['lebensereignisse', 'beziehungen', 'schauplätze', 'szenen'];
+const FIGUREN_HEAD = '=== FIGUREN DES BUCHS ===';
+
+function _figurStamm(f) {
+  const out = {};
+  for (const [k, v] of Object.entries(f)) {
+    if (!FIGUREN_DETAIL_KEYS.includes(k)) out[k] = v;
+  }
+  const details = {};
+  for (const k of FIGUREN_DETAIL_KEYS) {
+    const n = Array.isArray(f[k]) ? f[k].length : 0;
+    if (n > 0) details[k] = n;
+  }
+  if (Object.keys(details).length) out.weggelassen = details;
+  return out;
+}
+
+export function buildFigurenBlock(figuren, opts = {}) {
+  const list = Array.isArray(figuren) ? figuren.filter(Boolean) : [];
+  if (!list.length) return null;
+  const maxChars = Number(opts.maxChars) > 0 ? Number(opts.maxChars) : FIGUREN_BLOCK_DEFAULT_MAX_CHARS;
+  const withTools = opts.detailTools === true;
+
+  const voll = JSON.stringify(list, null, 2);
+  if (voll.length <= maxChars) {
+    const text = [FIGUREN_HEAD, voll].join('\n');
+    return { text, mode: 'voll', shown: list.length, total: list.length, chars: text.length };
+  }
+
+  const hint = withTools
+    ? 'Details je Figur (Beziehungen, Szenen, Schauplätze, Lebensereignisse) über `get_figure_profile` / `get_figure_relations` nachladen.'
+    : 'Die Detaillisten je Figur sind hier nicht enthalten — schliesse aus ihrem Fehlen nichts.';
+  const lead = [
+    FIGUREN_HEAD,
+    `(Stammdaten je Figur; \`weggelassen\` nennt die Anzahl der nicht enthaltenen Detaileinträge. ${hint})`,
+  ];
+  // Eine Figur pro Zeile: kein Pretty-Print-Aufschlag, aber lesbar — und zeilenweise
+  // füllbar, weshalb das Kappen immer an einer Figurengrenze endet.
+  const rows = list.map(f => JSON.stringify(_figurStamm(f)));
+  const wrap = (head, body) => [...head, '[', body.join(',\n'), ']'].join('\n');
+
+  const stamm = wrap(lead, rows);
+  if (stamm.length <= maxChars) {
+    return { text: stamm, mode: 'stamm', shown: list.length, total: list.length, chars: stamm.length };
+  }
+
+  const overhead = wrap([...lead, ''], []).length + 120;   // Kopf + Kappungs-Hinweis
+  const shownRows = [];
+  let used = 0;
+  for (const row of rows) {
+    if (used + row.length + overhead > maxChars) break;
+    shownRows.push(row);
+    used += row.length + 2;
+  }
+  const rest = list.length - shownRows.length;
+  const capped = [
+    ...lead,
+    `(NUR ${shownRows.length} von ${list.length} Figuren aufgeführt — ${rest} weitere fehlen in diesem Block. `
+    + (withTools
+      ? 'Frage nach einer hier fehlenden Figur gezielt via `get_figure_profile`.)'
+      : 'Behandle die Liste NICHT als vollständiges Ensemble.)'),
+  ];
+  const text = wrap(capped, shownRows);
+  return { text, mode: 'gekappt', shown: shownRows.length, total: list.length, chars: text.length };
+}
+
+/**
  * Baut den vollständigen System-Prompt für den Seiten-Chat.
  * @param {string}      pageName        Name der Seite
  * @param {string}      pageText        Aktueller Seiteninhalt als Plaintext
@@ -24,6 +120,8 @@ import { SYSTEM_CHAT, SYSTEM_BOOK_CHAT } from './core.js';
  * @param {Object|null} lektorat        Letztes Lektorat dieser Seite aus page_checks
  *                                      ({ checked_at, fehler, stilanalyse, fazit }).
  *                                      Kann gegenüber pageText veraltet sein.
+ * @param {Object}      opts            { figurenMaxChars } — Zeichenbudget des
+ *                                      Figuren-Blocks (siehe buildFigurenBlock).
  */
 // Rückgabe: Array von System-Cache-Blöcken (für callAIChat → Claude separate
 // cache_control-Blöcke; lokale Provider flatten sie auf einen String).
@@ -34,12 +132,14 @@ import { SYSTEM_CHAT, SYSTEM_BOOK_CHAT } from './core.js';
 //   Block 2 (5min): seiten-spezifischer Anteil (Seitenname/-inhalt + Ideen +
 //     Lektorat + JSON-Format-Trailer) — stabil über die Turns einer Seiten-Session,
 //     invalidiert beim Seitenwechsel oder wenn der Autor die Seite editiert.
-export function buildChatSystemPrompt(pageName, pageText, figuren, review, systemOverride = null, openingPageText = null, ideen = null, lektorat = null) {
+export function buildChatSystemPrompt(pageName, pageText, figuren, review, systemOverride = null, openingPageText = null, ideen = null, lektorat = null, opts = {}) {
   const stable = [systemOverride ?? SYSTEM_CHAT];
 
-  if (figuren && figuren.length > 0) {
-    stable.push('', '=== FIGUREN DES BUCHS ===', JSON.stringify(figuren, null, 2));
-  }
+  // Figuren des KAPITELS (der Aufrufer filtert), trotzdem gebudgetet: auch ein
+  // Kapitel-Ensemble trägt Volldossiers. opts.figurenMaxChars kommt aus dem
+  // Kontextfenster des effektiven Providers.
+  const figBlock = buildFigurenBlock(figuren, { maxChars: opts.figurenMaxChars });
+  if (figBlock) stable.push('', figBlock.text);
 
   if (review) {
     stable.push('', '=== LETZTE BUCHBEWERTUNG ===', JSON.stringify({
@@ -194,9 +294,11 @@ export function buildBookChatAgentSystemPrompt(bookName, figuren, review, system
     '',
   ];
 
-  if (figuren && figuren.length > 0) {
-    parts.push('=== FIGUREN DES BUCHS ===');
-    parts.push(JSON.stringify(figuren, null, 2));
+  // Werkzeuge sind hier der Ausweg aus dem Budget: was der Block nicht trägt, holt
+  // das Modell bei Bedarf gezielt via get_figure_profile / get_figure_relations.
+  const figBlock = buildFigurenBlock(figuren, { maxChars: opts.figurenMaxChars, detailTools: true });
+  if (figBlock) {
+    parts.push(figBlock.text);
     parts.push('');
   }
 
@@ -284,9 +386,8 @@ export function buildBookChatSystemPrompt(bookName, relevantPages, figuren, revi
     `Buch: «${bookName}»`,
   ];
 
-  if (figuren && figuren.length > 0) {
-    stable.push('', '=== FIGUREN DES BUCHS ===', JSON.stringify(figuren, null, 2));
-  }
+  const figBlock = buildFigurenBlock(figuren, { maxChars: opts.figurenMaxChars });
+  if (figBlock) stable.push('', figBlock.text);
 
   if (review) {
     stable.push('', '=== LETZTE BUCHBEWERTUNG ===', JSON.stringify({
