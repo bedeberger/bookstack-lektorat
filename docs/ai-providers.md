@@ -61,6 +61,7 @@ Alle KI-Konfig liegt in der `app_settings`-Tabelle. Admin-PUT via `/admin/settin
 | `ai.openai-compat.max_tokens_out` | 16 000 | – | |
 | `ai.openai-compat.think` | `false` | – | Reasoning an/aus; aus sendet `chat_template_kwargs.enable_thinking=false`, an sendet nichts (Modell-Default; nötig für echtes OpenAI) |
 | `ai.openai-compat.cloud` | `false` | – | Provider-Klasse (siehe unten): `true` = gehostetes Frontier-Modell (z.B. Kimi/Moonshot, OpenAI) → volle Cloud-Prompts, Lektorat-Split, parallele Calls. Pro Profil überschreibbar |
+| `ai.openai-compat.tools` | `true` | – | Function-Calling verfügbar? `false` = agentischer Buch-Chat läuft für diesen Endpunkt klassisch (siehe „Tool-Use") |
 | `ai.openai-compat.max_parallel` | 1 | – | Max. gleichzeitige Calls je Endpunkt; eigener Bucket pro KI-Profil |
 | `ai.openai-compat.timeout_ms` | 600 000 | – | Hard-Timeout pro Call; ohne ihn hält ein stummer Endpunkt den Job-Slot unbegrenzt |
 | `ai.openai-compat.retry_max` | 3 | – | Retry-Versuche bei 408/429/5xx mit Exponential-Backoff |
@@ -70,9 +71,41 @@ Alle KI-Konfig liegt in der `app_settings`-Tabelle. Admin-PUT via `/admin/settin
 
 | Provider | Streaming | Tool-Use | Caching |
 |----------|-----------|----------|---------|
-| `claude` | SSE | Ja (`callAIWithTools`) | `cache_control: ephemeral`, optional `ttl: '1h'` |
+| `claude` | SSE | Ja (`callAIWithTools`, native `tool_use`-Blöcke) | `cache_control: ephemeral`, optional `ttl: '1h'` |
 | `ollama` | NDJSON | Nein | Nein |
-| `openai-compat` | OpenAI-SSE | Nein | Nein |
+| `openai-compat` | OpenAI-SSE | Ja (OpenAI-Function-Calling, Schalter `ai.openai-compat.tools`) | Nein |
+
+**Tool-Use ist eine Fähigkeits-, keine Klassenfrage.** SSoT ist `providerSupportsTools(provider)`
+([lib/ai/config.js](../lib/ai/config.js)) — dieselbe Funktion lesen der Dispatch in
+`lib/ai/core.js` **und** die Pfadwahl des agentischen Buch-Chats
+([book-chat.js](../routes/jobs/chat/book-chat.js)#`_bookChatUseAgent`). Zwei
+verschiedene Fragen an diesen zwei Stellen heissen: der Job wählt den agentischen
+Pfad, und der erste Call wirft «Tool-Use nicht unterstützt».
+
+Der Loop selbst ([agentic-chat.js](../routes/jobs/agentic-chat.js)) spricht **eine**
+Sprache: die kanonische Anthropic-Form (`tools[{name, description, input_schema}]`,
+Content-Blöcke `tool_use`/`tool_result`). Jeder Provider übersetzt selbst und liefert
+sein Ergebnis wieder in dieser Form (`toolUses` / `stopReason` / `rawContentBlocks`);
+die Übersetzung für OpenAI-Function-Calling liegt in
+[lib/ai/tool-translate.js](../lib/ai/tool-translate.js) (rein, getestet in
+`tests/unit/ai-tool-translate.test.js`). Vier Eigenheiten des openai-compat-Pfads:
+
+- **Kein `response_format`** im Tool-Modus — ein erzwungenes JSON-Objekt drängt das
+  Modell in eine JSON-Antwort statt in einen Werkzeug-Aufruf. Die Struktur der
+  Endantwort erzwingt dort das `final_answer`-Werkzeug.
+- **`stopReason` folgt dem Inhalt, nicht `finish_reason`:** viele Endpunkte melden
+  `stop`, obwohl `tool_calls` im Delta standen — nach `finish_reason` gerechnet
+  bräche der Loop die Recherche nach Runde 1 ab.
+- **Text-Rettung:** schreibt ein Modell den Aufruf als Text (`[TOOL_CALLS][{…}]`,
+  Code-Fence-JSON), wird er zum Tool-Use umgedeutet, sofern der Name im angebotenen
+  Satz steht. Ohne das wäre das JSON-Fragment die «Antwort» des Agenten.
+- **`tool_call_id` verbatim zurück** (Mistral validiert auf 9 alphanumerische
+  Zeichen); Ersatz-IDs entstehen nur, wenn der Endpunkt gar keine liefert.
+
+Lehnt ein Endpunkt Werkzeuge ab (400/404/422 mit Tool-Bezug), trägt der Fehler den Code
+`AI_TOOLS_UNSUPPORTED` — der Buch-Chat fällt damit auf den klassischen Pfad zurück
+(`fallbackJob` in `makeAgenticChatJob`) statt den Job zu verlieren. Ollama hat noch
+keinen Pfad: `/api/chat` kann `tools`, aber in eigenem Wire-Format.
 
 Beide entfernten Provider (`claude`, `openai-compat`) haben Hard-Timeout und Retry-Ladder; Details unter „Timeout + Retry“.
 
@@ -133,7 +166,7 @@ const { text, truncated, tokensIn, tokensOut, cacheReadIn, cacheCreationIn } = a
 
 **`callAIChat(messages, ...)`** — Multi-Turn-Variante mit Messages-Array.
 
-**`callAIWithTools(messages, system, tools, ...)`** — Tool-Use, nur Claude. Wirft für Ollama/Llama. Caller verwaltet Loop: bei `stopReason === 'tool_use'` Tool-Results als `tool_result`-Blocks anhängen und neu callen.
+**`callAIWithTools(messages, system, tools, ...)`** — Tool-Use für `claude` und `openai-compat`; wirft für Provider ohne Tool-Pfad mit `err.code = 'AI_TOOLS_UNSUPPORTED'` (Fallback-Signal, siehe oben). `messages` ist immer die kanonische Anthropic-Form. Caller verwaltet Loop: bei `stopReason === 'tool_use'` Tool-Results als `tool_result`-Blocks anhängen und neu callen.
 
 ## JSON-Pflicht
 
@@ -259,7 +292,7 @@ Konsumenten der Klasse (nicht des Provider-Namens):
 - **Kontinuität + Erzählprofil auf allen drei Schichten** — `/config` (`komplett.continuity`/`narrativeProfile`, [routes/proxies.js](../routes/proxies.js)), Karten-Gate (`requiresCloudModel` in [feature-registry.js](../public/js/cards/feature-registry.js), gelesen aus `$store.config.effectiveProviderClass`) und Route-Guard (`400 CONTINUITY_PROVIDER_UNSUPPORTED` / `NARRATIVE_PROFILE_PROVIDER_UNSUPPORTED` in [routes/jobs/komplett/index.js](../routes/jobs/komplett/index.js)) stellen **dieselbe** Frage. Weichen sie auseinander, ist die Karte sichtbar und der Knopf antwortet 400.
 - **Klasse am effektiven Provider, nicht am globalen.** Die beiden Job-seitigen Gates (`settledAll`, `_isLocalProvider`) lösen über `effectiveProviderClass()` auf. An `ai.provider` gelesen führe der Mischbetrieb sonst genau in die Irre, für die es die Zwei-Instanzen-Prompt-Schicht überhaupt gibt: ein Claude-User liefe seriell, weil global Ollama eingestellt ist, und ein Ollama-User parallel in den VRAM-Überlauf.
 
-Bewusst **nicht** klassen-, sondern provider-gegatet (`=== 'claude'`): Prompt-Caching (`cache_control`) inklusive Warmup-Reihenfolge, Tool-Use (`callAIWithTools`, agentischer Buch-Chat, Recherche-Chat), Tiered Routing (`extractTier` — Claude-Modellnamen + `effort`), `ai.claude.phase1_concurrency`, der `web_search`-Faktencheck (`400 FACTCHECK_CLAUDE_ONLY`) und die aus dem Claude-Fenster abgeleitete Chunk-Obergrenze. Ein openai-compat-Frontier-Modell bekommt mit dem Schalter also die volle Prompt- und Strategie-Behandlung, aber keine Claude-API-Features — der Recherche-Chat bleibt für solche User ausgeblendet.
+Bewusst **nicht** klassen-, sondern provider-gegatet (`=== 'claude'`): Prompt-Caching (`cache_control`) inklusive Warmup-Reihenfolge, der Recherche-Chat (er braucht Anthropics `web_search`-Server-Tool, nicht bloss irgendein Tool-Protokoll), Tiered Routing (`extractTier` — Claude-Modellnamen + `effort`), `ai.claude.phase1_concurrency`, der `web_search`-Faktencheck (`400 FACTCHECK_CLAUDE_ONLY`) und die aus dem Claude-Fenster abgeleitete Chunk-Obergrenze. Ein openai-compat-Frontier-Modell bekommt mit dem Schalter also die volle Prompt- und Strategie-Behandlung, aber keine Claude-API-Features — der Recherche-Chat bleibt für solche User ausgeblendet.
 
 ### Per-Job-Konfiguration: der ALS-Bag `aiJob`
 

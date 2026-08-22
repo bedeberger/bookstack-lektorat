@@ -21,9 +21,9 @@ Der **Freitext**-Query (`?q=…`, Such-Karte + Buch-Chat-Tool `search_similar`) 
 
 `/config` exponiert die Ableitungs-Flags `semanticSearch.hybrid`/`.rerank` für einen dezenten Hinweis in der Such-Karte (`semanticEnhancedLabel`); Host/Model/Key bleiben serverseitig. Admin-Test: `POST /admin/settings/test-embed` + `POST /admin/settings/test-rerank`.
 
-## Drei Einstiegspunkte
+## Einstiegspunkte
 
-Alle drei sind nur sichtbar/aktiv, wenn das Backend konfiguriert ist (`config.semanticSearchEnabled`, siehe [Freischalten](#freischalten)).
+Alle sind nur sichtbar/aktiv, wenn das Backend konfiguriert ist (`config.semanticSearchEnabled`, siehe [Freischalten](#freischalten)).
 
 | Einstieg | Ort | Auslöser |
 |----------|-----|----------|
@@ -31,10 +31,14 @@ Alle drei sind nur sichtbar/aktiv, wenn das Backend konfiguriert ist (`config.se
 | **„Ähnliche Stellen"** | Button an Figuren- und Szenen-Karten | [figuren.html:133](../public/partials/figuren.html) / [szenen.html:181](../public/partials/szenen.html) → `$app.findSimilar(kind, id, label)` → öffnet Such-Karte, feuert Event `search:similar` |
 | **Buch-Chat-Tool** | Agentischer Buch-Chat | Tool `search_similar` ([book-chat-tools.js:68](../public/js/prompts/book-chat-tools.js)) — Gegenstück zu `search_passages` (Wort-genau vs. sinngemäss) |
 | **Recherche-Chat-Tool** | Agentischer Recherche-Chat | Tool `search_research_passages` ([recherche.js](../public/js/prompts/recherche.js)) — semantisch übers Archiv, mit `item_id` gezielt **in** ein langes PDF. Nur angeboten, wenn `embed.isEnabled()` (Filter in [research-chat.js](../routes/jobs/research-chat.js)) |
+| **Belegvorschlag** | Lektorat-Findings-Panel, an jedem `unbelegt`-Befund ([editor-findings.html](../public/partials/editor-findings.html)) | `toggleEvidence(i)` → `GET /sources/evidence` → semantisch gegen die **Quellen-Bibliothek** (`semanticSourceQuery`, user-skopiert) |
+| **Buchlandkarte** | Eigene Karte (`buchlandkarteCard`) | `runBookMap()` → Job `POST /jobs/book-map` — liest die Wolke als **Geometrie** statt als Trefferliste ([lib/book-map.js](../lib/book-map.js)) |
 
 Es gibt **keine eigene Karte** und **keinen Paletten-Prefix** — die semantische Suche lebt komplett in der bestehenden Such-Karte (`key: 'search'` in [feature-registry.js](../public/js/cards/feature-registry.js)).
 
-**Interner Konsument (kein UI-Einstieg): der klassische Buch-Chat.** `runBookChatJob` (Nicht-Claude / `jobs.book_chat.mode='classic'`, [docs/chats.md](chats.md#buch-chat)) nutzt `semanticQuery` als **Mini-RAG-Retriever**: statt alle Seiten zu laden + Keyword-Scoring zieht `_selectPassagesSemantic` bei aktivem Index die relevantesten Chunk-Auszüge (ein bester Chunk pro Seite, `kinds:['page']`, `jobs.book_chat.rag_top_k`) in den System-Prompt. Non-fatal: kein Index / Backend down / keine Treffer → Keyword-Fallback. So bekommt der agentenlose Chat dieselbe scharfe Retrieval-Qualität wie das Tool `search_similar`.
+**Interner Konsument (kein UI-Einstieg): der klassische Buch-Chat.** `runBookChatJob` (Nicht-Claude / `jobs.book_chat.mode='classic'`, [docs/chats.md](chats.md#buch-chat)) nutzt `semanticQuery` als **Mini-RAG-Retriever**: statt alle Seiten zu laden + Keyword-Scoring zieht `selectPassagesSemantic` ([book-chat-retrieval.js](../routes/jobs/chat/book-chat-retrieval.js)) bei aktivem Index die relevantesten Chunk-Auszüge (ein bester Chunk pro Seite, `kinds:['page']`, `jobs.book_chat.rag_top_k`) in den System-Prompt. Non-fatal: kein Index / Backend down / keine Treffer → Keyword-Fallback. So bekommt der agentenlose Chat dieselbe scharfe Retrieval-Qualität wie das Tool `search_similar`.
+
+**Interner Konsument (kein UI-Einstieg): der Erst-Kontext des agentischen Buch-Chats.** Derselbe Pfad, andere Dosierung: `preContextPassages` (ebenfalls [book-chat-retrieval.js](../routes/jobs/chat/book-chat-retrieval.js)) legt vor der ersten Tool-Iteration `jobs.book_chat.pre_rag_top_k` Passagen (Deckel `jobs.book_chat.pre_rag_chars`) als eigenen System-Block in den Prompt — **nicht** budget-füllend wie der klassische Pfad, sondern absichtlich klein. Zweck ist Kostenkontrolle: schmale Faktenfragen sind damit ohne Werkzeug-Runde beantwortbar, statt über `search_passages` zu `get_chapter_text` zu eskalieren. Details + Cache-Invariante: [docs/buchchat-tools.md](buchchat-tools.md#erst-kontext--kosten-leiter).
 
 **Interner Konsument (kein UI-Einstieg):** die **Kontinuitäts-Verify-Stufe** (Multi-Pass, [docs/komplett.md](komplett.md#phase-8--kontinuitätsprüfung)) nutzt den Index als **best-effort Beleg-Fallback** — findet die wörtliche Textstellen-Suche das Zitat eines Befunds nicht, lädt sie die semantisch nächste Seiten-Passage nach (`searchSimilar`, `kinds:['page']`). Gilt nur, wenn der Index für das Buch existiert; sonst keyword-Pfad. Rein rückwärtsgewandt.
 
@@ -101,6 +105,25 @@ Migrationen **240** + **251** + **259** ([db/migrations.js](../db/migrations.js)
 
 **Cleanup:** Der Entity-Delete cascadet in der DB. Die expliziten Hooks in [db/pages.js:154](../db/pages.js) (`remove('page', …)`) und [routes/figures.js](../routes/figures.js) (`remove('scene'/'figure', …)`) bleiben als sofortige Freigabe im selben Transaktionsschritt. `pruneMissing()` deckt den Fall ab, den kein FK sieht: die Entität existiert noch, ist aber nicht mehr indizierbar (stale-Figur, Seite in ein anderes Buch verschoben).
 
+## Zwei Fragen jenseits der Trefferliste
+
+Die Einstiegspunkte oben stellen alle dieselbe Frage — „gib mir die k nächsten Nachbarn zu diesem Text". Zwei Konsumenten benutzen denselben Index anders, und ihre Eigenheiten folgen daraus:
+
+**Belegvorschlag** ([routes/sources-evidence.js](../routes/sources-evidence.js) + [public/js/editor/lektorat-evidence.js](../public/js/editor/lektorat-evidence.js)) dreht die Richtung: die Anfrage kommt nicht vom Suchenden, sondern **aus dem Buchtext selbst**. Ein `unbelegt`-Befund des wissenschaftlichen Lektorat-Profils liefert den wörtlichen Satz (Span-Typ `satz`), und der ist eine fertige semantische Anfrage gegen `source_semantic_chunks`. Vier Entscheidungen daran:
+
+- **Nur `unbelegt`, nicht `zuschreibung`.** Im journalistischen Profil ist der Beleg die im Satz *genannte* Person oder Stelle, nicht der Kurzbeleg (Begründung an `JOURNALISTISCH_TYPEN` in [prompts/lektorat-typen.js](../public/js/prompts/lektorat-typen.js)) — ein Quellen-Chip wäre dort die falsche Reparatur.
+- **`linked` gehört in die Antwort.** Ein `data-src`-Marker erzeugt nur dann eine Fundstelle, wenn die Quelle dem Buch zugeordnet ist (`replacePageCitations`). Ein Vorschlag aus einer anderen Arbeit muss darum erst durch `POST /sources/:id/link` — und zwar **vor** dem Einfügen, sonst stünde der Beleg im Text und in keinem Verzeichnis.
+- **Server-Apply, nicht DOM.** Bei sichtbaren Befunden ist der Editor per Invariante nie im Bearbeiten-Modus (`editMode + checkDone forbidden`) — es gibt kein contenteditable. Der Weg ist derselbe wie beim Korrektur-Apply: frisch laden → `insertAfterInHtml` → `savePage(expectedUpdatedAt)`, Revisions-Quelle `lektorat-apply`. `insertAfterInHtml` **spleisst, ersetzt nicht**: `replaceInHtml` würde ein balanciertes `<em>` oder eine bestehende Quellenangabe im Satz verlieren.
+- **Keine Stellenangabe.** Der Fund kommt aus einem Embedding-Chunk, und `source_semantic_chunks` hat keine Seitenzahl. Sie zu raten wäre eine erfundene Belegstelle; der Autor trägt sie über den Chip-Klick nach. Mehrdeutigkeit (`countInHtml > 1`) ist ein **Abbruch**, keine Wahl.
+
+**Buchlandkarte** ([lib/book-map.js](../lib/book-map.js), Job [routes/jobs/book-map.js](../routes/jobs/book-map.js), Karte `buchlandkarteCard`) fragt nicht nach Nachbarn, sondern nach der **Form der Wolke**: wo liegen die Kapitel zueinander, hält ein Kapitel zusammen, welche Seite passt nicht ins Buch. Ein Punkt je Seite (Mittel über ihre Chunks, normiert), Projektion per **PCA** — linear, parameterfrei, deterministisch und in ~40 Zeilen selbst gerechnet (Power-Iteration mit Deflation). t-SNE/UMAP sähen hübscher aus, bräuchten eine Vendor-Lib, wären zufallsinitialisiert (dieselbe Analyse zeigte beim zweiten Öffnen ein anderes Bild) und erhalten *lokale* Nachbarschaft auf Kosten der globalen Struktur — genau die ist hier die Frage.
+
+- **Die Achsen haben keine Bedeutung** und bekommen darum keine Beschriftung; nur die relative Lage zählt. Beide werden mit **demselben** Faktor skaliert, sonst sähe eine gestreckte Wolke rund aus (gegated in [tests/unit/book-map.test.mjs](../tests/unit/book-map.test.mjs)).
+- **`explainedVariance` wird ausgewiesen, nicht verschwiegen.** Zeigt die Projektion wenig von der Streuung, sagt die Karte das und behauptet keine Nähe (gleiche Ehrlichkeitsregel wie der Einmalwort-Deckel des Wortschatzes).
+- **Alle Kennzahlen im Vollraum**, nie auf den 2D-Koordinaten: Kohäsion, Nachbar-Kapitel und Ausreisser-Abstand rechnen über den Original-Vektoren. Sonst erbten sie den Fehler der Projektion.
+- **Kohäsion ist kein Gütemass.** Ein niedriger Wert heisst „thematisch breit" — im Übersichtskapitel richtig, im Szenen-Kapitel ein Hinweis. Ein Kapitel mit einer Seite bekommt `cohesion: null` statt 1.0: das wäre die Behauptung perfekter Geschlossenheit, wo nichts zu vergleichen war.
+- **Kein persistierter Index.** Das Ergebnis lebt nur im Job-Result — es ist vollständig aus `semantic_chunks` neu berechenbar, und ein Ableitungs-Index eines Ableitungs-Index wäre nur eine weitere Stelle, die veralten kann.
+
 ## Nacht-Cron
 
 `reindexAllBooks()` ([routes/jobs/embed-index.js](../routes/jobs/embed-index.js), eingehängt in [server.js](../server.js)) reiht pro Buch (`contentStore.listBooks`) einen `embed-index`-Job ein (Dedup gegen laufende Jobs). Der Delta-Cache hält den Reindex billig: bereits indizierte Bücher embedden nur seit gestern geänderte Chunks neu, nie-indizierte Bücher bekommen ihren Erst-Index.
@@ -111,8 +134,9 @@ Migrationen **240** + **251** + **259** ([db/migrations.js](../db/migrations.js)
 - **Reiner Ableitungs-Index** — keine Wahrheit in `semantic_chunks`; jederzeit via `embed-index` neu berechenbar.
 - **Query filtert aufs aktive Modell** (`embed.model`). Modellwechsel im Admin → alte Modell-Chunks bleiben liegen (koexistieren), bis der nächste Full-Reindex sie über `pruneMissing`/`clearBook` ersetzt. Nach Modellwechsel Reindex anstoßen.
 - **Host/Model/Key nie im `/config`** — nur der abgeleitete Bool `semanticSearch.enabled` geht ans Frontend.
+- **Kennzahlen über der Wolke rechnen im Vollraum** — die 2D-Projektion der Buchlandkarte ist eine Anzeige, keine Datenquelle. Wer eine neue Kennzahl ergänzt, nimmt die Original-Vektoren.
 - **`embed.dim` muss zum Modell passen** — Vektoren ungleicher Länge ranken via `cosineSim → -Infinity` nie als Treffer.
 
 ## Tests
 
-[tests/unit/embed-chunk.test.mjs](../tests/unit/embed-chunk.test.mjs) — Chunking, (De)Serialisierung, Cosinus, Content-Hash (pure Helfer, kein Netz/DB). [tests/unit/embed-retry.test.mjs](../tests/unit/embed-retry.test.mjs) — Batch-Retry (`_withRetry`): transient→Erfolg nach Retries, nicht-transient→sofort, erschöpft→wirft, Job-Cancel→kein Retry.
+[tests/unit/embed-chunk.test.mjs](../tests/unit/embed-chunk.test.mjs) — Chunking, (De)Serialisierung, Cosinus, Content-Hash (pure Helfer, kein Netz/DB). [tests/unit/embed-retry.test.mjs](../tests/unit/embed-retry.test.mjs) — Batch-Retry (`_withRetry`): transient→Erfolg nach Retries, nicht-transient→sofort, erschöpft→wirft, Job-Cancel→kein Retry. [tests/unit/book-map.test.mjs](../tests/unit/book-map.test.mjs) — Buchlandkarte: Punkt-Verdichtung, PCA-Eigenschaften (Determinismus, geteilter Achsen-Faktor, Cluster-Trennung), Kapitel-Kennzahlen, Ausreisser (pure Mathematik, kein Netz/DB). [tests/unit/cite-insert-after.test.mjs](../tests/unit/cite-insert-after.test.mjs) — Belegvorschlag: `insertAfterInHtml` verliert nichts (Inline-Auszeichnung, bestehende Quellenangabe), bleibt im Absatz, umgeht abschliessende Auszeichnung; plus der Mehrdeutigkeits-Guard davor.

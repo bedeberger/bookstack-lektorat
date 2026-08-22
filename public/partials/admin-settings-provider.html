@@ -35,6 +35,7 @@
         <div x-data="settingField({ k: 'ai.komplett.extract_single_pass_cap', type: 'num', label: 'admin.settings.label.komplettExtractSinglePassCap', num: { integer: true, min: 0, max: 2000000 }, help: 'admin.settings.help.extractSinglePassCap' })"></div>
         <div x-data="settingField({ k: 'ai.komplett.figure_batch_size', type: 'num', label: 'admin.settings.label.komplettFigureBatchSize', num: { integer: true, min: 1, max: 200 }, help: 'admin.settings.help.figureBatchSize' })"></div>
         <div x-data="settingField({ k: 'ai.komplett.scene_backfill_min_chars', type: 'num', label: 'admin.settings.label.komplettSceneBackfillMinChars', num: { integer: true, min: 500, max: 100000 }, help: 'admin.settings.help.sceneBackfillMinChars' })"></div>
+        <div x-data="settingField({ k: 'ai.komplett.timeline_consolidate_max', type: 'num', label: 'admin.settings.label.komplettTimelineConsolidateMax', num: { integer: true, min: 0, max: 5000 }, help: 'admin.settings.help.timelineConsolidateMax' })"></div>
         <div x-data="settingField({ k: 'ai.komplett.attribute_check', type: 'toggle', label: 'admin.settings.label.komplettAttributeCheck', help: 'admin.settings.help.attributeCheck' })"></div>
         <div x-data="settingField({ k: 'ai.komplett.coverage_feedback', type: 'toggle', label: 'admin.settings.label.komplettCoverageFeedback', help: 'admin.settings.help.coverageFeedback' })"></div>
         <div x-data="settingField({ k: 'ai.komplett.scene_backfill', type: 'toggle', label: 'admin.settings.label.komplettSceneBackfill', help: 'admin.settings.help.sceneBackfill' })"></div>
@@ -76,9 +77,17 @@
         <div x-data="settingField({ k: 'ai.openai-compat.repeat_penalty', type: 'num', label: 'admin.settings.label.repeatPenalty', num: { step: 0.05, decimals: 2, min: 1, max: 2 }, help: 'admin.settings.help.repeatPenalty' })"></div>
         <div x-data="settingField({ k: 'ai.openai-compat.think', type: 'toggle', label: 'admin.settings.label.aiThink', help: 'admin.settings.help.thinkOpenaiCompat' })"></div>
         <div x-data="settingField({ k: 'ai.openai-compat.cloud', type: 'toggle', label: 'admin.settings.label.cloudModel', help: 'admin.settings.help.cloudOpenaiCompat' })"></div>
+        <div x-data="settingField({ k: 'ai.openai-compat.tools', type: 'toggle', label: 'admin.settings.label.aiTools', help: 'admin.settings.help.toolsOpenaiCompat' })"></div>
         <div x-data="settingField({ k: 'ai.openai-compat.max_parallel', type: 'num', label: 'admin.settings.label.maxParallel', num: { integer: true, min: 1, max: 16 }, help: 'admin.settings.help.maxParallelOpenaiCompat' })"></div>
         <div x-data="settingField({ k: 'ai.openai-compat.timeout_ms', type: 'num', label: 'admin.settings.label.aiTimeoutMs', num: { integer: true, min: 1000, max: 3600000 }, help: 'admin.settings.help.timeoutMsOpenaiCompat' })"></div>
         <div x-data="settingField({ k: 'ai.openai-compat.retry_max', type: 'num', label: 'admin.settings.label.aiRetryMax', num: { integer: true, min: 0, max: 10 }, help: 'admin.settings.help.retryMaxOpenaiCompat' })"></div>
+
+        <h4 class="admin-settings-subheading"><span x-text="$app.t('admin.settings.openaiCompat.bookchatTitle')"></span></h4>
+        <small class="muted-msg muted-msg--sm" x-text="$app.t('admin.settings.openaiCompat.bookchatIntro')"></small>
+        <div x-data="settingField({ k: 'ai.openai-compat.model.bookchat', label: 'admin.settings.label.aiModelBookchat', help: 'admin.settings.help.bookchatModelOpenaiCompat', models: { target: 'openai-compat', hostKey: 'ai.openai-compat.host' } })"></div>
+        <div x-data="settingField({ k: 'ai.openai-compat.context_window.bookchat', type: 'num', label: 'admin.settings.label.aiContextWindowBookchat', num: { integer: true, min: 0, max: 2000000 }, help: 'admin.settings.help.bookchatContextWindowOpenaiCompat' })"></div>
+        <div x-data="settingField({ k: 'ai.openai-compat.max_tokens_out.bookchat', type: 'num', label: 'admin.settings.label.aiMaxTokensOutBookchat', num: { integer: true, min: 0, max: 200000 }, help: 'admin.settings.help.bookchatMaxTokensOutOpenaiCompat' })"></div>
+        <div x-data="settingField({ k: 'ai.openai-compat.timeout_ms.bookchat', type: 'num', label: 'admin.settings.label.aiTimeoutMsBookchat', num: { integer: true, min: 0, max: 3600000 }, help: 'admin.settings.help.bookchatTimeoutMsOpenaiCompat' })"></div>
 
         <h4 class="admin-settings-subheading"><span x-text="$app.t('admin.settings.openaiCompat.komplettTitle')"></span></h4>
         <small class="muted-msg muted-msg--sm" x-text="$app.t('admin.settings.openaiCompat.komplettIntro')"></small>

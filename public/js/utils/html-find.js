@@ -303,6 +303,49 @@ export function replaceInHtml(html, needle, replacement) {
 }
 
 /**
+ * Fügt `insertion` DIREKT HINTER dem Fundort von `needle` ein, ohne den
+ * gefundenen Bereich anzutasten. Gegenstück zu `replaceInHtml` für den Fall, in
+ * dem nichts ersetzt, sondern etwas angehängt wird — der Belegvorschlag setzt so
+ * den Kurzbeleg hinter einen unbelegten Satz.
+ *
+ * WARUM NICHT `replaceInHtml(html, satz, satz + beleg)`: dort wird der ganze
+ * Match-Bereich durch den gelieferten String ersetzt. Bei einer KORREKTUR ist
+ * das richtig (die KI schlägt eine neue Formulierung vor, Auszeichnung im Alten
+ * ist damit ohnehin hinfällig), beim EINFÜGEN wäre es stiller Datenverlust: ein
+ * `<em>` oder eine bestehende Quellenangabe INNERHALB des Satzes ist ein
+ * balanciertes Inline-Paar, das `_splitOrphanTags` nicht rettet. Hier wird
+ * ausschliesslich an einer Position gespleisst, es fällt nichts weg.
+ *
+ * Der Einfügepunkt wandert über unmittelbar folgende SCHLIESSENDE Inline-Tags
+ * hinweg: endet der Satz auf einem betonten Wort (`…<em>Satz.</em>`), gehört der
+ * Beleg hinter das `</em>` und nicht hinein — sonst erbt der Chip die
+ * Auszeichnung. Über eine Block-Grenze (`</p>`) wandert er NICHT: der Beleg
+ * gehört in den Absatz, den er belegt.
+ *
+ * Gibt das HTML unverändert zurück, wenn `needle` nicht auffindbar ist. Die
+ * Mehrdeutigkeits-Prüfung liegt beim Aufrufer (`countInHtml`) — `findInHtml`
+ * greift immer das erste Vorkommen.
+ */
+export function insertAfterInHtml(html, needle, insertion) {
+  if (!html || !needle || !insertion) return html;
+  const m = findInHtml(html, needle);
+  if (!m) return html;
+
+  let at = m.htmlEnd;
+  const closeRe = /^<\/([a-zA-Z][a-zA-Z0-9]*)\s*>/;
+  for (;;) {
+    const next = closeRe.exec(html.slice(at));
+    if (!next || !_INLINE_TAGS.has(next[1].toLowerCase())) break;
+    at += next[0].length;
+  }
+
+  // Kein roher Zeilenumbruch (gleiche Begründung wie in `replaceInHtml`): in
+  // umbruch-erhaltenden Blöcken (`<pre>`, `.poem`) würde er sichtbar.
+  const ins = String(insertion).replace(/[\r\n]+/g, ' ');
+  return html.slice(0, at) + ins + html.slice(at);
+}
+
+/**
  * Warum eine `replaceInHtml`-Ersetzung ein No-Op wäre — zur Unterscheidung der
  * User-Meldung (Absatzgrenze vs. Link). Gibt `true`, wenn der Match einen
  * vollständigen `<a>…</a>` umschliesst (und deshalb übersprungen wird).

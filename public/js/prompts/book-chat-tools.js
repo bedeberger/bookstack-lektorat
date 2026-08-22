@@ -66,13 +66,14 @@ export const BOOK_CHAT_TOOLS = [
   },
   {
     name: 'search_similar',
-    description: 'Semantische Ähnlichkeitssuche (Embeddings) über das ganze Buch: findet Passagen/Szenen/Figuren, die einem Suchtext BEDEUTUNGSMÄSSIG nahestehen — auch wenn andere Wörter benutzt werden. Genau das Gegenstück zu `search_passages`: nutze `search_passages` für konkrete Wörter/Namen, `search_similar` für Fragen nach Sinn/Stimmung/Motiv ("wo herrscht dieselbe resignierte Stimmung wie hier", "ähnliche Szenen wie ein Abschied am Bahnhof", "Stellen, die diese Figur ähnlich beschreiben"). Liefert nach Ähnlichkeit sortierte Treffer {kind,entity_id,title,snippet,score}. Danach ggf. `get_pages`/`get_chapter_text` für den Volltext. Rein rückwärtsgewandt — findet Bestehendes, erfindet nichts.',
+    description: 'Semantische Ähnlichkeitssuche (Embeddings) über das ganze Buch: findet Passagen/Szenen/Figuren, die einem Suchtext BEDEUTUNGSMÄSSIG nahestehen — auch wenn andere Wörter benutzt werden. Genau das Gegenstück zu `search_passages`: nutze `search_passages` für konkrete Wörter/Namen, `search_similar` für Fragen nach Sinn/Stimmung/Motiv ("wo herrscht dieselbe resignierte Stimmung wie hier", "ähnliche Szenen wie ein Abschied am Bahnhof", "Stellen, die diese Figur ähnlich beschreiben"). Liefert nach Ähnlichkeit sortierte Treffer {kind,entity_id,title,snippet,score}. Der Ausschnitt (`snippet_chars`) ist oft schon die Antwort — dann NICHT noch `get_pages`/`get_chapter_text` nachschieben; die brauchst du nur, wenn der Zusammenhang um die Stelle fehlt. Rein rückwärtsgewandt — findet Bestehendes, erfindet nichts.',
     input_schema: {
       type: 'object',
       properties: {
         query:   { type: 'string',  description: 'Freitext, dessen Bedeutung gesucht wird (eine Beschreibung, ein Beispielsatz, ein Motiv). Für Stichwortsuche stattdessen `search_passages`.' },
         kinds:   { type: 'array', items: { type: 'string', enum: ['page', 'scene', 'figure'] }, description: 'Optional: auf Treffertypen einschränken (Seiten/Szenen/Figuren). Default: alle drei.' },
-        limit:   { type: 'integer', description: 'Maximale Trefferzahl (default 20, max 50).' },
+        limit:   { type: 'integer', description: 'Maximale Trefferzahl (default 20, max 50). Bei grossem snippet_chars kleiner wählen (z.B. 6–10) — sonst kürzt der Server die Liste.' },
+        snippet_chars: { type: 'integer', description: 'Länge des Textausschnitts pro Treffer (default 700, max 1500 ≈ eine ganze indizierte Passage). Gross wählen, wenn der Ausschnitt die Frage schon beantworten soll — das ersetzt ein teures get_pages danach.' },
       },
       required: ['query'],
     },
@@ -485,4 +486,39 @@ export const BOOK_CHAT_TOOLS = [
       required: ['antwort'],
     },
   },
+];
+
+// ── Slim-Werkzeugsatz (lokale/kleine Modelle) ─────────────────────────────────
+// Der volle Katalog kostet ~10k Input-Tokens PRO Iteration. Bei Claude trägt das
+// Prompt-Caching diesen Präfix; ein lokaler Endpunkt hat kein Caching und bezahlt
+// ihn jede Runde neu — und ein kleineres Modell trifft aus 37 Werkzeugen ohnehin
+// schlechter als aus 16. Darum eine kuratierte Teilmenge: Überblick, Suche
+// (Wortlaut + Sinn), Volltext, Zitat-Verifikation, die Figuren-Achse, Orte/Szenen,
+// Bewertung — plus der Pflicht-Endpunkt.
+//
+// Bewusst NICHT drin (über den Erst-Kontext oder eigene Karten erreichbar, und für
+// die häufigen Fragen entbehrlich): count_pronouns, get_stil_metrics, die Lektorat-,
+// Plot-, Motiv-, Ideen-, Song-, Weltfakten-, Werkstatt-, Revisions- und
+// Wiederholungs-Werkzeuge, get_dialogue, quote_passage (quote_match deckt den Weg
+// ab), find_first_last_mention (steht in get_figure_mentions), get_book_settings.
+//
+// KEINE zweite Definitionsliste: Namen zeigen auf BOOK_CHAT_TOOLS oben — Drift ist
+// durch tests/unit/ai-tool-translate.test.js gegated.
+export const BOOK_CHAT_SLIM_TOOL_NAMES = [
+  'list_chapters',
+  'search_passages',
+  'search_similar',
+  'get_pages',
+  'get_chapter_text',
+  'quote_match',
+  'list_figures',
+  'get_figure_profile',
+  'get_figure_mentions',
+  'get_figure_relations',
+  'get_timeline',
+  'list_scenes',
+  'list_locations',
+  'get_reviews',
+  'generate_image',
+  'final_answer',
 ];

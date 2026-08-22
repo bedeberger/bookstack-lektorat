@@ -26,6 +26,7 @@ const SIMPLE_HASH_VIEWS = {
   'stil':         'stil',
   'fehler':       'fehlerHeatmap',
   'redundanz':    'redundanz',
+  'landkarte':    'buchlandkarte',
   'wortschatz':   'wortschatz',
   'struktur':     'struktur',
   'titel':        'titelwerkstatt',

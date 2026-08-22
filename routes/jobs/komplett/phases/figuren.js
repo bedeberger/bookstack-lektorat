@@ -5,13 +5,15 @@ const { planFigurenMatch } = require('../../../../db/figures');
 const { judgeEntityPairs } = require('../entity-reconcile');
 const { recomputeBookFigureMentions } = require('../../../../lib/page-index');
 const { i18nError, updateJob } = require('../../shared');
-const { buildFigNameLookup } = require('../utils');
+const { buildFigNameLookup, consolidationFitsCap } = require('../utils');
 const {
   preMergeChapterFiguren, applySozialschichtModeVote, mergeDuplicateFiguren,
   validateBeziehungenDescriptions, backfillFiguren, ensureUniqueFigIds, applyAliasClusters,
+  annotateBeziehungenNames, rebindBeziehungenByName,
 } = require('../figuren-merge');
 const { komplettMaxTokens } = require('./tokens');
-const { providerClass } = require('../../../../lib/ai');
+const { providerClass, getContextConfigFor } = require('../../../../lib/ai');
+const { COST_LABEL, costTier } = require('../cost-labels');
 
 /** Phase 2: Figuren konsolidieren + Soziogramm + Name→ID Lookup.
  *  Single-Pass-Optimierung: Wenn Phase 1 im Single-Pass-Modus lief (ein „Kapitel"
@@ -35,6 +37,13 @@ async function runPhase2(ctx, chapterFiguren, chapterAssignments, chapterSzenen)
     updateJob(jobId, { progress: providerClass(effectiveProvider) === 'cloud' ? 40 : 43 });
   } else {
     updateJob(jobId, { progress: 30, statusText: 'job.phase.consolidatingFiguren' });
+    // Beziehungs-Ziele mit dem Namen anreichern, BEVOR irgendetwas gemergt wird: `figur_id`
+    // ist chunk-lokal, und jeder Weg, der die Figuren danach neu durchnummeriert (Fallback
+    // unten), verlöre sonst die Zuordnung an eine fremde Figur. Nutzt zugleich dem Prompt,
+    // der chunk-fremde Ziele dann mit Namen statt mit einer rohen id zeigt. Begründung
+    // ausführlich an der Funktion.
+    const annotated = annotateBeziehungenNames(chapterFiguren);
+    if (annotated > 0) log.info(`${annotated} Beziehungs-Ziele mit Namen angereichert (chunk-lokale fig_ids).`);
     // Welle 3 · Rollierender Dedup: Duplikate regelbasiert VOR dem KI-Call entfernen.
     // Spart Eingabetokens und verhindert, dass Phase 2 aus Bequemlichkeit doppelte Figuren durchlässt.
     const { chapterFiguren: preMerged, dupesRemoved } = preMergeChapterFiguren(chapterFiguren);
@@ -57,6 +66,7 @@ async function runPhase2(ctx, chapterFiguren, chapterAssignments, chapterSzenen)
           const aliasRes = await call(jobId, tok,
             prompts.buildAliasClusterPrompt(bookName, candidates),
             sys.SYSTEM_FIGUREN_BLOCKS, 30, 30, komplettMaxTokens(effectiveProvider), 0.2, null, prompts.SCHEMA_FIGUREN_ALIAS_CLUSTER,
+            costTier(COST_LABEL.figuren),
           );
           const { renamed, aliasMap: am } = applyAliasClusters(preMerged, aliasRes?.cluster || [], log);
           if (renamed > 0) aliasMap = am;
@@ -69,30 +79,64 @@ async function runPhase2(ctx, chapterFiguren, chapterAssignments, chapterSzenen)
     }
 
     const figProgressEnd = providerClass(effectiveProvider) === 'cloud' ? 40 : 43;
+    // Regelbasierter Ersatz für die KI-Konsolidierung. Zwei Aufrufer: der Preflight
+    // (Output passt nicht ins Cap) und der Catch (Call gescheitert) — beide landen beim
+    // selben Ergebnis, siehe Begründungen dort.
+    const fallbackFiguren = () => {
+      const list = preMerged.flatMap(c => c.figuren || []).map((f, i) => ({ ...f, id: 'fig_' + (i + 1) }));
+      // Genau hier wird global neu nummeriert — also genau hier die Beziehungs-Ziele über die
+      // zuvor angereicherten Namen neu binden. Ohne das zeigt jede chunk-lokale `figur_id` auf
+      // die Figur, die zufällig denselben Index im globalen Array hat.
+      rebindBeziehungenByName(list, log);
+      return list;
+    };
+    const cap = komplettMaxTokens(effectiveProvider);
+    const konsolPrompt = prompts.buildFiguresBasisConsolidationPrompt(bookName, preMerged, sys.BUCH_KONTEXT || '');
+    // Preflight: würde die Antwort das Cap sprengen, ist die Truncation sicher — und mit ihr
+    // der Fallback unten. Dann lieber sofort dorthin, statt den Cap erst leerzuschreiben
+    // (lokal zweistellige Minuten für ein Ergebnis, das verworfen wird).
+    const fit = consolidationFitsCap({
+      promptText: konsolPrompt, charsPerToken: getContextConfigFor(effectiveProvider).charsPerToken, cap,
+    });
     let figResult;
-    try {
-      figResult = await call(jobId, tok,
-        prompts.buildFiguresBasisConsolidationPrompt(bookName, preMerged, sys.BUCH_KONTEXT || ''),
-        sys.SYSTEM_FIGUREN_BLOCKS, 30, figProgressEnd, komplettMaxTokens(effectiveProvider), 0.2, null, prompts.SCHEMA_FIGUREN_KONSOL,
-      );
-      if (!Array.isArray(figResult?.figuren)) throw i18nError('job.error.figurenMissing');
-    } catch (e) {
-      if (e.name === 'AbortError') throw e;
-      // Konsolidierungs-Call fehlgeschlagen (typisch: aiTruncated, wenn ein kleines lokales Modell
-      // viele Figuren in einen Output packen müsste). Statt den gesamten Job – inkl. mehrstündiger
-      // Phase-1-Arbeit – zu verwerfen, auf die bereits regelbasiert pre-gemergten Figuren zurückfallen.
-      // mergeDuplicateFiguren + backfill unten laufen ohnehin noch; das Soziogramm wird sparser
-      // (kapitel-lokale Beziehungs-Refs filtert die Soziogramm-Stufe via validIds heraus).
-      // Kapitel-lokale fig_ids sind NICHT global eindeutig (jedes Kapitel beginnt bei fig_1);
-      // normalerweise vergibt Phase 2 eindeutige IDs. Im Fallback selbst neu durchnummerieren,
-      // sonst kollidieren gleiche Kapitel-Indizes verschiedener Figuren im
-      // UNIQUE(book_id, fig_id, user_email) von saveFigurenToDb.
-      const fallback = preMerged.flatMap(c => c.figuren || []).map((f, i) => ({ ...f, id: 'fig_' + (i + 1) }));
-      log.warn(`Phase-2-Figuren-Konsolidierung übersprungen (${e.message}) – Fallback auf ${fallback.length} pre-gemergte Figuren.`);
+    if (!fit.fits) {
+      const fallback = fallbackFiguren();
+      log.warn(`Phase-2-Figuren-Konsolidierung übersprungen – erwarteter Output ~${fit.estOut} Tokens `
+        + `über dem Cap ${fit.cap} (Truncation wäre sicher). Fallback auf ${fallback.length} pre-gemergte `
+        + 'Figuren. Abhilfe: ai.komplett.extract_max_tokens erhöhen oder das Buch in mehr Kapitel gliedern.');
       ctx.warnings?.push({ key: 'job.warn.figurenKonsolidierungDegraded' });
       figResult = { figuren: fallback };
       updateJob(jobId, { progress: figProgressEnd });
+    } else {
+      try {
+        figResult = await call(jobId, tok,
+          konsolPrompt,
+          sys.SYSTEM_FIGUREN_BLOCKS, 30, figProgressEnd, cap, 0.2, null, prompts.SCHEMA_FIGUREN_KONSOL,
+          costTier(COST_LABEL.figuren),
+        );
+        if (!Array.isArray(figResult?.figuren)) throw i18nError('job.error.figurenMissing');
+      } catch (e) {
+        if (e.name === 'AbortError') throw e;
+        // Konsolidierungs-Call fehlgeschlagen (typisch: aiTruncated, wenn ein kleines lokales Modell
+        // viele Figuren in einen Output packen müsste). Statt den gesamten Job – inkl. mehrstündiger
+        // Phase-1-Arbeit – zu verwerfen, auf die bereits regelbasiert pre-gemergten Figuren zurückfallen.
+        // mergeDuplicateFiguren + backfill unten laufen ohnehin noch.
+        // Chunk-lokale fig_ids sind NICHT global eindeutig (jeder Chunk beginnt bei fig_1);
+        // normalerweise vergibt Phase 2 eindeutige IDs. Im Fallback selbst neu durchnummerieren,
+        // sonst kollidieren gleiche Chunk-Indizes verschiedener Figuren im
+        // UNIQUE(book_id, fig_id, user_email) von saveFigurenToDb. Die Beziehungen zeigen
+        // danach auf die alten, chunk-lokalen ids — `rebindBeziehungenByName` unten bindet sie
+        // über die zuvor angereicherten Namen neu (ohne das landeten sie auf fremden Figuren).
+        const fallback = fallbackFiguren();
+        log.warn(`Phase-2-Figuren-Konsolidierung übersprungen (${e.message}) – Fallback auf ${fallback.length} pre-gemergte Figuren.`);
+        ctx.warnings?.push({ key: 'job.warn.figurenKonsolidierungDegraded' });
+        figResult = { figuren: fallback };
+        updateJob(jobId, { progress: figProgressEnd });
+      }
     }
+    // `f.id ||` erhält die im Fallback vergebenen ids (und damit den dort gemachten
+    // Rebind); die KI-Konsolidierung bringt ihre eigene, in sich konsistente ID-Welt mit
+    // und wird bewusst NICHT nachgebunden.
     figuren = figResult.figuren.map((f, i) => ({ ...f, id: f.id || ('fig_' + (i + 1)) }));
   }
   const { figuren: mergedFiguren, mergedCount, stage1Saved, stage2Saved, idRemap } = mergeDuplicateFiguren(figuren);
@@ -159,6 +203,7 @@ async function runPhase2(ctx, chapterFiguren, chapterAssignments, chapterSzenen)
         const sozResult = await call(jobId, tok,
           prompts.buildSoziogrammConsolidationPrompt(bookName, figuren, sys.BUCH_KONTEXT || ''),
           sys.SYSTEM_FIGUREN_BLOCKS, 40, 43, komplettMaxTokens(effectiveProvider), 0.2, null, prompts.SCHEMA_SOZIOGRAMM_KONSOL,
+          costTier(COST_LABEL.figuren),
         );
         const validIds = new Set(figuren.map(f => f.id));
         const prelimSchichtById = Object.fromEntries(sozFiguren.map(s => [s.fig_id, s.sozialschicht]));

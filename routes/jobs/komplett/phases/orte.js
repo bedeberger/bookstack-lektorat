@@ -3,8 +3,10 @@
 // Prelim-figurenKompakt + paralleler Orte-Call (Multi-Pass).
 const { saveOrteToDb, saveSongsToDb, planOrteMatch } = require('../../../../db/schema');
 const { updateJob } = require('../../shared');
-const { _remapFigNames } = require('../utils');
+const { _remapFigNames, consolidationFitsCap } = require('../utils');
 const { komplettMaxTokens } = require('./tokens');
+const { getContextConfigFor } = require('../../../../lib/ai');
+const { COST_LABEL, costTier } = require('../cost-labels');
 const { dedupeLocationsWithinRun } = require('../../../../lib/entity-match');
 const { judgeEntityPairs } = require('../entity-reconcile');
 
@@ -68,7 +70,9 @@ function buildFallbackSongs(chapterSongs, figNameToId, figNameToIdLower) {
  *  (figuren_namen) und werden nach P2 via figNameToId/figNameToIdLower (exakt + lowercase-
  *  Fallback) zu kanonischen fig_ids aufgelöst – nicht auflösbare Namen werden verworfen. */
 async function runPhase3(ctx, chapterOrte, figurenKompakt, isSinglePass, figNameToId, figNameToIdLower, opts = {}) {
-  const { jobId, bookIdInt, bookName, email, call, tok, log, prompts, sys, idMaps, effectiveProvider } = ctx;
+  // bookName/effectiveProvider bewusst nicht hier: Prompt-Bau und Output-Cap liegen in
+  // _orteKonsolPrompt, das sie selbst aus ctx zieht.
+  const { jobId, bookIdInt, email, call, tok, log, prompts, sys, idMaps } = ctx;
   // prefetchAttempted: im Claude-Parallel-Pfad wurde der Orte-Call bereits gefahren (Promise.all).
   // null heisst dann „Prefetch fehlgeschlagen" (Warnung schon geloggt) → direkt Fallback, kein Re-Call.
   const prefetchAttempted = 'prefetchedOrteRaw' in opts;
@@ -109,22 +113,37 @@ async function runPhase3(ctx, chapterOrte, figurenKompakt, isSinglePass, figName
   } else {
     updateJob(jobId, { progress: 43, statusText: 'job.phase.consolidatingOrte' });
     let orteResultRaw = prefetched;
+    // Prompt erst hier bauen: im Parallel-Pfad (prefetchAttempted) ist der Call längst
+    // gelaufen, und der Prompt trägt den ganzen Ortskatalog — ihn dort zu bauen wäre
+    // ein grosser String für nichts.
     if (!orteResultRaw && !prefetchAttempted) {
-      try {
-        orteResultRaw = await call(jobId, tok,
-          prompts.buildLocationsConsolidationPrompt(bookName, chapterOrte, figurenKompakt),
-          sys.SYSTEM_ORTE_BLOCKS, 43, 55, komplettMaxTokens(effectiveProvider), 0.2, null, prompts.SCHEMA_ORTE_KONSOL,
-        );
-      } catch (e) {
-        if (e.name === 'AbortError') throw e;
-        // Wie Phase 2 (Figuren) / Zeitstrahl: die Orte-Konsolidierung ist nicht
-        // katalog-kritisch – die Orte sind in chapterOrte bereits kapitelweise extrahiert.
-        // Ein Konsolidierungs-Fehler (typisch: aiTruncated, wenn ein kleines lokales Modell
-        // viele Orte in einen Output packen müsste, Parse-Fehler, erschöpfter Retry) darf den
-        // gesamten Job – inkl. bereits gespeicherter Figuren/Soziogramm/Fakten – NICHT verwerfen.
-        log.warn(`Orte-Konsolidierung fehlgeschlagen (${e.message}) – Fallback auf kapitel-extrahierte Orte.`);
+      const { promptText, cap, fit } = _orteKonsolPrompt(ctx, chapterOrte, figurenKompakt);
+      if (!fit.fits) {
+        // Preflight wie in Phase 2: passt die Antwort nicht unter den Cap, ist die Truncation
+        // sicher und ihr Ausgang derselbe regelbasierte Merge — dann ohne Umweg dorthin.
+        log.warn(`Orte-Konsolidierung übersprungen – erwarteter Output ~${fit.estOut} Tokens über dem `
+          + `Cap ${fit.cap} (Truncation wäre sicher). Fallback auf kapitel-extrahierte Orte. `
+          + 'Abhilfe: ai.komplett.extract_max_tokens erhöhen.');
         ctx.warnings?.push({ key: 'job.warn.orteKonsolidierungDegraded' });
         orteResultRaw = null;
+      } else {
+        try {
+          orteResultRaw = await call(jobId, tok,
+            promptText,
+            sys.SYSTEM_ORTE_BLOCKS, 43, 55, cap, 0.2, null, prompts.SCHEMA_ORTE_KONSOL,
+            costTier(COST_LABEL.orte),
+          );
+        } catch (e) {
+          if (e.name === 'AbortError') throw e;
+          // Wie Phase 2 (Figuren) / Zeitstrahl: die Orte-Konsolidierung ist nicht
+          // katalog-kritisch – die Orte sind in chapterOrte bereits kapitelweise extrahiert.
+          // Ein Konsolidierungs-Fehler (typisch: aiTruncated, wenn ein kleines lokales Modell
+          // viele Orte in einen Output packen müsste, Parse-Fehler, erschöpfter Retry) darf den
+          // gesamten Job – inkl. bereits gespeicherter Figuren/Soziogramm/Fakten – NICHT verwerfen.
+          log.warn(`Orte-Konsolidierung fehlgeschlagen (${e.message}) – Fallback auf kapitel-extrahierte Orte.`);
+          ctx.warnings?.push({ key: 'job.warn.orteKonsolidierungDegraded' });
+          orteResultRaw = null;
+        }
       }
     }
     if (!Array.isArray(orteResultRaw?.orte)) {
@@ -208,6 +227,7 @@ async function runPhase3Songs(ctx, chapterSongs, figurenKompakt, isSinglePass, f
         songsResultRaw = await call(jobId, tok,
           prompts.buildSongsConsolidationPrompt(bookName, chapterSongs, figurenKompakt),
           sys.SYSTEM_ORTE_BLOCKS, 55, 56, komplettMaxTokens(effectiveProvider), 0.2, null, prompts.SCHEMA_SONGS_KONSOL,
+          costTier(COST_LABEL.orte),
         );
       } catch (e) {
         if (e.name === 'AbortError') throw e;
@@ -253,16 +273,39 @@ function buildPrelimFigurenKompakt(chapterFiguren) {
   return list;
 }
 
+/** Baut den Orte-Konsolidierungs-Prompt und prüft vorab, ob die Antwort unter das
+ *  Output-Cap passt. Geteilt von beiden Aufrufpfaden (seriell in runPhase3, parallel in
+ *  runPhase3OrteCall), damit die Entscheidung nicht an zwei Orten auseinanderläuft.
+ *  `fits: false` heisst: Truncation wäre sicher, und ihr Ergebnis ist ohnehin der
+ *  regelbasierte Merge unten — den Call zu führen kostet nur Generierungszeit. */
+function _orteKonsolPrompt(ctx, chapterOrte, figurenKompakt) {
+  const { prompts, bookName, effectiveProvider } = ctx;
+  const promptText = prompts.buildLocationsConsolidationPrompt(bookName, chapterOrte, figurenKompakt);
+  const cap = komplettMaxTokens(effectiveProvider);
+  const fit = consolidationFitsCap({
+    promptText, charsPerToken: getContextConfigFor(effectiveProvider).charsPerToken, cap,
+  });
+  return { promptText, cap, fit };
+}
+
 /** Nur der Orte-Konso-AI-Call (Multi-Pass) – ohne DB-Save, ohne Progress-Update.
  *  Aufrufer löst figuren_namen → fig_id via runPhase3(opts.prefetchedOrteRaw) auf. */
 async function runPhase3OrteCall(ctx, chapterOrte, figurenKompaktForPrompt) {
-  const { jobId, bookName, call, tok, log, prompts, sys, effectiveProvider } = ctx;
+  const { jobId, call, tok, log, prompts, sys } = ctx;
+  const { promptText, cap, fit } = _orteKonsolPrompt(ctx, chapterOrte, figurenKompaktForPrompt);
+  if (!fit.fits) {
+    log.warn(`Orte-Konsolidierung übersprungen – erwarteter Output ~${fit.estOut} Tokens über dem `
+      + `Cap ${fit.cap} (Truncation wäre sicher). Fallback auf kapitel-extrahierte Orte. `
+      + 'Abhilfe: ai.komplett.extract_max_tokens erhöhen.');
+    ctx.warnings?.push({ key: 'job.warn.orteKonsolidierungDegraded' });
+    return null;
+  }
   try {
     return await call(jobId, tok,
-      prompts.buildLocationsConsolidationPrompt(bookName, chapterOrte, figurenKompaktForPrompt),
+      promptText,
       sys.SYSTEM_ORTE_BLOCKS,
       null, null,
-      komplettMaxTokens(effectiveProvider), 0.2, null, prompts.SCHEMA_ORTE_KONSOL,
+      cap, 0.2, null, prompts.SCHEMA_ORTE_KONSOL, costTier(COST_LABEL.orte),
     );
   } catch (e) {
     if (e.name === 'AbortError') throw e;

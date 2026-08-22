@@ -14,6 +14,7 @@ const { mergeBeziehungenIntoFiguren, _normalizeName } = require('../figuren-merg
 const appSettings = require('../../../../lib/app-settings');
 const { getContextConfigFor, providerClass } = require('../../../../lib/ai');
 const { komplettMaxTokens } = require('./tokens');
+const { COST_LABEL, costTier } = require('../cost-labels');
 
 /** Teilt ein Array in Gruppen der Grösse `size` (≥1). */
 function _chunkArray(arr, size) {
@@ -46,7 +47,7 @@ async function runCompletenessGap(ctx, {
   // via displayOf in die Prompt-Liste fliesst (beide werden mit _normalizeName normalisiert).
   keyOf = (it) => it.name, isValid = (it) => it && it.name, displayOf = (it) => it.name,
 }) {
-  const { call, jobId, tok, log, extractTier } = ctx;
+  const { call, jobId, tok, log, gapTier } = ctx;
   const seen = new Set((knownNames || []).map(n => _normalizeName(n)).filter(Boolean));
   const display = (knownNames || []).filter(Boolean);
   const fresh = [];
@@ -55,7 +56,7 @@ async function runCompletenessGap(ctx, {
     let res;
     try {
       res = await retryOnTransientAi(() => call(jobId, tok,
-        buildPrompt(display), systemBlocks, null, null, claudeExtractCap, 0.2, null, schema, extractTier,
+        buildPrompt(display), systemBlocks, null, null, claudeExtractCap, 0.2, null, schema, gapTier,
       ), { log, label: `${label} (Gap ${round}/${maxPasses})` });
     } catch (e) {
       if (e.name === 'AbortError') throw e;
@@ -220,7 +221,11 @@ async function runRelationsPassBatched(ctx, { bookSystemBlock, claudeExtractCap,
     prompts.buildFigurenBeziehungenExtraktionPrompt(
       bookName, single ? batch : stammFiguren, null, single ? null : batch.map(f => f.name).filter(Boolean)),
     [bookSystemBlock, ...toSystemBlocks(sys.SYSTEM_FIGUREN_BLOCKS, '1h')],
-    null, null, claudeExtractCap, 0.2, null, prompts.SCHEMA_BEZIEHUNGEN,
+    // ACHTUNG Asymmetrie: A2 traegt — anders als der E-Pass daneben — KEIN
+    // Modell-/Effort-Tier und laeuft damit auf dem Konsolidierungs-Modell. Hier
+    // steht bewusst nur das Label (behaviour-neutral), damit die Aufschluesselung
+    // die Asymmetrie ueber ihre `models`-Liste zeigt, statt sie zu kaschieren.
+    null, null, claudeExtractCap, 0.2, null, prompts.SCHEMA_BEZIEHUNGEN, costTier(COST_LABEL.extract),
   ), { log, label: `Single-Pass Beziehungen (A2)${single ? '' : ` Batch ${bi + 1}/${batches.length}`}` })),
     (batches.length > 1 ? { concurrency: _phase1Concurrency() } : {}));
   const flatBz = [];
@@ -239,7 +244,7 @@ async function runRelationsPassBatched(ctx, { bookSystemBlock, claudeExtractCap,
  * Rein additiv, non-fatal. Mutiert nichts in place; gibt `{ stammFiguren, passB }` zurück.
  */
 async function runCoverageFeedback(ctx, { bookSystemBlock, claudeExtractCap, stammFiguren, passB }) {
-  const { jobId, bookName, call, tok, log, prompts, sys, groups, groupOrder, extractTier } = ctx;
+  const { jobId, bookName, call, tok, log, prompts, sys, groups, groupOrder, coverageTier } = ctx;
   const n = ctx.coverageAuditChapters || 0;
   if (n <= 0) return { stammFiguren, passB };
   const samples = sampleChapters(groups, groupOrder, n);
@@ -250,7 +255,7 @@ async function runCoverageFeedback(ctx, { bookSystemBlock, claudeExtractCap, sta
   const audit = await settledAll(samples.map(s => () => retryOnTransientAi(() => call(jobId, tok,
     prompts.buildCoverageAuditPrompt(bookName, s.name, s.chText, figNames, orteNames),
     toSystemBlocks(sys.SYSTEM_KOMPLETT_EXTRAKTION_BLOCKS), null, null, claudeExtractCap, 0.2, null,
-    prompts.SCHEMA_COVERAGE_AUDIT, extractTier,
+    prompts.SCHEMA_COVERAGE_AUDIT, coverageTier,
   ), { log, label: `Coverage-Feedback «${s.name}»` })), { concurrency: 3 });
   const ok = audit.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value);
   if (!ok.length) return { stammFiguren, passB };
@@ -268,12 +273,12 @@ async function runCoverageFeedback(ctx, { bookSystemBlock, claudeExtractCap, sta
     missFig.length ? () => retryOnTransientAi(() => call(jobId, tok,
       prompts.buildTargetedFigurenPrompt(bookName, missFig),
       [bookSystemBlock, ...toSystemBlocks(sys.SYSTEM_KOMPLETT_FIGUREN_STAMM_BLOCKS, '1h')],
-      null, null, claudeExtractCap, 0.2, null, prompts.SCHEMA_KOMPLETT_FIGUREN_STAMM, extractTier,
+      null, null, claudeExtractCap, 0.2, null, prompts.SCHEMA_KOMPLETT_FIGUREN_STAMM, coverageTier,
     ), { log, label: 'Coverage-Feedback Figuren' }) : () => null,
     missOrt.length ? () => retryOnTransientAi(() => call(jobId, tok,
       prompts.buildTargetedOrtePrompt(bookName, missOrt),
       [bookSystemBlock, ...toSystemBlocks(sys.SYSTEM_KOMPLETT_ORTE_PASS_BLOCKS, '1h')],
-      null, null, claudeExtractCap, 0.2, null, prompts.SCHEMA_KOMPLETT_ORTE_PASS, extractTier,
+      null, null, claudeExtractCap, 0.2, null, prompts.SCHEMA_KOMPLETT_ORTE_PASS, coverageTier,
     ), { log, label: 'Coverage-Feedback Orte' }) : () => null,
   ], { concurrency: 2 });
 
@@ -310,7 +315,7 @@ async function runCoverageFeedback(ctx, { bookSystemBlock, claudeExtractCap, sta
  * (ggf. ergänzte) passB zurück.
  */
 async function runSceneBackfill(ctx, { bookSystemBlock, claudeExtractCap, passB }) {
-  const { jobId, bookName, call, tok, log, prompts, sys, groups, groupOrder, extractTier } = ctx;
+  const { jobId, bookName, call, tok, log, prompts, sys, groups, groupOrder, gapTier } = ctx;
   const minChars = ctx.sceneBackfillMinChars || 3000;
   const sceneCountByChapter = new Map();
   for (const s of (passB.szenen || [])) {
@@ -333,7 +338,7 @@ async function runSceneBackfill(ctx, { bookSystemBlock, claudeExtractCap, passB 
     res = await retryOnTransientAi(() => call(jobId, tok,
       prompts.buildTargetedSzenenPrompt(bookName, targets),
       [bookSystemBlock, ...toSystemBlocks(sys.SYSTEM_KOMPLETT_ORTE_PASS_BLOCKS, '1h')],
-      null, null, claudeExtractCap, 0.2, null, prompts.SCHEMA_KOMPLETT_ORTE_PASS, extractTier,
+      null, null, claudeExtractCap, 0.2, null, prompts.SCHEMA_KOMPLETT_ORTE_PASS, gapTier,
     ), { log, label: 'Szenen-Backfill' });
   } catch (e) {
     if (e.name === 'AbortError') throw e;
@@ -569,10 +574,11 @@ async function extractSinglePass(ctx, { claudeExtractCap, callExtract }) {
  * Katalog aller Chunks (Cross-Chunk-Dedup) → nur der genuine Long-Tail wird nachgezogen.
  * Loop-until-dry pro Chunk bis completenessPasses. Rein ADDITIV (mutiert `chapters` in place,
  * hängt fresh items an den jeweiligen Chunk-Eintrag). Eigener `:gap`-Cache pro Chunk → die
- * Basis-Chunk-Caches bleiben gültig. Läuft auf dem Extraktions-Tier (extractTier). NON-FATAL.
+ * Basis-Chunk-Caches bleiben gültig. Läuft auf dem Extraktions-Tier, wird aber als eigener
+ * Kosten-Bucket ausgewiesen (gapTier = extractTier + Label). NON-FATAL.
  */
 async function runMultiPassCompletenessGaps(ctx, { chunkTexts, chapters, concurrency }) {
-  const { jobId, bookIdInt, email, bookName, call, tok, log, effectiveProvider, prompts, sys, extractTier } = ctx;
+  const { jobId, bookIdInt, email, bookName, call, tok, log, effectiveProvider, prompts, sys, gapTier } = ctx;
   const completenessPasses = ctx.completenessPasses || 0;
   if (providerClass(effectiveProvider) !== 'cloud' || completenessPasses <= 0 || !chunkTexts.length) return;
 
@@ -614,7 +620,7 @@ async function runMultiPassCompletenessGaps(ctx, { chunkTexts, chapters, concurr
           prompts.buildChunkGapPrompt(chunk.name, bookName, chunk.pages.length, chText, {
             figuren: disp.figuren, orte: disp.orte, fakten: disp.fakten, szenen: disp.szenen,
           }),
-          sys.SYSTEM_KOMPLETT_EXTRAKTION_BLOCKS, null, null, claudeExtractCap, 0.2, null, prompts.SCHEMA_KOMPLETT_EXTRAKTION, extractTier,
+          sys.SYSTEM_KOMPLETT_EXTRAKTION_BLOCKS, null, null, claudeExtractCap, 0.2, null, prompts.SCHEMA_KOMPLETT_EXTRAKTION, gapTier,
         ), { log, label: `${chunkLabel} (Gap ${round}/${completenessPasses})` });
       } catch (e) {
         if (e.name === 'AbortError') throw e;
@@ -727,7 +733,11 @@ async function extractMultiPass(ctx, { chunks, chunkOrder, claudeExtractCap, cal
         log.info(`${chunkLabel} – Cache-MISS, KI-Call…`);
         const result = await retryOnTransientAi(() => call(jobId, tok,
           prompts.buildExtraktionKomplettChapterPrompt(chunk.name, bookName, chunk.pages.length, chText),
-          sys.SYSTEM_KOMPLETT_EXTRAKTION_BLOCKS, null, null, claudeExtractCap, 0.2, null, prompts.SCHEMA_KOMPLETT_EXTRAKTION,
+          // ACHTUNG: dieser Call geht NICHT ueber callExtract (das nur der lokale
+          // Split-Pfad nutzt) und traegt darum kein Extraktions-Tier — die
+          // Basis-Extraktion des Cloud-Multi-Pass laeuft auf dem Konsolidierungs-
+          // Modell. Label-only, damit die Kosten getrennt sichtbar sind.
+          sys.SYSTEM_KOMPLETT_EXTRAKTION_BLOCKS, null, null, claudeExtractCap, 0.2, null, prompts.SCHEMA_KOMPLETT_EXTRAKTION, costTier(COST_LABEL.extract),
         ), { log, label: chunkLabel });
         saveChapterExtractCache(bookIdInt, email, key, pagesSig, result, effectiveProvider);
         log.info(`${chunkLabel} – OK (fig=${result?.figuren?.length ?? 0} orte=${result?.orte?.length ?? 0} songs=${result?.songs?.length ?? 0} sz=${result?.szenen?.length ?? 0}).`);

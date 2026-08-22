@@ -5,7 +5,14 @@
 // MVP-Whitelist (Focus + Normal):  ['bold', 'italic', 'underline']
 //                                  → Cmd/Ctrl+B / +I / +U
 // Andere Shortcuts werden bewusst nicht abgefangen — Browser-Default greift
-// (z.B. Cmd+Z für Undo, Cmd+S wird vom Editor-Karten-Handler verarbeitet).
+// (z.B. Cmd+S wird vom Editor-Karten-Handler verarbeitet).
+//
+// AUSNAHME Undo/Redo: `matchHistoryCommand` unten. Cmd/Ctrl+Z darf in KEINEM
+// der beiden Editoren zum Browser durchfallen — beide fahren eine eigene
+// Snapshot-Historie (shared/edit-history.js), und ein zusätzlich laufender
+// Browser-Stack liesse ein Cmd+Z doppelt wirken. Der Aufrufer muss also
+// preventDefault'en, siehe notebook/toolbar/keydown.js#_kbUndoRedo und
+// focus/listeners.js.
 
 const COMMAND_KEY = {
   bold: 'b',
@@ -58,4 +65,18 @@ export function bindInlineFormattingShortcuts(container, { allowedCommands, sign
   };
   container.addEventListener('keydown', handler, signal ? { signal } : undefined);
   return () => container.removeEventListener('keydown', handler);
+}
+
+// Undo/Redo-Griffe, geteilt von beiden Editoren: Cmd/Ctrl+Z = Undo,
+// Cmd/Ctrl+Shift+Z und Ctrl+Y = Redo. Reine Funktion, damit die Griffe nicht in
+// zwei Handlern auseinanderdriften (der Notebook-Dispatcher hängt am document,
+// der Fokusmodus am contenteditable). Liefert 'undo' | 'redo' | null.
+export function matchHistoryCommand(event) {
+  if (!event) return null;
+  const mod = event.metaKey || event.ctrlKey;
+  if (!mod || event.altKey) return null;
+  const key = (event.key || '').toLowerCase();
+  if (key === 'z') return event.shiftKey ? 'redo' : 'undo';
+  if (key === 'y' && !event.shiftKey) return 'redo';
+  return null;
 }

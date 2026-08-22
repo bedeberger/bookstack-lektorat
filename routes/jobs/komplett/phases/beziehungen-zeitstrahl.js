@@ -3,6 +3,9 @@
 const { db, addFigurenBeziehungen, saveZeitstrahlEvents } = require('../../../../db/schema');
 const { updateJob } = require('../../shared');
 const { komplettMaxTokens } = require('./tokens');
+const { providerClass } = require('../../../../lib/ai');
+const appSettings = require('../../../../lib/app-settings');
+const { COST_LABEL, costTier } = require('../cost-labels');
 
 /**
  * Phase 3b: Kapitelübergreifende Beziehungen (nur Multi-Pass).
@@ -87,6 +90,7 @@ async function runPhase3b(ctx, figuren) {
   const bzResult = await call(jobId, tok,
     prompts.buildKapiteluebergreifendeBeziehungenPrompt(bookName, figuren, textForPrompt),
     sys.SYSTEM_FIGUREN_BLOCKS, 56, 58, komplettMaxTokens(effectiveProvider), 0.2, null, prompts.SCHEMA_BEZIEHUNGEN,
+    costTier(COST_LABEL.figuren),
   );
   const newBz = Array.isArray(bzResult?.beziehungen) ? bzResult.beziehungen : [];
   if (newBz.length > 0) addFigurenBeziehungen(bookIdInt, newBz, email, ctx.idMaps);
@@ -172,9 +176,27 @@ async function runZeitstrahl(ctx, opts = {}) {
   // Bei wenigen pre-gegroupeten Events bringt die KI-Konsolidierung fast nichts
   // (Dedup-Chance klein, kanonische Formulierung marginal) – direkt speichern spart
   // einen KI-Call (~2K Input + 3K Output).
-  if (zeitstrahlEvents.length < 5) {
+  // Obergrenze für die lokale Klasse: die Konsolidierung ist rein kosmetisch (Dedup +
+  // kanonische Formulierung), ihr Output wächst aber linear mit der Ereigniszahl. Bei
+  // 20-30 tok/s kostet sie ab ein paar hundert Ereignissen zweistellige Minuten für
+  // einen Gewinn, den der Fallback-Pfad (pre-gruppierte Events direkt persistieren) fast
+  // vollständig mitliefert — und je grösser die Liste, desto wahrscheinlicher reisst sie
+  // ohnehin am Output-Cap. Die Cloud-Klasse läuft weiter ohne Deckel (dort ist der Call
+  // schnell, parallel zu P8 und günstig). 0 = kein Deckel.
+  const localEventCap = providerClass(effectiveProvider) !== 'cloud'
+    ? Math.max(0, parseInt(appSettings.get('ai.komplett.timeline_consolidate_max'), 10) || 0)
+    : 0;
+  const tooMany = localEventCap > 0 && zeitstrahlEvents.length > localEventCap;
+  if (zeitstrahlEvents.length < 5 || tooMany) {
     saveZeitstrahlEvents(bookIdInt, email, zeitstrahlEvents, idMaps.chNameToId, idMaps.pageNameToIdByChapter);
-    log.info(`${zeitstrahlEvents.length} Zeitstrahl-Ereignisse direkt gespeichert (unter Konsolidierungs-Schwelle) – spart einen KI-Call.`);
+    if (tooMany) {
+      log.info(`${zeitstrahlEvents.length} Zeitstrahl-Ereignisse direkt gespeichert `
+        + `(über dem Deckel ai.komplett.timeline_consolidate_max=${localEventCap} für lokale Modelle) `
+        + '– spart einen langen KI-Call, die Ereignisse sind vollständig.');
+      ctx.warnings?.push({ key: 'job.warn.timelineConsolidationSkipped', params: { count: zeitstrahlEvents.length } });
+    } else {
+      log.info(`${zeitstrahlEvents.length} Zeitstrahl-Ereignisse direkt gespeichert (unter Konsolidierungs-Schwelle) – spart einen KI-Call.`);
+    }
     if (!silent) updateJob(jobId, { progress: 82 });
     return;
   }
@@ -185,7 +207,7 @@ async function runZeitstrahl(ctx, opts = {}) {
       prompts.buildZeitstrahlConsolidationPrompt(zeitstrahlEvents),
       sys.SYSTEM_ZEITSTRAHL_BLOCKS,
       silent ? null : 78, silent ? null : 82,
-      komplettMaxTokens(effectiveProvider), 0.2, null, prompts.SCHEMA_ZEITSTRAHL,
+      komplettMaxTokens(effectiveProvider), 0.2, null, prompts.SCHEMA_ZEITSTRAHL, costTier(COST_LABEL.zeitstrahl),
     );
   } catch (e) {
     if (e.name === 'AbortError') throw e;

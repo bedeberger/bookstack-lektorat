@@ -98,7 +98,7 @@ function createJob(type, bookId, userEmail, label, labelParams = null, dedupId =
   const provider = resolveProvider({ userEmail: userEmail || null });
   let model = _modelName(provider);
   // Einzelne Job-Familien fahren ein eigenes Modell (Per-Job-Override in den App-Settings,
-  // gespiegelt von _komplettAiOverrides bzw. _bookChatClaudeOverrides). Dann muss
+  // gespiegelt von _komplettAiOverrides bzw. _bookChatAiOverrides). Dann muss
   // job_runs.model das TATSÄCHLICH genutzte Modell spiegeln, nicht das globale — sonst
   // verbucht das Kosten-Tracking z.B. einen Opus-Lauf zum Sonnet-Default-Tarif.
   // Der Buch-Chat-Override bleibt claude-only (Tool-Use), der Komplett-Override nicht.
@@ -292,6 +292,7 @@ const JOB_TYPE_LABELS = {
   'faktencheck':           'job.label.faktencheck',
   'lexicon-scan':          'job.label.lexiconScan',
   'redundancy':            'job.label.redundancy',
+  'book-map':              'job.label.bookMap',
   'research-chat':         'job.label.researchChat',
   'research-link':         'job.label.researchLink',
   'rueckblick':            'job.label.rueckblickType',

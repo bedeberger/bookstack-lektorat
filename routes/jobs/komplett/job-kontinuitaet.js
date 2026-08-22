@@ -23,6 +23,7 @@ const { makePhaseTimer } = require('./utils');
 const { saveKontinuitaetResult } = require('./remap');
 const { komplettMaxTokens } = require('./phases');
 const { buildAnachronismusData, verifyKontinuitaetProbleme, _komplettAiOverrides } = require('./job-shared');
+const { COST_LABEL, costTier } = require('./cost-labels');
 
 async function runKontinuitaetJob(jobId, bookId, bookName, userEmail, userToken, provider = undefined) {
   const bookIdInt = parseInt(bookId);
@@ -109,6 +110,7 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail, userToken,
       result = await retryOnTransientAi(() => call(jobId, tok,
         prompts.buildKontinuitaetSinglePassPrompt(bookName, bookText, figurenKompakt, orteKompakt, narrativeLabels(getBookSettings(bookIdInt, email)), anachronismus),
         sys.SYSTEM_KONTINUITAET_BLOCKS, 60, 97, komplettMaxTokens(effectiveProvider), 0.2, null, prompts.SCHEMA_KONTINUITAET_PROBLEME,
+        costTier(COST_LABEL.kontinuitaet),
       ), { log, label: 'Kontinuität Single-Pass' });
       pt.mark('Single-Pass Check');
     } else {
@@ -139,6 +141,7 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail, userToken,
           const chResult = await retryOnTransientAi(() => call(jobId, tok,
             prompts.buildKontinuitaetChapterFactsPrompt(group.name, chText),
             sys.SYSTEM_KONTINUITAET_BLOCKS, fromPct, toPct, komplettMaxTokens(effectiveProvider), 0.2, null, prompts.SCHEMA_KONTINUITAET_FAKTEN,
+            costTier(COST_LABEL.kontinuitaet),
           ), { log, label: `Fakten «${group.name}»` });
           chapterFacts.push({ kapitel: group.name, fakten: chResult.fakten || [] });
         } catch (e) {
@@ -161,6 +164,7 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail, userToken,
             const chResult = await retryOnTransientAi(() => call(jobId, tok,
               prompts.buildKontinuitaetChapterFactsPrompt(group.name, chText),
               sys.SYSTEM_KONTINUITAET_BLOCKS, 86, 88, komplettMaxTokens(effectiveProvider), 0.2, null, prompts.SCHEMA_KONTINUITAET_FAKTEN,
+              costTier(COST_LABEL.kontinuitaet),
             ), { log, label: `Fakten-Retry «${group.name}»` });
             chapterFacts.push({ kapitel: group.name, fakten: chResult.fakten || [] });
           } catch (e) {
@@ -181,6 +185,7 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail, userToken,
       result = await retryOnTransientAi(() => call(jobId, tok,
         prompts.buildKontinuitaetCheckPrompt(bookName, chapterFacts, figurenKompakt, orteKompakt, anachronismus),
         sys.SYSTEM_KONTINUITAET_BLOCKS, 88, 95, komplettMaxTokens(effectiveProvider), 0.2, null, prompts.SCHEMA_KONTINUITAET_PROBLEME,
+        costTier(COST_LABEL.kontinuitaet),
       ), { log, label: 'Kontinuität Check (Multi-Pass)' });
       // Fakten-basierte Befunde gegen den Originaltext verifizieren (False-Positive-Filter).
       // Klassen-, nicht Namensfrage: der Verify-Pass braucht ein faehiges Modell, keine

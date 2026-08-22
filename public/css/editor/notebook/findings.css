@@ -101,6 +101,56 @@
 .finding-korrektur-input:focus { outline: none; border-color: var(--color-accent); }
 .finding-korrektur-edit-actions { display: inline-flex; gap: var(--space-6); }
 
+/* === Belegvorschlag (nur `unbelegt`-Befunde) ===
+   Sitzt unter dem Befund und klappt eine Trefferliste aus der Quellen-Bibliothek
+   auf. Alles `span` statt `div`, weil der Befund ein `<label>` ist. */
+.finding-evidence {
+  display: block;
+  width: 100%;
+  margin-top: var(--space-3);
+}
+.finding-evidence-head { display: inline-flex; align-items: center; gap: var(--space-6); }
+.finding-evidence-spinner { font-size: var(--font-size-xs); color: var(--color-muted); }
+.finding-evidence-panel {
+  display: block;
+  margin-top: var(--space-sm);
+  border-left: 2px solid var(--color-border);
+  padding-left: var(--space-sm);
+}
+.finding-evidence-error {
+  display: block;
+  font-size: var(--font-size-xs);
+  color: var(--color-muted);
+}
+.finding-evidence-hit {
+  display: block;
+  padding: var(--space-6) 0;
+}
+.finding-evidence-hit + .finding-evidence-hit { border-top: 1px solid var(--color-border); }
+.finding-evidence-hit-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-6);
+}
+.finding-evidence-score {
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-muted);
+}
+.finding-evidence-src { font-size: var(--font-size-xs); font-weight: 600; }
+/* Der Ausschnitt beantwortet „stuetzt das meinen Satz wirklich?" — er darf
+   mehrzeilig sein, aber nicht die Befundliste sprengen. */
+.finding-evidence-snippet {
+  display: block;
+  margin: var(--space-3) 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-muted);
+  max-height: 7.5em;
+  overflow-y: auto;
+  white-space: pre-line;
+}
+
 del {
   background: var(--color-err-bg);
   color: var(--color-err-text);

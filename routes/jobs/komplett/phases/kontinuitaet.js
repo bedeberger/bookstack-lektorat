@@ -18,6 +18,7 @@ const { verifyKontinuitaetProbleme, runAttributeContradictionCheck } = require('
 // diese Datei mit und der Umweg wäre ein Zirkular-Import.
 const { runZeitstrahl } = require('./beziehungen-zeitstrahl');
 const { komplettMaxTokens } = require('./tokens');
+const { COST_LABEL, costTier } = require('../cost-labels');
 
 // P8-Call. Single-Pass (voller Buchtext im 1h-Cache) nur bei Cloud-Klasse, sonst
 // Fakten-Multi-Pass. Fehler werden hier abgefangen: ein gescheiterter P8 (Trunkierung
@@ -34,12 +35,14 @@ async function _runP8(ctx, { kontMultiPass, figKompakt, orteKompakt, chapterFakt
         prompts.buildKontinuitaetSinglePassPrompt(bookName, null, figKompakt, orteKompakt, narrativeLabels(getBookSettings(bookIdInt, email)), anachronismus),
         [bookSystemBlock, ...toSystemBlocks(sys.SYSTEM_KONTINUITAET_BLOCKS, '1h')],
         82, 97, komplettMaxTokens(effectiveProvider), 0.2, null, prompts.SCHEMA_KONTINUITAET_PROBLEME,
+        costTier(COST_LABEL.kontinuitaet),
       ), { log, label: 'Kontinuität Single-Pass (P8)' });
     }
     log.info(`Kontinuität facts-basiert: ${chapterFakten.length} Kapitel, ${figKompakt.length} Figuren`);
     return await retryOnTransientAi(() => call(jobId, tok,
       prompts.buildKontinuitaetCheckPrompt(bookName, chapterFakten, figKompakt, orteKompakt, anachronismus),
       sys.SYSTEM_KONTINUITAET_BLOCKS, 82, 97, komplettMaxTokens(effectiveProvider), 0.2, null, prompts.SCHEMA_KONTINUITAET_PROBLEME,
+      costTier(COST_LABEL.kontinuitaet),
     ), { log, label: 'Kontinuität facts-basiert (P8)' });
   } catch (e) {
     if (e.name === 'AbortError') throw e;

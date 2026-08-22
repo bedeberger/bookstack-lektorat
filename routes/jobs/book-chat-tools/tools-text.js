@@ -18,6 +18,7 @@ const {
   SEARCH_SNIPPET_CONTEXT,
   _truncateResult,
   _findFigure,
+  resolveEntityTitle,
 } = require('./shared');
 
 // ── search_passages ───────────────────────────────────────────────────────────
@@ -590,12 +591,14 @@ function tool_find_first_last_mention(input, ctx) {
 // ── search_similar ────────────────────────────────────────────────────────────
 // Semantische Ähnlichkeitssuche über die Embedding-Vektoren (semantic_chunks).
 // Gegenstück zu search_passages: findet nach BEDEUTUNG, nicht nach Wortlaut.
-function _resolveSimilarTitle(kind, entityId) {
-  if (kind === 'page') return db.prepare('SELECT page_name AS t FROM pages WHERE page_id = ?').get(entityId)?.t;
-  if (kind === 'scene') return db.prepare('SELECT titel AS t FROM figure_scenes WHERE id = ?').get(entityId)?.t;
-  if (kind === 'figure') return db.prepare('SELECT name AS t FROM figures WHERE id = ?').get(entityId)?.t;
-  return null;
-}
+
+// Snippet-Länge pro Treffer. Ein Chunk ist ~1500 Zeichen (lib/embed-chunk.js#CHUNK_CHARS),
+// der Default deckt also den grössten Teil des Treffers ab. Bewusst gross: ein zu kurzes
+// Snippet ist nur ein Zeiger, nach dem das Modell die Seite per get_pages nachladen MUSS —
+// und dieser Volltext kostet ein Vielfaches der Passage, die die Frage schon beantwortet
+// hätte. _truncateResult deckelt die Gesamtantwort weiterhin.
+const SIMILAR_SNIPPET_CHARS     = 700;
+const SIMILAR_SNIPPET_MAX_CHARS = 1500;
 
 async function tool_search_similar(input, ctx) {
   if (!embed.isEnabled()) return { error: 'Embedding-Backend nicht konfiguriert.' };
@@ -612,13 +615,20 @@ async function tool_search_similar(input, ctx) {
   try { raw = await semanticRetrieval.semanticQuery(ctx.bookId, query, { kinds, topK, signal: ctx.jobSignal }); }
   catch (e) { return { error: `Embedding-Endpunkt nicht erreichbar: ${e.message}` }; }
 
+  const snippetChars = Math.min(
+    Math.max(120, Number.isInteger(input.snippet_chars) ? input.snippet_chars : SIMILAR_SNIPPET_CHARS),
+    SIMILAR_SNIPPET_MAX_CHARS,
+  );
+
   const results = [];
   for (const h of raw) {
-    const title = _resolveSimilarTitle(h.kind, h.entity_id);
+    const title = resolveEntityTitle(h.kind, h.entity_id);
     if (title == null) continue; // gelöschte Entität → überspringen
+    const text = String(h.text || '');
     results.push({
       kind: h.kind, entity_id: h.entity_id, title,
-      snippet: String(h.text || '').slice(0, 240), score: Math.round(h.score * 1000) / 1000,
+      snippet: text.length > snippetChars ? text.slice(0, snippetChars) + '…' : text,
+      score: Math.round(h.score * 1000) / 1000,
     });
   }
   return _truncateResult({ query, count: results.length, results });

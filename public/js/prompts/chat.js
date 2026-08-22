@@ -142,24 +142,52 @@ export const BOOK_CHAT_FORCE_FINAL_INSTRUCTION =
   + 'Wenn die Recherche unvollständig blieb, beantworte die Frage so weit wie möglich mit dem Vorhandenen und weise kurz darauf hin, was nicht abgedeckt werden konnte. '
   + 'Sprache der Antwort: die der Userfrage.';
 
-export function buildBookChatAgentSystemPrompt(bookName, figuren, review, systemOverride = null, maxToolIter = 6) {
+// Rückgabe: Array von System-Cache-Blöcken (wie buildBookChatSystemPrompt).
+//   Block 1 (ttl '1h'): der über die Session stabile Anteil (System, Werkzeug-
+//     Strategie, Figuren, Review, final_answer-Pflicht). Tools + dieser Block sind
+//     der Cache-Präfix jeder Iteration — deshalb steht hier alles, was sich
+//     innerhalb der Session nicht ändert.
+//   Block 2 (cache:false): der Erst-Kontext (semantisch nächste Passagen zur
+//     AKTUELLEN Frage). Bewusst ohne Breakpoint: er trägt pro Frage andere Bytes,
+//     ein Breakpoint wäre ein cache_write, das nie gelesen wird. Steht am Ende,
+//     damit Block 1 ein stabiler Präfix bleibt.
+export function buildBookChatAgentSystemPrompt(bookName, figuren, review, systemOverride = null, maxToolIter = 6, opts = {}) {
+  // opts.semantic === false: der Embedding-Endpunkt fehlt, `search_similar` wird dem
+  // Modell gar nicht angeboten (Filter in routes/jobs/chat/book-chat.js#prepare) — dann
+  // darf der Prompt es auch nicht empfehlen, sonst verbrennt das Modell eine Runde an
+  // einem Werkzeug, das es nicht hat.
+  const semantic = opts.semantic !== false;
+  // opts.toolNames: die TATSÄCHLICH angebotenen Werkzeuge (Slim-Satz bei lokalen
+  // Providern). Dieselbe Regel wie bei `semantic`, nur für alle übrigen: was nicht
+  // angeboten wird, darf der Prompt nicht empfehlen. Ohne Angabe: alles erlaubt.
+  const offered = opts.toolNames ? new Set(opts.toolNames) : null;
+  const has = (name) => !offered || offered.has(name);
+  // Zeile nur aufnehmen, wenn mindestens eines der genannten Werkzeuge angeboten wird.
+  const ifAny = (names, line) => (names.some(has) ? [line] : []);
   const parts = [
     systemOverride ?? SYSTEM_BOOK_CHAT,
     '',
     `Buch: «${bookName}»`,
     '',
     'Du hast Zugriff auf Werkzeuge, die Fragen über das gesamte Buch aus einem vorberechneten Index beantworten. Nutze sie, bevor du antwortest, wann immer die Frage gemessen oder aus konkreten Textstellen belegt werden kann:',
-    '- Häufigkeit, Verteilung, Erzählperspektive → count_pronouns, get_stil_metrics',
-    '- Figurenverteilung, erstes Auftreten → get_figure_mentions, list_chapters',
-    '- Konkrete Textstellen oder Zitate → search_passages, quote_match, quote_passage',
-    '- Ganze Kapitel lesen → get_chapter_text (statt list_chapters→get_pages)',
-    '- Lektorat: Übersicht → get_lektorat_hotspots, konkrete Findings → get_lektorat_findings',
-    '- Kapitel-Qualität, Stärken/Schwächen → get_reviews',
-    '- Geplante Handlung / Beat-Board / was noch nicht geschrieben ist → get_plot_board',
-    '- Geplante Themen & Motive, Soll/Ist-Abgleich (welche Motive fehlen im Text) → get_motifs, get_motif_occurrences',
+    ...ifAny(['count_pronouns', 'get_stil_metrics'], '- Häufigkeit, Verteilung, Erzählperspektive → count_pronouns, get_stil_metrics'),
+    ...ifAny(['get_figure_mentions'], '- Figurenverteilung, erstes Auftreten → get_figure_mentions, list_chapters'),
+    ...ifAny(['search_passages', 'quote_match'], `- Konkrete Textstellen oder Zitate → search_passages, quote_match${has('quote_passage') ? ', quote_passage' : ''}`),
+    ...(semantic && has('search_similar') ? ['- Stellen nach SINN suchen, wenn du das Stichwort nicht kennst → search_similar'] : []),
+    ...ifAny(['get_chapter_text'], '- Ganze Kapitel lesen → get_chapter_text (statt list_chapters→get_pages)'),
+    ...ifAny(['get_figure_profile', 'get_figure_relations'], '- Wer ist X, wer kennt wen → get_figure_profile, get_figure_relations'),
+    ...ifAny(['get_lektorat_hotspots', 'get_lektorat_findings'], '- Lektorat: Übersicht → get_lektorat_hotspots, konkrete Findings → get_lektorat_findings'),
+    ...ifAny(['get_reviews'], '- Kapitel-Qualität, Stärken/Schwächen → get_reviews'),
+    ...ifAny(['get_plot_board'], '- Geplante Handlung / Beat-Board / was noch nicht geschrieben ist → get_plot_board'),
+    ...ifAny(['get_motifs', 'get_motif_occurrences'], '- Geplante Themen & Motive, Soll/Ist-Abgleich (welche Motive fehlen im Text) → get_motifs, get_motif_occurrences'),
     '',
     'Rufe Werkzeuge an, bevor du vermutest.',
-    'STRATEGIE — Suche vs. Lektüre: `search_passages` ist Stichwort-Suche („wo kommt das bekannte Wort/der Name X vor?"). Für SEMANTISCHE Aufgaben, bei denen du Stellen nach einer EIGENSCHAFT auswählst (lustigste/schönste/spannendste/traurigste Stellen, Humor, Ton, Stimmung, Beispiele für ein Stilmittel) hat das Gesuchte KEINE Stichwort-Signatur — rate dann NICHT mit search_passages nach Wörtern. Lies stattdessen den Text selbst: lade ganze Kapitel via `get_chapter_text` (mehrere gebündelt in einer Runde) und wähle die Stellen aus eigener Lektüre aus. Bei kleinen/mittleren Büchern, die in den Kontext passen (siehe `hint` aus list_chapters), lade gleich das ganze Buch statt es in vielen Runden zu durchforsten.',
+    'KOSTEN-LEITER — nimm die billigste Quelle, die die Frage beantwortet, und HÖRE DANN AUF:',
+    '  Stufe 1 (gratis, schon da): der ERST-KONTEXT am Ende dieses Prompts (semantisch nächste Passagen zur aktuellen Frage) plus die Blöcke FIGUREN und BUCHBEWERTUNG. Beantwortet das die Frage, rufst du SOFORT `final_answer` — ohne ein einziges Recherche-Werkzeug.',
+    `  Stufe 2 (billig, gezielt): ${semantic && has('search_similar') ? '`search_similar` (Sinn), ' : ''}\`search_passages\` (Wortlaut), \`get_figure_profile\`, \`get_figure_mentions\`, \`get_timeline\`, \`quote_match\`. Diese liefern Passagen, keine Volltexte.`,
+    '  Stufe 3 (teuer, Volltext): `get_pages`, `get_chapter_text`. Nur wenn die Frage den ZUSAMMENHANG längerer Passagen braucht — Zusammenfassen, Aufbau/Dramaturgie eines Kapitels, Auswahl über den ganzen Text.',
+    'Schmale Faktenfragen — Alter, Datum, Beruf, Wohnort, Verwandtschaft, «wann hat X …», «wie heisst Y» — werden auf Stufe 1 oder 2 beantwortet. Lade dafür NIE ein ganzes Kapitel und nie das ganze Buch: ein einzelner Fakt steht in einer Passage, nicht in einem Kapitel.',
+    'STRATEGIE — Suche vs. Lektüre: `search_passages` ist Stichwort-Suche („wo kommt das bekannte Wort/der Name X vor?"). Für SEMANTISCHE Aufgaben, bei denen du Stellen nach einer EIGENSCHAFT auswählst (lustigste/schönste/spannendste/traurigste Stellen, Humor, Ton, Stimmung, Beispiele für ein Stilmittel) hat das Gesuchte KEINE Stichwort-Signatur — rate dann NICHT mit search_passages nach Wörtern. Lies stattdessen den Text selbst: lade ganze Kapitel via `get_chapter_text` (mehrere gebündelt in einer Runde) und wähle die Stellen aus eigener Lektüre aus. Bei kleinen/mittleren Büchern, die in den Kontext passen (siehe `hint` aus list_chapters), lade gleich das ganze Buch statt es in vielen Runden zu durchforsten. Das gilt NUR für Aufgaben, die den ganzen Text sichten müssen. Dass ein Buch in den Kontext passt, ist kein Grund, es für eine einzelne Faktenfrage zu laden.',
     'Wörtliche Zitate: IMMER über quote_match (Pattern → Stelle) oder quote_passage (offset+length) holen, NIE aus Erinnerung paraphrasieren. Beim final_answer-Call jedes wörtliche Zitat in `zitate` mitliefern — Server validiert.',
     `Maximal ${maxToolIter} Werkzeug-Iterationen pro Antwort (eine Iteration = eine Runde, NICHT ein Tool-Call). Halte Werkzeug-Argumente präzise und kurz. Die Iterationen sind knapp — verschwende sie nicht mit seriellem Stichwort-Raten, wenn ein paar gebündelte get_chapter_text-Calls den ganzen relevanten Text in einer Runde liefern.`,
     'WICHTIG — bündle Werkzeuge: Rufe in EINER Runde alle Werkzeuge parallel auf, die nicht voneinander abhängen, statt eines nach dem anderen. Bei breiten Aufgaben (z.B. „Zitate/Stellen aus vielen Kapiteln") gleich mehrere search_passages/get_chapter_text gleichzeitig absetzen. Erst danach in der nächsten Runde zitieren/auswerten. So reichen die Iterationen auch für umfangreiche Recherchen.',
@@ -187,11 +215,57 @@ export function buildBookChatAgentSystemPrompt(bookName, figuren, review, system
     'Liefere deine finale Antwort IMMER über das Werkzeug `final_answer` (Pflicht-Endpunkt). Kein Freitext-Output ohne Tool-Call — auch wenn keine Recherche-Tools nötig sind, muss die Antwort via final_answer kommen. Sprache der Antwort: passe dich der Sprache der Userfrage an, nicht der Sprache dieses Prompts.',
   );
 
-  return parts.join('\n');
+  // Werkzeug-Disziplin für lokale/kleinere Modelle. Nicht Stil, sondern die drei
+  // Fehler, die den Loop dort tatsächlich zerlegen: erfundene Werkzeugnamen,
+  // Aufrufe als Text statt als Tool-Call, und Werkzeug-Schleifen ohne Abschluss.
+  if (_isLocal) {
+    parts.push(
+      '',
+      'WERKZEUG-DISZIPLIN (verbindlich):',
+      '- Rufe NUR Werkzeuge aus der bereitgestellten Liste. Ein Werkzeug, das dort nicht steht, existiert nicht — erfinde keine Namen und keine Parameter.',
+      '- Rufe Werkzeuge über den Werkzeug-Mechanismus, NIE indem du den Aufruf als Text oder JSON in die Antwort schreibst.',
+      '- Argumente als gültiges JSON, nur die dokumentierten Felder.',
+      '- Höre auf zu recherchieren, sobald du antworten kannst, und rufe dann `final_answer`. Wiederhole keinen Aufruf, der schon ein Ergebnis geliefert hat.',
+      '- Steht die Antwort schon im ERST-KONTEXT, rufe sofort `final_answer` — ohne ein einziges Recherche-Werkzeug.',
+    );
+  }
+
+  return [
+    { text: parts.join('\n'), ttl: '1h' },
+    { text: buildBookChatPreContext(opts.passages), cache: false },
+  ];
+}
+
+/**
+ * Erst-Kontext-Block des agentischen Buch-Chats: die semantisch nächsten Passagen
+ * zur aktuellen Frage, vorab geholt über dieselbe Pipeline wie `search_similar`.
+ * `passages` = [{ kind, entity_id, title, score, text }] (siehe
+ * routes/jobs/chat/book-chat-retrieval.js#preContextPassages) oder leer/null.
+ *
+ * Ohne Treffer bleibt der Hinweis stehen, dass Stufe 1 der Kosten-Leiter diesmal
+ * leer ist — sonst deutet das Modell das Fehlen des Blocks als «kein Index» und
+ * überspringt gleich auf die Volltext-Werkzeuge.
+ */
+export function buildBookChatPreContext(passages) {
+  const list = Array.isArray(passages) ? passages : [];
+  const head = ['=== ERST-KONTEXT: SEMANTISCH NÄCHSTE STELLEN ZUR AKTUELLEN FRAGE ==='];
+  if (!list.length) {
+    head.push('(Keine Treffer — entweder ist die Frage nicht textbezogen oder der Bedeutungs-Index ist leer. Weiter auf Stufe 2 der Kosten-Leiter.)');
+    return head.join('\n');
+  }
+  head.push(
+    '(Automatisch vorab geholt, dieselbe Pipeline wie `search_similar`; nach Ähnlichkeit sortiert, Ausschnitte können unvollständig sein.',
+    'Beantworten diese Stellen die Frage, antworte direkt via `final_answer` — kein weiteres Werkzeug. Sonst arbeite von hier aus weiter:',
+    '`entity_id` einer Seite geht als page_id in `get_pages`/`quote_match`. Wörtliche Zitate IMMER über quote_match/quote_passage verifizieren, nie aus diesem Ausschnitt abschreiben.)',
+  );
+  for (const p of list) {
+    head.push(`--- ${p.kind}: «${p.title}» (entity_id ${p.entity_id}, score ${p.score}) ---`, p.text, '');
+  }
+  return head.join('\n');
 }
 
 // Werkzeug-Definitionen für den Agentic Buch-Chat: docs/buchchat-tools.md.
-export { BOOK_CHAT_TOOLS } from './book-chat-tools.js';
+export { BOOK_CHAT_TOOLS, BOOK_CHAT_SLIM_TOOL_NAMES } from './book-chat-tools.js';
 
 
 // Rückgabe: Array von System-Cache-Blöcken (für callAIChat → Claude separate

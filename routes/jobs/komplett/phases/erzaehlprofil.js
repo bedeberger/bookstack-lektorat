@@ -10,6 +10,7 @@ const { getNarrativeReport, saveAutorenBefund } = require('../../../../db/narrat
 const { updateJob, toSystemBlocks, retryOnTransientAi, settledAll } = require('../../shared');
 const { buildBookSystemBlockText } = require('../utils');
 const { komplettMaxTokens } = require('./tokens');
+const { COST_LABEL, costTier } = require('../cost-labels');
 const { providerClass } = require('../../../../lib/ai');
 
 /** @returns {number} Anzahl gespeicherter Kapitel-Profile (0 wenn nichts erzeugt). */
@@ -33,7 +34,7 @@ async function runErzaehlprofil(ctx, opts = {}) {
     const res = await retryOnTransientAi(() => call(jobId, tok,
       prompts.buildErzaehlprofilSinglePassPrompt(bookName, null),
       [bookSystemBlock, ...toSystemBlocks(sys.SYSTEM_KOMPLETT_EXTRAKTION_BLOCKS, '1h')],
-      fromPct, toPct, cap, 0.2, null, prompts.SCHEMA_ERZAEHLPROFIL,
+      fromPct, toPct, cap, 0.2, null, prompts.SCHEMA_ERZAEHLPROFIL, costTier(COST_LABEL.erzaehlprofil),
     ), { log, label: 'Erzählprofil Single-Pass' });
     profiles = Array.isArray(res?.kapitel) ? res.kapitel : [];
   } else {
@@ -47,7 +48,7 @@ async function runErzaehlprofil(ctx, opts = {}) {
       return retryOnTransientAi(() => call(jobId, tok,
         prompts.buildErzaehlprofilChapterPrompt(bookName, group.name, chText),
         toSystemBlocks(sys.SYSTEM_KOMPLETT_EXTRAKTION_BLOCKS),
-        fp, tp, cap, 0.2, null, prompts.SCHEMA_ERZAEHLPROFIL_CHAPTER,
+        fp, tp, cap, 0.2, null, prompts.SCHEMA_ERZAEHLPROFIL_CHAPTER, costTier(COST_LABEL.erzaehlprofil),
       ), { log, label: `Erzählprofil «${group.name}»` })
         .then(r => (r ? { ...r, kapitel: group.name } : null));
     }), { concurrency: 3 });
@@ -86,7 +87,7 @@ async function runAutorenBefund(ctx, { declared, fromPct, toPct }) {
   const res = await retryOnTransientAi(() => call(jobId, tok,
     prompts.buildAutorenBefundPrompt(bookName, befund, declared),
     toSystemBlocks(sys.SYSTEM_KOMPLETT_EXTRAKTION_BLOCKS),
-    fromPct, toPct, 4000, 0.5, null, prompts.SCHEMA_AUTOREN_BEFUND,
+    fromPct, toPct, 4000, 0.5, null, prompts.SCHEMA_AUTOREN_BEFUND, costTier(COST_LABEL.erzaehlprofil),
   ), { log, label: 'Autoren-Befund' });
   const befunde = Array.isArray(res?.befunde) ? res.befunde : [];
   saveAutorenBefund(bookIdInt, email, { zusammenfassung: res?.zusammenfassung || '', befunde });

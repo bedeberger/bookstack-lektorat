@@ -20,6 +20,7 @@ const ALLOWED_KEYS = new Set([
   'stil',
   'fehlerHeatmap',
   'redundanz',
+  'buchlandkarte',
   'wortschatz',
   'struktur',
   'titelwerkstatt',

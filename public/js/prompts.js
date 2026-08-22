@@ -290,6 +290,7 @@ export {
   buildBookChatAgentSystemPrompt,
   buildChatTitlePrompt,
   BOOK_CHAT_TOOLS,
+  BOOK_CHAT_SLIM_TOOL_NAMES,
   BOOK_CHAT_FORCE_FINAL_INSTRUCTION,
   SCHEMA_CHAT,
   SCHEMA_BOOK_CHAT,

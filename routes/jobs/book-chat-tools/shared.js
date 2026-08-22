@@ -34,6 +34,19 @@ function _truncateResult(obj) {
   return { _truncated: s.slice(0, MAX_RESULT_CHARS - 100) + '… [result truncated]' };
 }
 
+/**
+ * Titel einer semantisch getroffenen Entität (page/scene/figure). Geteilt von
+ * `search_similar` (tools-text.js) und dem Erst-Kontext des agentischen Buch-Chats
+ * (routes/jobs/chat/book-chat-retrieval.js) — beide lösen dieselben drei Kinds des
+ * Embedding-Index auf. Rückgabe null = Entität gelöscht, Chunk noch im Index.
+ */
+function resolveEntityTitle(kind, entityId) {
+  if (kind === 'page')   return db.prepare('SELECT page_name AS t FROM pages WHERE page_id = ?').get(entityId)?.t ?? null;
+  if (kind === 'scene')  return db.prepare('SELECT titel AS t FROM figure_scenes WHERE id = ?').get(entityId)?.t ?? null;
+  if (kind === 'figure') return db.prepare('SELECT name AS t FROM figures WHERE id = ?').get(entityId)?.t ?? null;
+  return null;
+}
+
 /** Lookup einer Figur per fig_id (exakt) oder figur_name (LIKE + Exact-Match-Bonus). */
 function _findFigure(input, ctx) {
   const userEmail = ctx.userEmail || null;
@@ -65,4 +78,5 @@ module.exports = {
   SEARCH_SNIPPET_CONTEXT,
   _truncateResult,
   _findFigure,
+  resolveEntityTitle,
 };

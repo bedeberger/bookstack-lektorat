@@ -64,6 +64,45 @@
             </template>
 
             <span class="finding-explanation" x-text="f.erklaerung"></span>
+
+            <!-- Belegvorschlag: nur bei `unbelegt` (siehe editor/lektorat-evidence.js).
+                 Sucht den Satz semantisch in den PDFs der eigenen Quellen-Bibliothek
+                 und setzt auf Klick den Kurzbeleg dahinter. Nie generativ: der Satz
+                 selbst bleibt unangetastet. -->
+            <template x-if="evidenceEligible(f.typ) && evidenceReady()">
+              <span class="finding-evidence" @click.stop @pointerdown.stop>
+                <span class="finding-evidence-head">
+                  <button type="button" class="finding-edit-btn"
+                          x-show="!evidenceDone(f.original)"
+                          :disabled="evidenceLoading && evidenceOpenIdx === i"
+                          @click.stop="toggleEvidence(i)"
+                          x-text="$app.t(evidenceOpenIdx === i ? 'evidence.close' : 'evidence.search')"></button>
+                  <span class="tag" x-show="evidenceDone(f.original)" x-text="$app.t('evidence.doneTag')"></span>
+                  <span class="finding-evidence-spinner" x-show="evidenceLoading && evidenceOpenIdx === i"
+                        x-text="$app.t('evidence.searching')"></span>
+                </span>
+
+                <template x-if="evidenceOpenIdx === i">
+                  <span class="finding-evidence-panel">
+                    <span class="finding-evidence-error" x-show="evidenceError" x-text="evidenceError"></span>
+                    <template x-for="hit in evidenceHits" :key="hit.source_id">
+                      <span class="finding-evidence-hit">
+                        <span class="finding-evidence-hit-head">
+                          <span class="finding-evidence-score" x-text="Math.round(hit.score * 100) + '%'"></span>
+                          <span class="finding-evidence-src" x-text="evidenceSourceLine(hit.source)"></span>
+                          <span class="tag" x-show="!hit.linked" x-text="$app.t('evidence.willLink')"></span>
+                        </span>
+                        <span class="finding-evidence-snippet" x-text="hit.snippet"></span>
+                        <button type="button" class="btn-compact"
+                                :disabled="evidenceBusyId !== null"
+                                @click.stop="applyEvidence(i, hit)"
+                                x-text="$app.t(evidenceBusyId === hit.source_id ? 'evidence.inserting' : 'evidence.insert')"></button>
+                      </span>
+                    </template>
+                  </span>
+                </template>
+              </span>
+            </template>
           </span>
         </label>
       </template>

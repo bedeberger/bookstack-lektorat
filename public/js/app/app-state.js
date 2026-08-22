@@ -296,6 +296,7 @@ const cardsState = () => ({
   showStilCard: false,
   showFehlerHeatmapCard: false,
   showRedundanzCard: false,
+  showBuchlandkarteCard: false,
   showWortschatzCard: false,
   showStrukturCard: false,
   showTitelwerkstattCard: false,

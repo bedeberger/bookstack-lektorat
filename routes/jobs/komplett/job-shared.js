@@ -8,6 +8,7 @@ const appSettings = require('../../../lib/app-settings');
 const { providerClass } = require('../../../lib/ai');
 const { updateJob, settledAll, jobAbortControllers } = require('../shared');
 const { _stelleQuote, _refToString } = require('./utils');
+const { COST_LABEL, costTier } = require('./cost-labels');
 const embed = require('../../../lib/embed');
 const semanticChunks = require('../../../db/semantic-chunks');
 
@@ -103,7 +104,8 @@ async function verifyKontinuitaetProbleme(ctx, result, fromPct, toPct) {
     try {
       const v = await call(jobId, tok,
         prompts.buildKontinuitaetVerifyPrompt(bookName, p, exA.text, exB.text),
-        sys.SYSTEM_KONTINUITAET_BLOCKS, null, null, 400, 0.3, 600, prompts.SCHEMA_KONTINUITAET_VERIFY);
+        sys.SYSTEM_KONTINUITAET_BLOCKS, null, null, 400, 0.3, 600, prompts.SCHEMA_KONTINUITAET_VERIFY,
+        costTier(COST_LABEL.kontinuitaet));
       return { p, keep: v?.bestaetigt !== false };
     } catch (e) {
       if (e.name === 'AbortError') throw e;
@@ -336,7 +338,8 @@ async function runAttributeContradictionCheck(ctx, fromPct, toPct) {
   const settled = await settledAll(candidates.map((cand) => async () => {
     const v = await call(jobId, tok,
       prompts.buildAttributeContradictionJudgePrompt(bookName, cand),
-      sys.SYSTEM_KONTINUITAET_BLOCKS, null, null, 600, 0.3, 900, prompts.SCHEMA_ATTR_CONTRADICTION);
+      sys.SYSTEM_KONTINUITAET_BLOCKS, null, null, 600, 0.3, 900, prompts.SCHEMA_ATTR_CONTRADICTION,
+      costTier(COST_LABEL.kontinuitaet));
     if (v?.widerspruch !== true) return null;
     const stelle = (w) => `${cand.attribut}: ${w.wert}${w.kapitel ? ` (Kapitel ${w.kapitel})` : ''}`;
     return {
@@ -397,7 +400,8 @@ async function resolveRemapNames(ctx, { chapterSzenen, chapterAssignments, figur
   try {
     res = await call(jobId, tok,
       prompts.buildNameResolutionPrompt(bookName, unknownList, catalogNames),
-      sys.SYSTEM_FIGUREN_BLOCKS, null, null, 800, 0.2, null, prompts.SCHEMA_NAME_RESOLUTION);
+      sys.SYSTEM_FIGUREN_BLOCKS, null, null, 800, 0.2, null, prompts.SCHEMA_NAME_RESOLUTION,
+      costTier(COST_LABEL.match));
   } catch (e) {
     if (e.name === 'AbortError') throw e;
     log.warn(`Remap-Rescue Namensauflösung fehlgeschlagen (ignoriert): ${e.message}`);

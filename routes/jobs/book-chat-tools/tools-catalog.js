@@ -72,17 +72,22 @@ function tool_list_chapters(_input, ctx) {
 // Chat-Historie. Ziel: bei semantischen Selektions-Aufgaben (lustigste/schönste
 // Stellen, Ton, Stimmung) den Agenten zur Voll-Lektüre lenken statt zum seriellen
 // search_passages-Stichwort-Raten. budget unbekannt → konservativer Wort-Fallback.
+// Der Hinweis nennt die BEDINGUNG zuerst und die Erlaubnis danach: «passt in den Kontext»
+// ist eine Aussage über Kapazität, kein Auftrag. Sonst liest der Agent Voll-Lektüre als
+// Standardweg und lädt auch für eine einzelne Faktenfrage ganze Kapitel.
 function _listChaptersHint(totalChars, inputBudgetChars) {
   const budget = Number(inputBudgetChars) || 0;
+  const cheapFirst = 'Für eine einzelne Faktenfrage (Alter, Datum, Beruf, Ort, Beziehung) bleibst du '
+    + 'beim Erst-Kontext bzw. search_similar/search_passages/get_figure_profile — Volltext nicht nötig.';
   if (budget > 0 && totalChars > 0 && totalChars < budget * 0.5) {
-    return 'Das ganze Buch passt komplett in den Kontext. Für inhaltliche/semantische Selektion '
-      + '(z.B. lustigste/schönste/spannendste Stellen, Ton, Stimmung) lade ganze Kapitel via '
-      + 'get_chapter_text (mehrere gebündelt in EINER Runde) und wähle aus eigener Lektüre aus — '
-      + 'nicht mit search_passages nach Stichwörtern raten.';
+    return 'NUR falls die Frage den ganzen Text sichten muss (inhaltliche/semantische Selektion über '
+      + 'das Buch — lustigste/schönste/spannendste Stellen, Ton, Stimmung): das ganze Buch passt in den '
+      + 'Kontext, lade dann ganze Kapitel via get_chapter_text (mehrere gebündelt in EINER Runde) und '
+      + `wähle aus eigener Lektüre aus, statt mit search_passages nach Stichwörtern zu raten. ${cheapFirst}`;
   }
   if (totalChars > 0 && totalChars < 60000) {
     return 'Eher kleines Buch – du kannst ganze Kapitel via get_chapter_text (gebündelt) oder '
-      + 'Seiten via get_pages laden, wenn die Frage Lektüre statt Stichwort-Suche verlangt.';
+      + `Seiten via get_pages laden, WENN die Frage Lektüre statt Stichwort-Suche verlangt. ${cheapFirst}`;
   }
   return undefined;
 }

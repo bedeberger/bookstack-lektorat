@@ -274,8 +274,42 @@ function clearBook(bookId, model = null) {
   else db.prepare('DELETE FROM semantic_chunks WHERE book_id = ?').run(bookId);
 }
 
+// Seiten-Chunks eines Buchs samt KAPITEL-Zuordnung fuer die Buchlandkarte
+// (lib/book-map.js). Wie loadChunksForPairing, aber mit `chapter_id` — die Karte
+// gruppiert und faerbt nach Kapitel, und die Kohaesions-Kennzahl braucht die
+// Zuordnung ueberhaupt erst.
+//
+// Der JOIN auf `pages` ist der sanktionierte Fall der Content-Store-Regel: eine
+// abgeleitete Tabelle braucht zur Lesezeit einen Wert aus `pages`, und die
+// Abfrage liegt darum in ihrem eigenen db/-Modul statt im Handler (Muster
+// db/sources/citations.js#listSourceCitations). Es kommt bewusst KEIN Seiten-NAME
+// mit: den loest das Frontend aus der ohnehin geladenen Navigationsliste auf
+// (gleiche Regel wie beim Redundanz-Radar), und eine Snapshot-Spalte waere hier
+// erst recht falsch.
+//
+// `book_id` doppelt geprueft (an den Chunks UND an der Seite): eine Seite, die in
+// ein anderes Buch verschoben wurde, haelt ihre Vektoren bis zum naechsten
+// Reindex — sie darf nicht in der Landkarte des alten Buchs auftauchen.
+// Rueckgabe: [{ entity_id, chapter_id, text, vector:Float32Array }].
+function loadPageChunksWithChapter(bookId, model) {
+  const rows = db.prepare(`
+    SELECT sc.entity_id, sc.text, sc.vector, p.chapter_id
+      FROM semantic_chunks sc
+      JOIN pages p ON p.page_id = sc.entity_id
+     WHERE sc.book_id = ? AND sc.model = ? AND sc.kind = 'page'
+       AND p.book_id = ?
+     ORDER BY sc.entity_id, sc.chunk_ix
+  `).all(bookId, model, bookId);
+  return rows.map(r => ({
+    entity_id: r.entity_id,
+    chapter_id: r.chapter_id ?? null,
+    text: r.text,
+    vector: blobToVector(r.vector),
+  }));
+}
+
 module.exports = {
   getEntityChunks, replaceEntity, remove, searchSimilar, searchInEntity, getEntityVector, getEntityText,
   bookStats, clearBook, pruneMissing, indexStatus,
-  loadChunksForPairing, loadFigureVectorsForPairing,
+  loadChunksForPairing, loadFigureVectorsForPairing, loadPageChunksWithChapter,
 };

@@ -242,6 +242,16 @@ export const adminSettingsMethods = {
     if (!Number.isFinite(ctx) || ctx <= 0) return null;
     let out = Number(this.adminSettingsForm[`ai.${p}.max_tokens_out`]);
     if (!Number.isFinite(out) || out <= 0) out = p === 'claude' ? 64000 : 16000;
+    // Die Komplettanalyse deckelt ihre Calls bei der Klasse 'local' auf
+    // ai.komplett.extract_max_tokens; die Klasse 'cloud' behält das Provider-Ceiling
+    // (spiegelt phases/tokens.js#komplettMaxTokens, Klassen-Entscheid analog
+    // lib/ai/config.js#providerClass: openai-compat nur mit gesetztem `.cloud`).
+    // Weil die Vorschau genau diese Pässe beschreibt, muss sie mit demselben Cap rechnen
+    // wie chunkLimitsFor — sonst zeigt sie kleinere Chunks, als der Job tatsächlich bildet.
+    const isCloudClass = p === 'claude'
+      || (p === 'openai-compat' && this.adminSettingsForm['ai.openai-compat.cloud'] === true);
+    const komplettOut = Number(this.adminSettingsForm['ai.komplett.extract_max_tokens']);
+    if (!isCloudClass && Number.isFinite(komplettOut) && komplettOut > 0) out = Math.min(out, komplettOut);
     const cptRaw = Number(this.adminSettingsForm['ai.chars_per_token']);
     const charsPerToken = Number.isFinite(cptRaw) && cptRaw > 0 ? cptRaw : (p === 'claude' ? 3 : 4);
     // Sicherheitspuffer proportional — spiegelt contextSafetyMargin in lib/ai/config.js.

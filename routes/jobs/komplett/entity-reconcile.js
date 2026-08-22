@@ -30,6 +30,7 @@ const { updateJob } = require('../shared');
 const { locationHintKey, figureHintKey, sceneHintKey } = require('../../../lib/entity-match');
 const { komplettMaxTokens } = require('./phases/tokens');
 const { providerClass } = require('../../../lib/ai');
+const { COST_LABEL, costTier } = require('./cost-labels');
 
 // Deckel auf die vorgelegten Paare. Der Graubereich ist normalerweise klein (einstellig
 // bis wenige Dutzend); ist er gross, ist meist die Extraktion instabil — dann hilft ein
@@ -118,7 +119,7 @@ async function judgeEntityPairs(ctx, kind, { incoming, existing, unsure }) {
     res = await call(jobId, tok,
       prompts.buildEntityMatchJudgePrompt(bookName, kind, pairs.map(p => ({ nr: p.nr, a: p.a, b: p.b }))),
       sys.SYSTEM_ORTE_BLOCKS, null, null, komplettMaxTokens(effectiveProvider), 0.2, null,
-      prompts.SCHEMA_ENTITY_MATCH,
+      prompts.SCHEMA_ENTITY_MATCH, costTier(COST_LABEL.match),
     );
   } catch (e) {
     if (e.name === 'AbortError') throw e;

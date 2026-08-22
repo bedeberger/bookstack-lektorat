@@ -26,7 +26,7 @@ const {
   createJob, enqueueJob, findActiveJobId,
   summarizeCostByPhase, formatCostByPhase,
 } = require('../shared');
-const { providerClass } = require('../../../lib/ai');
+const { providerClass, maxParallelCalls } = require('../../../lib/ai');
 const contentStore = require('../../../lib/content-store');
 const appSettings = require('../../../lib/app-settings');
 const { setContext } = require('../../../lib/log-context');
@@ -39,9 +39,10 @@ const { judgeEntityPairs, isJudgeEnabled } = require('./entity-reconcile');
 const {
   runPhase1, runPhase2, runPhase3, runPhase3Songs, runPhase3b,
   buildPrelimFigurenKompakt, runPhase3OrteCall, runErzaehlprofil,
-  runKontinuitaetPhase, runCoverageAudit,
+  runKontinuitaetPhase, runCoverageAudit, komplettMaxTokens,
 } = require('./phases');
 const { buildAnachronismusData, _komplettAiOverrides, resolveRemapNames } = require('./job-shared');
+const { COST_LABEL, relabel } = require('./cost-labels');
 
 // ── Job: Komplettanalyse ─────────────────────────────────────────────────────
 // Pipeline (token-optimiert):
@@ -98,13 +99,27 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
   const extractTier = effectiveProvider === 'claude' ? {
     model: String(appSettings.get('ai.claude.model.komplett.extract') || '').trim() || undefined,
     effort: String(appSettings.get('ai.claude.effort.komplett.extract') || '').trim().toLowerCase() || undefined,
-    label: 'extract',
-  } : { label: 'extract' };
+    label: COST_LABEL.extract,
+  } : { label: COST_LABEL.extract };
+  // Gap-/Coverage-Pässe laufen auf DEMSELBEN Tier (Modell + Effort) wie die
+  // Basis-Extraktion, werden aber getrennt bepreist: sie hängen an eigenen
+  // Hebeln (completeness_passes, coverage_audit_chapters) und vervielfachen die
+  // Call-Zahl der Phase. In einem gemeinsamen Bucket wäre nicht ablesbar,
+  // welcher der beiden Hebel das Geld kostet.
+  const gapTier = relabel(extractTier, COST_LABEL.extractGap);
+  const coverageTier = relabel(extractTier, COST_LABEL.coverage);
   const call = (jobId_, tok_, prompt_, system_, fromPct, toPct, expectedChars, outputRatio, maxTokens, schema, tier) =>
     aiCall(jobId_, tok_, prompt_, system_, fromPct, toPct, expectedChars, outputRatio, maxTokens, effectiveProvider, schema, tier);
   // Per-Provider-Skalierung aus dessen `ai.<p>.context_window` (lib/ai.js#getContextConfigFor).
   // Bei Claude 200K-Kontext ≈ 420K Zeichen Single-Pass – reicht für fast alle Bücher.
-  const { singlePass: singlePassLimit, perChunk: perChunkLimit } = chunkLimitsFor(effectiveProvider);
+  // Gegen das EIGENE Output-Cap dieser Pipeline gerechnet, nicht gegen das provider-weite:
+  // jeder Komplett-Call reserviert `komplettMaxTokens` (Cloud: das Provider-Ceiling, lokal
+  // `ai.komplett.extract_max_tokens`), und derselbe Wert bestimmt den Preflight in aiCall.
+  // Mit dem provider-weiten `max_tokens_out` läge die Chunk-Grenze unter dem, was die Calls
+  // tatsächlich tragen — bei einem lokalen Modell zerlegt das das Buch in deutlich mehr
+  // Chunks als nötig (mehr Calls, mehr chunk-übergreifende Dubletten in der Konsolidierung).
+  const { singlePass: singlePassLimit, perChunk: perChunkLimit } =
+    chunkLimitsFor(effectiveProvider, { maxTokensOut: komplettMaxTokens(effectiveProvider) });
   // EXTRAKTIONS-Schwelle, entkoppelt von der Kontinuitäts-Schwelle (singlePassLimit): bei
   // Opus 4.8 + 1M würde sonst fast jedes Buch Single-Pass extrahiert (schlechterer Long-Tail-
   // Recall + Truncation-Risiko im 128K-Output). ai.komplett.extract_single_pass_cap > 0 zwingt
@@ -230,7 +245,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
       effectiveProvider, singlePassLimit, extractSinglePassLimit, perChunkLimit,
       cacheVersion, bookPagesSig, prompts, sys,
       idMaps, pageContents, groups, groupOrder, totalChars, fullBookText, warnings, completenessPasses,
-      extractTier,
+      extractTier, gapTier, coverageTier,
       coverageFeedbackEnabled, coverageAuditChapters, sceneBackfillEnabled, sceneBackfillMinChars, figureBatchSize,
     };
     pt.mark('Laden');
@@ -292,13 +307,17 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     log.info(`${chapterFakten.reduce((s, c) => s + (c.fakten?.length || 0), 0)} Welt-Fakten gespeichert.`);
 
     // ── Phase 2 + 3: Figuren + Orte konsolidieren ────────────────────────────
-    // Multi-Pass Claude: P2 (Figuren-AI) und P3 (Orte-AI) sind unabhängig und
-    // werden parallel gefahren. P3 nutzt prelim figurenKompakt (Pre-P2-Merge) im
-    // Prompt; nach P2-Merge werden die Orte-figuren_namen via figNameToId auf die
-    // finalen kanonischen fig_ids aufgelöst.
+    // Multi-Pass: P2 (Figuren-AI) und P3 (Orte-AI) sind unabhängig und werden parallel
+    // gefahren. P3 nutzt prelim figurenKompakt (Pre-P2-Merge) im Prompt; nach P2-Merge
+    // werden die Orte-figuren_namen via figNameToId auf die finalen kanonischen fig_ids
+    // aufgelöst — der Preis der Parallelisierung ist also eine etwas ältere Figurenliste
+    // im Orte-Prompt.
     // Single-Pass: kein AI-Call in P2/P3 → Parallelisierung bringt nichts.
-    // Lokale Provider: sequentiell (Mutex serialisiert AI-Calls ohnehin).
-    const isMultiPassParallel = isCloudModel && chapterFiguren.length > 1;
+    // Das Gate ist die PARALLELITÄT DES ENDPUNKTS, nicht die Provider-Klasse: ein lokaler
+    // Server mit `ai.openai-compat.max_parallel > 1` verträgt die zwei Calls genauso, und
+    // bei einem lokalen Modell wiegt der gesparte Call ein Vielfaches der Cloud-Ersparnis.
+    // Ollama liefert 1 (globaler Mutex) und bleibt damit seriell wie bisher.
+    const isMultiPassParallel = maxParallelCalls(effectiveProvider) > 1 && chapterFiguren.length > 1;
     let figuren, figNameToId, figNameToIdLower, figurenKompakt, isSinglePass;
     let orte, ortNameToId, ortNameToIdLower;
     if (isMultiPassParallel) {

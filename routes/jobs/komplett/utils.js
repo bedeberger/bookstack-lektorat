@@ -17,6 +17,31 @@ function _refToString(v) {
   return null;
 }
 
+/** Passt der zu erwartende Output einer Konsolidierung noch unter das Output-Cap?
+ *  Liefert `{ estOut, cap, fits }`; pure.
+ *
+ *  **Why:** Eine Konsolidierung schreibt die eingespeisten Felder praktisch vollständig
+ *  zurück — dedupliziert zwar, ergänzt dafür JSON-Schlüssel und Anführungszeichen. Der
+ *  Prompt ist damit der beste verfügbare Schätzer für die Antwortlänge. Reisst der Call
+ *  am Cap, wirft `aiCall` `job.error.aiTruncated`, das ganze Ergebnis ist verloren und
+ *  der Aufrufer fällt auf seinen regelbasierten Merge zurück — die Generierung ist zu
+ *  dem Zeitpunkt aber bereits bezahlt. Bei einem lokalen Modell mit 20–30 tok/s sind
+ *  das für ein 32K-Cap rund 20 Minuten für ein verworfenes Ergebnis. Vorher zu fragen
+ *  ändert am ERGEBNIS nichts (derselbe Fallback), spart aber die Wartezeit — und macht
+ *  im Log sichtbar, an welchem Wert es lag.
+ *
+ *  `reserve` (Default 0.9) hält Luft für den Schätzfehler in beide Richtungen. Bewusst
+ *  grosszügig: ein fälschlich übersprungener Call kostet Qualität, ein fälschlich
+ *  geführter nur Zeit — im Zweifel also lieber rufen. */
+function consolidationFitsCap({ promptText, charsPerToken, cap, reserve = 0.9 }) {
+  const cpt = Number(charsPerToken) > 0 ? Number(charsPerToken) : 4;
+  const capN = Number(cap) > 0 ? Number(cap) : 0;
+  const estOut = Math.ceil(String(promptText || '').length / cpt);
+  // Ohne brauchbares Cap nicht raten — dann lieber rufen (bisheriges Verhalten).
+  if (!capN) return { estOut, cap: capN, fits: true };
+  return { estOut, cap: capN, fits: estOut <= capN * reserve };
+}
+
 /** Extrahiert ein Feld aus settledAll-Ergebnissen in das Kapitel-Array-Format. */
 function extractField(settled, chunkTexts, field) {
   return settled.map((r, i) => ({
@@ -244,7 +269,7 @@ function buildConsolidationSig(chapters, cacheVersion, flags = {}) {
 }
 
 module.exports = {
-  _refToString, _remapFigNames, extractField,
+  _refToString, _remapFigNames, extractField, consolidationFitsCap,
   buildBookSystemBlockText, buildBookPagesSig, bookSettingsSigPart,
   _stelleQuote,
   makePhaseTimer,

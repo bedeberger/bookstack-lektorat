@@ -275,7 +275,10 @@ function _recordCallCostUnsafe(tok, tier, provider, m) {
 
 /** Aufbereitete Kosten-Aufschlüsselung fürs Job-Result: teuerster Bucket zuerst,
  *  USD auf Cent gerundet (rohe Floats blähen das Result-JSON auf). Gibt null,
- *  wenn kein Call ein Label trug (lokale Provider, Jobs ohne Tiering). */
+ *  wenn kein Call ein Label trug — also nur noch für Jobs, die gar keine Buckets
+ *  setzen. Die Komplettanalyse labelt alle ihre Calls (SSoT
+ *  routes/jobs/komplett/cost-labels.js); bei lokalen Providern stehen die Buckets
+ *  darum ebenfalls da, nur mit usd = 0 (Calls/Tokens/Sekunden bleiben aussagekräftig). */
 function summarizeCostByPhase(tok) {
   const src = tok?.byPhase;
   if (!src || !Object.keys(src).length) return null;

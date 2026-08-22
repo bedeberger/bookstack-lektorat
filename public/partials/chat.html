@@ -140,6 +140,10 @@
               <!-- Agent-Modus: aufgerufene Werkzeuge -->
               <template x-if="msg.context_info.mode === 'agent'">
                 <span>
+                  <template x-if="msg.context_info.pre_context">
+                    <span class="chat-context-badge"
+                          x-text="$app.t('chat.ctxPreContext', { n: msg.context_info.pre_context.count })"></span>
+                  </template>
                   <template x-for="(entry, ei) in _agentToolSummary(msg.context_info.tool_calls)" :key="ei">
                     <span class="chat-context-badge"
                           :class="{ 'chat-context-badge--error': entry.errors > 0 }"

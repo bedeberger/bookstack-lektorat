@@ -154,6 +154,72 @@ function preMergeChapterFiguren(chapterFiguren) {
   return { chapterFiguren: merged, dupesRemoved };
 }
 
+/** Reichert `beziehungen[].figur_id` mit dem Zielnamen an (mutiert in place, liefert
+ *  die Anzahl gesetzter Namen). MUSS auf den ROHEN Phase-1-Chunks laufen, vor jedem
+ *  Merge.
+ *
+ *  **Why:** `figur_id` ist CHUNK-LOKAL. Der Extraktions-Prompt verlangt pro Chunk
+ *  «Eindeutige IDs (fig_1, fig_2, …); Beziehungen nur zwischen IDs dieser Liste»
+ *  (prompts/komplett/extraktion/system.js) — jeder Chunk beginnt also wieder bei
+ *  fig_1, und `extractField` hält pro Chunk einen eigenen Eintrag, also einen eigenen
+ *  ID-Namensraum. Wer die Figuren danach global neu durchnummeriert, ohne die
+ *  Beziehungen mitzunehmen, bindet sie an eine FREMDE Figur: `dedupRelations` in
+ *  db/figures/save.js filtert nur auf Existenz der id, und `fig_2` existiert ja.
+ *  Der Name ist der einzige chunk-übergreifend stabile Schlüssel — dieselbe
+ *  Begründung, aus der Songs/Orte ihre Figuren schon über Namen referenzieren
+ *  (utils.js#_remapFigNames). Der Konsolidierungs-Prompt liest `bz.name` bereits als
+ *  Fallback (prompts/komplett/figuren.js), das Feld ist also vorgesehen und macht
+ *  zugleich den Prompt für chunk-fremde Ziele lesbar. */
+function annotateBeziehungenNames(chapterFiguren) {
+  let annotated = 0;
+  for (const chunk of (chapterFiguren || [])) {
+    const nameById = new Map();
+    for (const f of (chunk?.figuren || [])) {
+      if (f?.id != null) nameById.set(String(f.id), f.name || '');
+    }
+    for (const f of (chunk?.figuren || [])) {
+      for (const bz of (f?.beziehungen || [])) {
+        if (!bz || bz.name) continue;
+        const name = nameById.get(String(bz.figur_id ?? ''));
+        if (name) { bz.name = name; annotated++; }
+      }
+    }
+  }
+  return annotated;
+}
+
+/** Bindet Beziehungs-Ziele nach dem Vergeben der FINALEN ids über `bz.name` neu.
+ *  Gegenstück zu `annotateBeziehungenNames`, aufzurufen an jeder Stelle, die Figuren-ids
+ *  neu vergibt (heute: der Fallback in phases/figuren.js). Idempotent und ein No-op für
+ *  Einträge ohne `name`. Die KI-Konsolidierung geht bewusst NICHT hier durch — sie bringt
+ *  ihre eigene, in sich konsistente ID-Welt mit, und an ihr gibt es nichts zu binden.
+ *  Nicht auflösbare Ziele werden ENTFERNT: eine Kante zur falschen Figur
+ *  ist schlimmer als eine fehlende, und genau dieser Fall ist unten in der DB nicht
+ *  mehr erkennbar. Selbst-Referenzen fallen ebenfalls weg (kann durch das Neubinden
+ *  entstehen, wenn zwei Chunk-Figuren dieselbe Person waren). */
+function rebindBeziehungenByName(figuren, log) {
+  const idByName = new Map();
+  for (const f of (figuren || [])) {
+    const key = _normalizeName(f?.name);
+    if (key && !idByName.has(key)) idByName.set(key, f.id);
+  }
+  let rebound = 0, dropped = 0;
+  for (const f of (figuren || [])) {
+    if (!Array.isArray(f?.beziehungen)) continue;
+    f.beziehungen = f.beziehungen.filter(bz => {
+      if (!bz || !bz.name) return true;
+      const target = idByName.get(_normalizeName(bz.name));
+      if (!target || target === f.id) { dropped++; return false; }
+      if (target !== bz.figur_id) { bz.figur_id = target; rebound++; }
+      return true;
+    });
+  }
+  if ((rebound || dropped) && log) {
+    log.info(`Beziehungs-Ziele über Namen neu gebunden – ${rebound} korrigiert, ${dropped} unauflösbar entfernt.`);
+  }
+  return { rebound, dropped };
+}
+
 /** Welle 4 · #12 – Mode-Vote für Sozialschicht (lokale Modelle).
  *  Phase 2 (Konsolidierung) bei kleinen Modellen wählt die sozialschicht
  *  manchmal aus einem Nebenkapitel, obwohl drei andere Kapitel einheitlich
@@ -478,6 +544,7 @@ function applyAliasClusters(chapterFiguren, clusters, log = null) {
 
 module.exports = {
   preMergeChapterFiguren, applySozialschichtModeVote,
+  annotateBeziehungenNames, rebindBeziehungenByName,
   mergeDuplicateFiguren, validateBeziehungenDescriptions,
   mergeBeziehungenIntoFiguren, backfillFiguren, ensureUniqueFigIds,
   applyAliasClusters,

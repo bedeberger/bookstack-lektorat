@@ -25,9 +25,21 @@ const SINGLE_PASS_LIMIT = Math.max(20000, Math.min(SINGLE_PASS_CHAR_CEILING, Mat
 const PER_CHUNK_LIMIT   = Math.max(10000, Math.min(200000, Math.floor(INPUT_BUDGET_CHARS * 0.35)));
 const BATCH_SIZE = 15;
 
-function chunkLimitsFor(provider) {
+// `maxTokensOut`: das Output-Cap, gegen das gerechnet wird. Ohne Angabe das provider-weite
+// `ai.<p>.max_tokens_out` (= cfg.inputBudgetChars, bisheriges Verhalten). Ein Job, der seine
+// Calls TIEFER deckelt, MUSS sein eigenes Cap einsetzen — sonst chunkt er gegen ein
+// Input-Budget, das seine Calls nie reservieren, und zerlegt das Buch feiner als nötig.
+// Konkret die Komplettanalyse: sie deckelt jeden Call auf `ai.komplett.extract_max_tokens`
+// (phases/tokens.js#komplettMaxTokens), und genau dieser Wert landet als `maxTokensOut` im
+// Preflight (routes/jobs/shared/ai.js#aiCall) — Chunk-Grenze und Preflight müssen dieselbe
+// Rechnung machen. Für die Cloud-Klasse sind beide Werte identisch (komplettMaxTokens
+// liefert dort das Provider-Ceiling) → dort keine Verhaltensänderung.
+function chunkLimitsFor(provider, { maxTokensOut } = {}) {
   const cfg = getContextConfigFor(provider);
-  const budget = cfg.inputBudgetChars;
+  const out = Number(maxTokensOut) > 0 ? Number(maxTokensOut) : cfg.maxTokensOut;
+  // Floor identisch zu getContextConfigFor: ein inkonsistentes Cap darf das Budget nicht
+  // negativ werden lassen.
+  const budget = Math.max(2000, cfg.contextWindow - out - cfg.safetyMargin) * cfg.charsPerToken;
   return {
     singlePass: Math.max(20000, Math.min(SINGLE_PASS_CHAR_CEILING, Math.floor(budget * 0.70))),
     perChunk:   Math.max(10000, Math.min(200000, Math.floor(budget * 0.35))),

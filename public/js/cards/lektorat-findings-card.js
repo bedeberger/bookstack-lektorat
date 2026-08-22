@@ -10,6 +10,7 @@
 // DOM-Isolation.
 
 import { isHardFinding } from '../book/page-view.js';
+import { lektoratEvidenceMethods, lektoratEvidenceState } from '../editor/lektorat-evidence.js';
 
 // Split-Modus Media Query — dieselbe Schwelle wie page-view.js.
 const splitMQ = typeof window !== 'undefined' ? window.matchMedia('(min-width: 1100px)') : null;
@@ -28,16 +29,27 @@ export function registerLektoratFindingsCard() {
     editingIdx: -1,
     editDraft: '',
 
+    // Belegvorschlag (nur `unbelegt`-Befunde) — Panel-Zustand + Trefferliste.
+    // Slice liegt beim Fachmodul, damit Reset und Feld-Liste eine Quelle haben.
+    ...lektoratEvidenceState(),
+
     init() {
       // Neuer Prüflauf ersetzt das Findings-Array (neue Referenz) → offenen
       // Inline-Editor schliessen, sonst zeigt eine alte Index-Position Edit-UI.
       this.$watch(() => window.__app?.lektoratFindings, () => {
         this.editingIdx = -1;
         this.editDraft = '';
+        // Gleiche Begruendung fuer den Belegvorschlag: `evidenceOpenIdx` ist eine
+        // Index-Position in der ALTEN Liste und zeigte nach einem neuen Prueflauf
+        // auf einen fremden Befund. `evidenceApplied` haengt dagegen am
+        // Satz-Text und darf einen Prueflauf ueberleben.
+        Object.assign(this, { ...lektoratEvidenceState(), evidenceApplied: this.evidenceApplied });
       });
     },
 
     _isHardFinding(typ) { return isHardFinding(typ); },
+
+    ...lektoratEvidenceMethods,
 
     startEditKorrektur(idx) {
       const f = window.__app?.lektoratFindings?.[idx];

@@ -13,7 +13,7 @@ export const hashSetupMethods = {
       'showSourcesCard',
       'showKontinuitaetCard', 'showErzaehlprofilCard', 'showTagebuchRueckblickCard', 'showBookReviewCard', 'showBookChatCard',
       'showKapitelReviewCard', 'kapitelReviewChapterId',
-      'showBookStatsCard', 'showStilCard', 'showFehlerHeatmapCard', 'showRedundanzCard', 'showWortschatzCard', 'showStrukturCard', 'showTitelwerkstattCard',
+      'showBookStatsCard', 'showStilCard', 'showFehlerHeatmapCard', 'showRedundanzCard', 'showBuchlandkarteCard', 'showWortschatzCard', 'showStrukturCard', 'showTitelwerkstattCard',
       'showBookSettingsCard', 'showUserSettingsCard', 'showMyStatsCard', 'showHelpCard', 'showOnboardingCard',
       'showAdminUsersCard', 'showAdminSettingsCard', 'showAdminUsageCard', 'adminUsageTab',
       'showAdminCategoriesCard', 'showAdminBooksCard', 'showAdminLogsCard', 'showAdminParseFailsCard',

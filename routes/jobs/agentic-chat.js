@@ -14,12 +14,19 @@
 //   validate({ userEmail }),               // optional, läuft im try → wirft via i18nError (z.B. Claude-only-Guard)
 //   loadSession(sessionId, userEmail),     // Session-Row (inkl. book_name) oder null
 //   prepare(args) → { systemPrompt, tools, maxToolIter, tokenBudget, toolResultCap?, forceFinalInstruction, ctx }
+//     args enthält u.a. `message` (die aktuelle Userfrage) — der Buch-Chat zieht
+//     daraus seinen semantischen Erst-Kontext, bevor der Loop startet.
 //   executeTool(name, input, ctx),
 //   consumeFinalAnswer({ finalUse, ctx, toolLog, iterNum, logger }) → finalText (JSON-String),
 //   parseFinal(finalText, logger) → antwort-String,
 //   buildContextInfo({ toolLog, iter, webSearches, webResults, ctx }) → object,
 //   buildCompletePayload?({ base, ctx }) → object (default: base),
 //   buildSummary({ session, sessionId, toolLog, iter, webSearches, ctx }) → string,
+//   fallbackJob?(jobId, sessionId, userMsgId, message, userEmail, userToken),
+//     optional: uebernimmt den Job, wenn der Provider kein Tool-Protokoll spricht
+//     (Fehler-Code AI_TOOLS_UNSUPPORTED). Der Buch-Chat haengt hier seinen
+//     klassischen Pfad ein — ein Endpunkt, der Function-Calling ablehnt, kostet
+//     dann keine Antwort, sondern nur den agentischen Mehrwert.
 // }
 
 const { db } = require('../../db/schema');
@@ -81,7 +88,7 @@ function makeAgenticChatJob(config) {
       logger.info(`Start (${config.startLabel}): «${session.book_name || '-'}» session=${sessionId}, msg-len=${message.length}`);
 
       const jobSignal = jobAbortControllers.get(jobId)?.signal;
-      const prep = await config.prepare({ session, userEmail, userToken, aiCfg, logger, jobSignal });
+      const prep = await config.prepare({ session, userEmail, userToken, aiCfg, logger, jobSignal, message });
       const { systemPrompt, tools, maxToolIter, tokenBudget, forceFinalInstruction, ctx } = prep;
       const toolResultCap = prep.toolResultCap ?? Infinity;
 
@@ -259,6 +266,13 @@ function makeAgenticChatJob(config) {
       const payload = config.buildCompletePayload ? config.buildCompletePayload({ base, ctx }) : base;
       completeJob(jobId, payload, tpsVal, config.buildSummary({ session, sessionId, toolLog, iter, webSearches: state.webSearches, ctx }));
     } catch (e) {
+      // Provider kann keine Werkzeuge: derselbe Job noch einmal auf dem Fallback-Pfad.
+      // Sicher, weil AI_TOOLS_UNSUPPORTED nur aus callAIWithTools kommt — also vor
+      // jedem Schreibpfad (Assistant-Nachricht, Ledger, Session-Titel).
+      if (e?.code === 'AI_TOOLS_UNSUPPORTED' && config.fallbackJob && e.name !== 'AbortError') {
+        logger.warn(`${config.errLabel}: Tool-Use nicht verfuegbar (${e.message}) – Rueckfall auf den klassischen Pfad.`);
+        return config.fallbackJob(jobId, sessionId, userMsgId, message, userEmail, userToken);
+      }
       if (e.name !== 'AbortError') logger.error(`${config.errLabel}-Fehler: ${e.message}`, { stack: e.stack });
       failJob(jobId, e);
     }

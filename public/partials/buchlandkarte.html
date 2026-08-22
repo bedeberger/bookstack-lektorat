@@ -1,0 +1,151 @@
+<!-- Buchlandkarte: die Seiten des Buchs als Punktwolke über dem Embedding-Index -->
+<!--
+  Alpine.data-Sub-Komponente — siehe public/js/cards/buchlandkarte-card.js.
+  `showBuchlandkarteCard` + `toggleBuchlandkarteCard` bleiben im Root
+  (Exklusivität). Rein rückwärtsgewandt: liest den Semantik-Index, schreibt nie
+  in den Buchtext. Setzt einen gebauten Seiten-Index voraus.
+
+  Die Achsen tragen bewusst KEINE Beschriftung — sie haben keine Bedeutung, nur
+  die relative Lage zählt. Wieviel von der Streuung das Bild zeigt, sagt der
+  Hinweis unter der Karte.
+-->
+<div class="card card--buchlandkarte" x-data="buchlandkarteCard" x-show="$app.showBuchlandkarteCard" x-cloak>
+  <div class="card-header">
+    <div class="card-header-titlebar">
+      <span class="card-eyebrow" x-text="$app.selectedBookName"></span>
+      <span class="card-title" x-text="$app.t('buchlandkarte.title')"></span>
+    </div>
+    <div class="card-actions" x-show="bookMapAvailable && bookMapHasIndex">
+      <button type="button" class="primary" data-label-ok
+              :disabled="bookMapLoading"
+              @click="runBookMap()"
+              x-text="$app.t(bookMapResult ? 'buchlandkarte.rerun' : 'buchlandkarte.run')"></button>
+    </div>
+  </div>
+
+  <p class="buchlandkarte-intro" x-show="bookMapAvailable && bookMapHasIndex"
+     x-text="$app.t('buchlandkarte.intro')"></p>
+
+  <!-- Gating: Backend aus / kein Index -->
+  <div x-show="!bookMapAvailable" class="muted-msg muted-msg--spaced" x-text="$app.t('buchlandkarte.needBackend')"></div>
+  <div x-show="bookMapAvailable && !bookMapHasIndex" class="muted-msg muted-msg--spaced" x-text="$app.t('buchlandkarte.needIndex')"></div>
+
+  <div x-show="bookMapLoading && bookMapProgress > 0" class="progress-bar-wrap">
+    <div class="progress-bar" :style="{ '--progress': bookMapProgress + '%' }"></div>
+  </div>
+  <div x-show="bookMapStatus" class="card-status" x-text="bookMapStatus"></div>
+
+  <!-- Ergebnis -->
+  <template x-if="bookMapResult">
+    <div class="buchlandkarte-result">
+      <div class="buchlandkarte-meta">
+        <span x-text="$app.t('buchlandkarte.meta.summary', {
+          pages: bookMapResult.pages.length, chapters: bookMapResult.chapters.length })"></span>
+        <span x-show="bookMapResult.truncatedPages > 0" class="buchlandkarte-meta-note"
+              x-text="$app.t('buchlandkarte.meta.capped', { n: bookMapResult.truncatedPages })"></span>
+      </div>
+
+      <div x-show="!bookMapHasMap()" class="muted-msg muted-msg--spaced"
+           x-text="$app.t('buchlandkarte.empty')"></div>
+
+      <template x-if="bookMapHasMap()">
+        <div>
+          <div class="buchlandkarte-canvas-wrap">
+            <canvas id="bookMapCanvas" role="img"></canvas>
+          </div>
+          <p class="buchlandkarte-variance" :class="'buchlandkarte-variance--' + bookMapVarianceBand()"
+             x-text="$app.t('buchlandkarte.variance.' + bookMapVarianceBand(), { pct: bookMapVariancePct() })"></p>
+          <p class="buchlandkarte-hint" x-text="$app.t('buchlandkarte.clickHint')"></p>
+        </div>
+      </template>
+
+      <!-- Kapitel: hält es zusammen, und welchem Kapitel liegt es am nächsten -->
+      <template x-if="bookMapResult.chapters.length">
+        <div class="buchlandkarte-section">
+          <h3 class="section-heading" x-text="$app.t('buchlandkarte.chapters.title')"></h3>
+          <p class="buchlandkarte-section-hint" x-text="$app.t('buchlandkarte.chapters.hint')"></p>
+          <div class="table-scroll">
+            <table class="buchlandkarte-table"
+                   x-data="sortableTable({
+                     rows: () => bookMapChapterRows(),
+                     defaultKey: 'cohesionPct',
+                     defaultDir: 'asc',
+                     persistKey: 'buchlandkarte.chapters',
+                     types: { pages: 'number', cohesionPct: 'number', spreadPct: 'number', nearestPct: 'number' },
+                   })">
+              <thead>
+                <tr>
+                  <th class="sortable-th" :class="sortClass('name')" :aria-sort="ariaSort('name')"
+                      @click="sortBy('name')" x-text="$app.t('buchlandkarte.col.chapter')"></th>
+                  <th class="sortable-th" :class="sortClass('pages')" :aria-sort="ariaSort('pages')"
+                      @click="sortBy('pages')" x-text="$app.t('buchlandkarte.col.pages')"></th>
+                  <th class="sortable-th" :class="sortClass('cohesionPct')" :aria-sort="ariaSort('cohesionPct')"
+                      @click="sortBy('cohesionPct')" x-text="$app.t('buchlandkarte.col.cohesion')"></th>
+                  <th class="sortable-th" :class="sortClass('spreadPct')" :aria-sort="ariaSort('spreadPct')"
+                      @click="sortBy('spreadPct')" x-text="$app.t('buchlandkarte.col.spread')"></th>
+                  <th class="sortable-th" :class="sortClass('nearestName')" :aria-sort="ariaSort('nearestName')"
+                      @click="sortBy('nearestName')" x-text="$app.t('buchlandkarte.col.nearest')"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="row in sorted" :key="row.chapterId">
+                  <tr>
+                    <td x-text="row.name"></td>
+                    <td class="buchlandkarte-num" x-text="row.pages"></td>
+                    <td class="buchlandkarte-num"
+                        x-text="row.cohesionPct === null ? '—' : row.cohesionPct + '%'"></td>
+                    <td class="buchlandkarte-num"
+                        x-text="row.spreadPct === null ? '—' : row.spreadPct + '%'"></td>
+                    <td>
+                      <span x-show="row.nearestName" x-text="row.nearestName"></span>
+                      <span x-show="row.nearestName" class="buchlandkarte-num-inline"
+                            x-text="row.nearestPct + '%'"></span>
+                      <span x-show="!row.nearestName">—</span>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </template>
+
+      <!-- Ausreisser: was am weitesten vom Buch-Zentroid entfernt liegt -->
+      <template x-if="bookMapResult.outliers.length">
+        <div class="buchlandkarte-section">
+          <h3 class="section-heading" x-text="$app.t('buchlandkarte.outliers.title')"></h3>
+          <p class="buchlandkarte-section-hint" x-text="$app.t('buchlandkarte.outliers.hint')"></p>
+          <div class="table-scroll">
+            <table class="buchlandkarte-table"
+                   x-data="sortableTable({
+                     rows: () => bookMapOutlierRows(),
+                     defaultKey: 'distancePct',
+                     persistKey: 'buchlandkarte.outliers',
+                     types: { distancePct: 'number' },
+                   })">
+              <thead>
+                <tr>
+                  <th class="sortable-th" :class="sortClass('name')" :aria-sort="ariaSort('name')"
+                      @click="sortBy('name')" x-text="$app.t('buchlandkarte.col.page')"></th>
+                  <th class="sortable-th" :class="sortClass('chapterName')" :aria-sort="ariaSort('chapterName')"
+                      @click="sortBy('chapterName')" x-text="$app.t('buchlandkarte.col.chapter')"></th>
+                  <th class="sortable-th" :class="sortClass('distancePct')" :aria-sort="ariaSort('distancePct')"
+                      @click="sortBy('distancePct')" x-text="$app.t('buchlandkarte.col.distance')"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="row in sorted" :key="row.id">
+                  <tr>
+                    <td><span class="tag internal-link" @click="bookMapGotoPage(row.id)" x-text="row.name"></span></td>
+                    <td x-text="row.chapterName"></td>
+                    <td class="buchlandkarte-num" x-text="row.distancePct + '%'"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </template>
+    </div>
+  </template>
+</div>

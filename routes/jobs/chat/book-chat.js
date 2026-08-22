@@ -4,7 +4,7 @@
 // Buchindex). Dispatcher wählt anhand der App-Settings (Provider/Modus).
 
 const { db } = require('../../../db/schema');
-const { callAIChat, chatTemperature, getContextConfigFor, resolveProvider } = require('../../../lib/ai');
+const { callAIChat, chatTemperature, getContextConfigFor, resolveProvider, providerClass, providerSupportsTools } = require('../../../lib/ai');
 const {
   _promptConfig,
   makeJobLogger, updateJob, completeJob, failJob, i18nError,
@@ -18,7 +18,7 @@ const { generateSessionTitle } = require('../chat-title');
 const { makeAgenticChatJob, buildAgenticHistory } = require('../agentic-chat');
 const { imageGenEnabled } = require('../../../lib/image-gen');
 const embed = require('../../../lib/embed');
-const { semanticQuery } = require('../../../lib/semantic-retrieval');
+const { selectPassagesSemantic, preContextPassages } = require('./book-chat-retrieval');
 const { setContext } = require('../../../lib/log-context');
 const appSettings = require('../../../lib/app-settings');
 const { recordChatLedgerForMessage } = require('../../../db/cost-ledger');
@@ -49,78 +49,50 @@ function _scorePageRelevance(query, text, stopwords = _BOOK_CHAT_STOPWORDS) {
   return score;
 }
 
-// Mini-RAG-Retrieval für den klassischen Buch-Chat: zieht die semantisch relevantesten
-// Chunk-Auszüge (ein bester Chunk pro Seite) über die geteilte Pipeline
-// lib/semantic-retrieval.js#semanticQuery (Cosinus + Hybrid-RRF + optional Rerank — exakt
-// dieselbe wie das agentische search_similar-Tool und die Such-Karte) und füllt damit das
-// Text-Budget. Seiten-Metadaten (Name/Slug) werden einmal via listPages aufgelöst; der
-// Chunk-Text kommt aus dem Index, es werden KEINE Seiten-Volltexte geladen. Gibt null
-// zurück, wenn kein Index existiert bzw. die Anfrage keine Treffer liefert (Caller fällt
-// dann auf Keyword-Scoring über alle Seiten zurück). Wirft nur bei Abort/Backend-Fehler.
-async function _selectPassagesSemantic(bookId, query, budgetChars, signal, userToken) {
-  const topK = parseInt(appSettings.get('jobs.book_chat.rag_top_k'), 10) || 40;
-  const hits = await semanticQuery(bookId, query, { kinds: ['page'], topK, signal });
-  if (!hits.length) return null;
-
-  let pages;
-  try { pages = await contentStore.listPages(bookId, userToken); }
-  catch (e) {
-    if (e?.status) throw i18nError('job.error.contentStorePageList', { status: e.status });
-    throw e;
-  }
-  const metaById = new Map(pages.map(p => [p.id, p]));
-
-  const selectedPages = [];
-  const seen = new Set();
-  let usedChars = 0;
-  for (const h of hits) {
-    if (usedChars >= budgetChars) break;
-    if (h.kind !== 'page' || seen.has(h.entity_id)) continue;
-    const meta = metaById.get(h.entity_id);
-    if (!meta) continue; // Seite gelöscht, Chunk noch im Index
-    const text = String(h.text || '').slice(0, budgetChars - usedChars);
-    if (text.length < 50) continue;
-    seen.add(h.entity_id);
-    selectedPages.push({ name: meta.name, id: meta.id, slug: meta.slug, book_slug: meta.book_slug, text });
-    usedChars += text.length;
-  }
-  if (!selectedPages.length) return null;
-  return { selectedPages, usedChars, totalPages: pages.length };
-}
-
-// Per-Job-Claude-Override für den Buch-Chat (klassisch + agentisch), analog zur
-// Komplettanalyse (_komplettAiOverrides in routes/jobs/komplett/job-shared.js). Anders als
-// dort bleibt er claude-only: der agentische Buch-Chat läuft ohnehin nur mit Tool-Use, also
-// nur auf der Anthropic-API. Leer/0 = folgt dem globalen Wert. Erlaubt z.B. Opus für den
-// Tool-Loop, während global Sonnet 4.6 läuft. Kein eigener Timeout-Default (anders als
-// komplett) – der Buch-Chat macht pro Call nur eine Tool-Use-Runde, der globale
-// 10-Min-Timeout reicht.
-function _bookChatClaudeOverrides(effectiveProvider) {
-  if (effectiveProvider !== 'claude') return null;
-  const model = String(appSettings.get('ai.claude.model.bookchat') || '').trim();
-  const contextWindow = parseInt(appSettings.get('ai.claude.context_window.bookchat'), 10) || 0;
-  const maxTokensOut = parseInt(appSettings.get('ai.claude.max_tokens_out.bookchat'), 10) || 0;
-  const timeoutMs = parseInt(appSettings.get('ai.claude.timeout_ms.bookchat'), 10) || 0;
-  // effort (output_config) für Opus 4.5+/Sonnet 4.6: low|medium|high|xhigh|max. Leer = API-Default
-  // (high). lib/ai.js klemmt Tier-Mismatch (max→Opus-only, xhigh→Opus-4.7+) automatisch auf high.
-  const effort = String(appSettings.get('ai.claude.effort.bookchat') || '').trim();
-  const bag = { provider: 'claude' };
+// Per-Job-Override für den Buch-Chat (klassisch + agentisch), analog zur
+// Komplettanalyse (_komplettAiOverrides in routes/jobs/komplett/job-shared.js): Keys
+// `ai.<provider>.{model,context_window,max_tokens_out,timeout_ms}.bookchat`, leer/0 =
+// folgt dem globalen Wert. Erlaubt bei Claude z.B. Opus für den Tool-Loop, während
+// global Sonnet läuft. Kein eigener Timeout-Default (anders als komplett) – der
+// Buch-Chat macht pro Call nur eine Tool-Use-Runde, der globale 10-Min-Timeout reicht.
+//
+// Warum auch openai-compat: der agentische Pfad läuft dort ebenfalls (Function-Calling),
+// und er braucht das umgekehrte Zuschnitt-Verhältnis wie die Analyse — VIEL Input
+// (Werkzeugkatalog + Erst-Kontext + wachsende Tool-Results, jede Iteration ungecacht)
+// und wenig Output. Ein für die Komplettanalyse gesetzter Output-Cap frisst sonst das
+// Input-Budget des Chats auf, weil beide aus demselben Kontextfenster kommen.
+const _BOOKCHAT_OVERRIDE_PROVIDERS = new Set(['claude', 'openai-compat']);
+function _bookChatAiOverrides(effectiveProvider) {
+  if (!_BOOKCHAT_OVERRIDE_PROVIDERS.has(effectiveProvider)) return null;
+  const p = effectiveProvider;
+  const model = String(appSettings.get(`ai.${p}.model.bookchat`) || '').trim();
+  const contextWindow = parseInt(appSettings.get(`ai.${p}.context_window.bookchat`), 10) || 0;
+  const maxTokensOut = parseInt(appSettings.get(`ai.${p}.max_tokens_out.bookchat`), 10) || 0;
+  const timeoutMs = parseInt(appSettings.get(`ai.${p}.timeout_ms.bookchat`), 10) || 0;
+  const bag = { provider: p };
   if (model) bag.model = model;
   if (contextWindow > 0) bag.contextWindow = contextWindow;
   if (maxTokensOut > 0) bag.maxTokensOut = maxTokensOut;
   if (timeoutMs > 0) bag.timeoutMs = timeoutMs;
-  if (effort) bag.effort = effort;
+  // effort (output_config) für Opus 4.5+/Sonnet 4.6: low|medium|high|xhigh|max. Leer =
+  // API-Default (high). lib/ai.js klemmt Tier-Mismatch (max→Opus-only, xhigh→Opus-4.7+)
+  // automatisch auf high. Claude-API-Eigenheit — kein openai-compat-Pendant.
+  if (p === 'claude') {
+    const effort = String(appSettings.get('ai.claude.effort.bookchat') || '').trim();
+    if (effort) bag.effort = effort;
+  }
   return Object.keys(bag).length > 1 ? { aiJob: bag } : null;
 }
 
-// Override via ALS-Context binden (greift für alle Claude-Calls dieses Jobs, ohne globale
-// Calls zu beeinflussen). MUSS vor getContextConfigFor() laufen, damit das aiCfg (Token-
-// Budget, Tool-Result-Cap) das Buch-Chat-Kontextfenster/Output-Cap reflektiert.
-function _applyBookChatClaudeOverrides(effectiveProvider, logger) {
-  const overrides = _bookChatClaudeOverrides(effectiveProvider);
+// Override via ALS-Context binden (greift für alle Calls dieses Jobs gegen DIESEN
+// Provider, ohne globale Calls zu beeinflussen — der `provider` im Bag ist Teil des
+// Vertrags). MUSS vor getContextConfigFor() laufen, damit das aiCfg (Token-Budget,
+// Tool-Result-Cap) das Buch-Chat-Kontextfenster/Output-Cap reflektiert.
+function _applyBookChatAiOverrides(effectiveProvider, logger) {
+  const overrides = _bookChatAiOverrides(effectiveProvider);
   if (overrides) {
     setContext(overrides);
-    logger.info(`Buch-Chat-Claude-Override: ${JSON.stringify(overrides.aiJob)} (global model=${appSettings.get('ai.claude.model')}).`);
+    logger.info(`Buch-Chat-Override (${effectiveProvider}): ${JSON.stringify(overrides.aiJob)}.`);
   }
   return overrides;
 }
@@ -129,7 +101,7 @@ async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, u
   const logger = makeJobLogger(jobId);
   const { buildBookChatSystemPrompt, SCHEMA_BOOK_CHAT } = await getPrompts(userEmail);
   const effectiveProvider = resolveProvider({ userEmail });
-  _applyBookChatClaudeOverrides(effectiveProvider, logger);
+  _applyBookChatAiOverrides(effectiveProvider, logger);
   const aiCfg = getContextConfigFor(effectiveProvider);
   try {
     updateJob(jobId, { statusText: 'job.phase.preparing', progress: 5 });
@@ -175,7 +147,7 @@ async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, u
     if (embed.isEnabled()) {
       updateJob(jobId, { statusText: 'job.phase.selectingPages', progress: 20 });
       try {
-        const sem = await _selectPassagesSemantic(session.book_id, message, TEXT_CHAR_BUDGET, jobSignal, userToken);
+        const sem = await selectPassagesSemantic(session.book_id, message, TEXT_CHAR_BUDGET, jobSignal, userToken);
         if (sem) {
           ({ selectedPages, usedChars, totalPages } = sem);
           retrievalMode = 'semantic';
@@ -333,8 +305,26 @@ async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, u
 // Ersetzt runBookChatJob bei API_PROVIDER=claude (und BOOK_CHAT_MODE != 'classic').
 // Der Agent ruft Tools aus routes/jobs/book-chat-tools.js auf, um Fragen
 // über den gesamten Buchindex zu beantworten, statt alle Seiten vorab zu laden.
-function _bookChatMaxToolIter() {
-  return parseInt(appSettings.get('jobs.book_chat.max_tool_iter'), 10) || 6;
+// Iterations-Deckel. Lokale Provider bekommen einen eigenen, niedrigeren Wert:
+// ohne Prompt-Caching kostet jede Runde den vollen Prompt erneut (Werkzeugkatalog +
+// Historie + alle bisherigen Tool-Results), und eine Runde dauert dort Sekunden bis
+// Minuten. `..._local = 0` schaltet den eigenen Deckel ab.
+function _bookChatMaxToolIter(provider, userEmail) {
+  const base = parseInt(appSettings.get('jobs.book_chat.max_tool_iter'), 10) || 6;
+  if (providerClass(provider, { userEmail }) !== 'local') return base;
+  const local = parseInt(appSettings.get('jobs.book_chat.max_tool_iter_local'), 10) || 0;
+  return local > 0 ? Math.min(base, local) : base;
+}
+
+// Werkzeugsatz: 'full' (alle 37) oder 'slim' (kuratierte Teilmenge, SSoT
+// BOOK_CHAT_SLIM_TOOL_NAMES in public/js/prompts/book-chat-tools.js). 'auto' folgt der
+// Provider-KLASSE — der volle Katalog kostet ~10k Input-Tokens pro Iteration, die ein
+// lokaler Endpunkt ohne Caching jede Runde neu bezahlt, und ein kleineres Modell
+// wählt aus 16 Werkzeugen zuverlässiger als aus 37.
+function _bookChatToolSet(provider, userEmail) {
+  const mode = String(appSettings.get('jobs.book_chat.tool_set') || 'auto').toLowerCase();
+  if (mode === 'slim' || mode === 'full') return mode;
+  return providerClass(provider, { userEmail }) === 'local' ? 'slim' : 'full';
 }
 // Per-Iteration-Limit für Input-Tokens (Context-Window-Schutz, nicht kumulativ).
 // Default = `ai.<provider>.context_window` − `ai.<provider>.max_tokens_out` − Puffer.
@@ -350,18 +340,22 @@ function _toolResultCapChars(maxIter, aiCfg) {
 }
 
 // Pfadwahl haengt am EFFEKTIVEN Provider (KI-Profil aus app_users.ai_profile_id vor
-// globalem `ai.provider`), nicht am globalen Setting: Tool-Use gibt es nur bei
-// Claude. Ein auf openai-compat uebersteuerter User landete bei global=claude
-// sonst im agentischen Pfad, wo lib/ai/core.js «Tool-Use nicht unterstuetzt»
-// wirft — ohne Rueckfall auf den klassischen Buch-Chat. userEmail ist im
+// globalem `ai.provider`), nicht am globalen Setting: ein auf openai-compat
+// uebersteuerter User landete bei global=claude sonst im Claude-Pfad. userEmail ist im
 // Dispatch-Pfad vorhanden; ohne Argument zieht resolveProvider den User aus dem
 // ALS-Context des Job-Workers.
+//
+// Ob ueberhaupt Werkzeuge gehen, entscheidet `providerSupportsTools`
+// (lib/ai/config.js) — dieselbe Frage, die auch der Dispatch in lib/ai/core.js
+// stellt. Zwei verschiedene Fragen an dieser Stelle hiessen: Job waehlt den
+// agentischen Pfad, und der erste Call wirft «Tool-Use nicht unterstuetzt».
+// `mode='agent'` erzwingt nichts, was der Provider nicht kann — es schaltet nur den
+// klassischen Pfad als Alternative aus.
 function _bookChatUseAgent(userEmail) {
   const provider = resolveProvider({ userEmail });
   const mode = String(appSettings.get('jobs.book_chat.mode') || 'auto').toLowerCase();
   if (mode === 'classic') return false;
-  if (mode === 'agent')   return provider === 'claude';
-  return provider === 'claude'; // 'auto'
+  return providerSupportsTools(provider);
 }
 
 // final_answer-Tool-Use auswerten: Zitate validieren (Beweisspur, nicht blockierend),
@@ -406,6 +400,21 @@ async function _consumeFinalAnswer(finalUse, ctx, toolLog, iterNum, logger) {
   return JSON.stringify({ antwort });
 }
 
+// Erst-Kontext holen (non-fatal). Ohne Embedding-Index gibt es ihn nicht — dann
+// arbeitet der Agent wie vorher ausschliesslich über seine Werkzeuge.
+async function _agentPreContext(bookId, message, jobSignal, logger) {
+  if (!embed.isEnabled() || !message) return null;
+  try {
+    const pre = await preContextPassages(bookId, message, { signal: jobSignal });
+    if (pre) logger.info(`Erst-Kontext: ${pre.hits.length} Passagen, ${pre.chars} Zeichen.`);
+    return pre;
+  } catch (e) {
+    if (e.name === 'AbortError') throw e;
+    logger.warn(`Erst-Kontext-Retrieval fehlgeschlagen (${e.message}) – Agent arbeitet nur über Werkzeuge.`);
+    return null;
+  }
+}
+
 // Agentischer Buch-Chat: ruft Tools aus routes/jobs/book-chat-tools.js auf, um
 // Fragen über den gesamten Buchindex zu beantworten, statt alle Seiten vorab zu
 // laden. Loop/Persistenz kommen aus makeAgenticChatJob (siehe agentic-chat.js);
@@ -417,7 +426,7 @@ const runBookChatJobAgent = makeAgenticChatJob({
   callProvider: undefined,   // lässt lib/ai den (ggf. via setContext überschriebenen) Provider auflösen
   resolveProvider: (userEmail, logger) => {
     const effectiveProvider = resolveProvider({ userEmail });
-    _applyBookChatClaudeOverrides(effectiveProvider, logger);
+    _applyBookChatAiOverrides(effectiveProvider, logger);
     return effectiveProvider;
   },
 
@@ -427,20 +436,37 @@ const runBookChatJobAgent = makeAgenticChatJob({
     WHERE cs.id = ? AND cs.user_email = ?
   `).get(parseInt(sessionId), userEmail),
 
-  async prepare({ session, userEmail, userToken, aiCfg, logger, jobSignal }) {
-    const { buildBookChatAgentSystemPrompt, BOOK_CHAT_TOOLS, BOOK_CHAT_FORCE_FINAL_INSTRUCTION } = await getPrompts(userEmail);
+  async prepare({ session, userEmail, userToken, aiCfg, logger, jobSignal, message }) {
+    const { buildBookChatAgentSystemPrompt, BOOK_CHAT_TOOLS, BOOK_CHAT_SLIM_TOOL_NAMES, BOOK_CHAT_FORCE_FINAL_INSTRUCTION } = await getPrompts(userEmail);
     const figuren = getFiguren(session.book_id, userEmail);
     const review  = getLatestReview(session.book_id, userEmail);
     const { SYSTEM_BOOK_CHAT: bookChatSys } = await getBookPrompts(session.book_id, userEmail);
-    const maxToolIter = _bookChatMaxToolIter();
-    const systemPrompt = buildBookChatAgentSystemPrompt(session.book_name || '', figuren, review, bookChatSys, maxToolIter);
+    const provider = resolveProvider({ userEmail });
+    const maxToolIter = _bookChatMaxToolIter(provider, userEmail);
+    // Erst-Kontext: die semantisch nächsten Passagen zur Frage, bevor der Loop startet.
+    // Die häufigste Frageform ist eine schmale Faktenfrage; ohne diesen Block beginnt der
+    // Agent bei null und lädt im Zweifel ganze Kapitel — der Block kostet ein paar Tausend
+    // Tokens, eine get_chapter_text-Runde ein Vielfaches. Nicht-fatal: fällt der Embedding-
+    // Endpunkt aus, läuft der Agent wie vorher rein über seine Werkzeuge.
+    const preContext = await _agentPreContext(session.book_id, message, jobSignal, logger);
+    const embOn = embed.isEnabled();
     // generate_image / search_similar nur anbieten, wenn der jeweilige Endpunkt
     // (Bild bzw. Embeddings) konfiguriert ist — sonst spart das Input-Tokens und
-    // das Modell ruft kein totes Werkzeug.
+    // das Modell ruft kein totes Werkzeug. Im Slim-Satz (lokale Provider) faellt
+    // zusaetzlich alles weg, was nicht auf der kuratierten Liste steht.
     const imgOn = imageGenEnabled();
-    const embOn = embed.isEnabled();
+    const toolSet = _bookChatToolSet(provider, userEmail);
+    const slim = toolSet === 'slim' ? new Set(BOOK_CHAT_SLIM_TOOL_NAMES) : null;
     const tools = BOOK_CHAT_TOOLS.filter(t =>
-      (t.name !== 'generate_image' || imgOn) && (t.name !== 'search_similar' || embOn));
+      (!slim || slim.has(t.name))
+      && (t.name !== 'generate_image' || imgOn) && (t.name !== 'search_similar' || embOn));
+    // Der Prompt darf nur empfehlen, was tatsaechlich angeboten wird — sonst
+    // verbrennt das Modell Runden an Werkzeugen, die es nicht hat.
+    const systemPrompt = buildBookChatAgentSystemPrompt(
+      session.book_name || '', figuren, review, bookChatSys, maxToolIter,
+      { passages: preContext?.hits || [], semantic: embOn, toolNames: tools.map(t => t.name) },
+    );
+    logger.info(`Werkzeugsatz: ${toolSet} (${tools.length} Werkzeuge), max ${maxToolIter} Iterationen, Provider=${provider}/${providerClass(provider, { userEmail })}.`);
     return {
       systemPrompt,
       tools,
@@ -451,12 +477,19 @@ const runBookChatJobAgent = makeAgenticChatJob({
       ctx: {
         bookId: session.book_id, sessionId: session.id, userEmail, userToken,
         jobSignal, logger,
+        // Welcher Werkzeugsatz lief — landet in context_info (Kosten-Diagnose:
+        // ein Slim-Lauf beantwortet manche Frage nicht, das muss sichtbar sein).
+        toolSet, toolsOffered: tools.length,
         // generate_image-Tool sammelt hier {image_id, prompt, mime}; nach dem Loop
         // in context_info.images persistiert (Frontend-Anzeige im Verlauf).
         images: [],
         // Input-Budget des effektiven Providers — list_chapters leitet daraus ab,
         // ob das ganze Buch in den Kontext passt (Voll-Lektüre statt search-Raten).
         inputBudgetChars: aiCfg.inputBudgetChars,
+        // Erst-Kontext-Kennzahlen für context_info (Frontend-Plakette + Kosten-Diagnose).
+        preContext: preContext
+          ? { count: preContext.hits.length, chars: preContext.chars }
+          : null,
       },
     };
   },
@@ -477,12 +510,21 @@ const runBookChatJobAgent = makeAgenticChatJob({
     mode: 'agent',
     tool_calls: toolLog,
     iterations: iter + 1,
+    ...(ctx.toolSet ? { tool_set: ctx.toolSet, tools_offered: ctx.toolsOffered } : {}),
+    ...(ctx.preContext ? { pre_context: ctx.preContext } : {}),
     // Im Chat generierte Bilder — Frontend rendert sie unter der Antwort.
     ...(ctx.images.length ? { images: ctx.images } : {}),
   }),
 
   buildSummary: ({ sessionId, toolLog, iter }) =>
     `Agent session=${sessionId}, ${toolLog.length} Tool-Calls, ${iter + 1} Iter`,
+
+  // Endpunkt/Modell sprechen kein Tool-Protokoll (400/404/422 mit Tool-Bezug, oder
+  // `ai.openai-compat.tools=false` waehrend der Job schon lief): statt den Job zu
+  // verlieren, dieselbe Frage klassisch beantworten. Greift nur, solange nichts
+  // persistiert wurde — der Fehler kann ausschliesslich am callAIWithTools auftreten,
+  // und der liegt vor jedem Schreibpfad.
+  fallbackJob: runBookChatJob,
 });
 
 // Dispatcher: wählt zwischen Agent-Pfad und klassischem Pfad.

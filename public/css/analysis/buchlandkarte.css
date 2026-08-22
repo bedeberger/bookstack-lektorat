@@ -1,0 +1,86 @@
+@layer components {
+/* === Buchlandkarte ===
+   Punktwolke der Seiten (Chart.js-Scatter) plus zwei Kennzahl-Tabellen.
+   Akzentfarbe kommt über --card-accent (card-accents.css), nicht hier. */
+
+.buchlandkarte-intro,
+.buchlandkarte-section-hint {
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+  margin: var(--space-sm) 0;
+  max-width: 70ch;
+}
+
+.buchlandkarte-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  align-items: baseline;
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+  margin-bottom: var(--space-sm);
+}
+.buchlandkarte-meta-note { color: var(--color-warn-text); }
+
+/* Quadratisch, weil beide Achsen mit demselben Faktor skaliert sind: ein
+   gestreckter Rahmen verzerrte die Abstände und damit die einzige Aussage, die
+   die Karte macht. Höhe gedeckelt, damit sie auf dem Laptop komplett sichtbar
+   bleibt — die Tabellen darunter gehören dazu. */
+.buchlandkarte-canvas-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 640px;
+  aspect-ratio: 1;
+  max-height: 70vh;
+  margin: var(--space-sm) auto;
+}
+.buchlandkarte-canvas-wrap > canvas { cursor: pointer; }
+
+.buchlandkarte-variance,
+.buchlandkarte-hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-muted);
+  text-align: center;
+  margin: var(--space-3) 0;
+}
+/* Nur die schwache Lage wird eingefärbt: dort ist die Aussage der Karte
+   eingeschränkt, und das muss auffallen. */
+.buchlandkarte-variance--weak { color: var(--color-warn-text); }
+
+/* Der Abschnitts-Titel selbst nutzt `.section-heading` (DESIGN.md
+   „Heading-Hierarchie in Karten") — bewusst keine eigene Titel-Klasse. */
+.buchlandkarte-section { margin-top: var(--space-lg); }
+
+.buchlandkarte-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+.buchlandkarte-table th,
+.buchlandkarte-table td {
+  padding: var(--space-6) var(--space-sm);
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  vertical-align: baseline;
+}
+.buchlandkarte-table th {
+  font-weight: 600;
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+.buchlandkarte-table tbody tr:hover { background: var(--color-hover-light); }
+
+/* Zahlen rechts und tabellarisch — Prozentwerte sollen untereinander
+   vergleichbar sein, nicht tanzen. */
+.buchlandkarte-num,
+.buchlandkarte-num-inline {
+  font-variant-numeric: tabular-nums;
+}
+.buchlandkarte-num { text-align: right; }
+.buchlandkarte-num-inline {
+  margin-left: var(--space-6);
+  color: var(--color-muted);
+  font-size: var(--font-size-xs);
+}
+
+}

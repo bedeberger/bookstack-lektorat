@@ -36,6 +36,7 @@ const { lookupDoi, lookupIsbn, normalizeDoi, normalizeIsbn } = require('../lib/s
 const { localIsoDate } = require('../lib/local-date');
 const { canRead, isOwner } = require('./sources-acl');
 const sourcesDocRouter = require('./sources-doc');
+const sourcesEvidenceRouter = require('./sources-evidence');
 const logger = require('../logger');
 
 const router = express.Router();
@@ -44,6 +45,9 @@ const jsonBody = express.json({ limit: '256kb' });
 // Entfernen + Embed-Index-Trigger). Frueh eingehaengt, damit `/:id/doc` nicht
 // erst hinter den CRUD-Routen liegt.
 router.use('/', sourcesDocRouter);
+// Belegvorschlag (`/evidence`): ebenfalls frueh, sonst faengt der `/:id`-Handler
+// den Pfad als Id ab. Eigener Router aus demselben Grund wie der Dokument-Teil.
+router.use('/', sourcesEvidenceRouter);
 // Import-Text ist eine hochgeladene Datei im JSON-Feld — eine Zotero-Bibliothek
 // sprengt das CRUD-Limit muehelos. Eigener Parser mit eigenem Limit statt das
 // CRUD-Limit fuer alle Routen anzuheben.

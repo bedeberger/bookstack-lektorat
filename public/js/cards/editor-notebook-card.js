@@ -16,12 +16,10 @@ export function registerEditorNotebookCard() {
   if (typeof window === 'undefined' || !window.Alpine) return;
   window.Alpine.data('editorNotebookCard', () => ({
     _notebookRestoreSnapshot: null,
-    // Undo/Redo: Session-scoped Stack (siehe editor/notebook/history.js).
-    // Initial leer; `startEdit` ruft `_historyReset(initialHtml)`.
-    _undoStack: [],
-    _undoIdx: -1,
-    _undoTimer: null,
-    _undoApplying: false,
+    // Undo/Redo: Session-scoped Historie (siehe editor/notebook/history.js,
+    // Kern in editor/shared/edit-history.js). Instanz entsteht beim ersten
+    // Zugriff — `startEdit` ruft `_historyReset(initialHtml)`.
+    _editHistory: null,
     // Steuerzeichen-Overlay (Soft-Break-Marken ↵): Listener-/Observer-Handles
     // (siehe editor/notebook/format-marks.js).
     _formatMarksRaf: null,

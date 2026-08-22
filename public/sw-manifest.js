@@ -4,7 +4,7 @@
 //
 // __SHELL_BUILD: content hash over all listed assets → drives SHELL_CACHE.
 // __SHELL_MANIFEST: the coherent set precached atomically at SW install.
-self.__SHELL_BUILD = "c82ef72224fabe75";
+self.__SHELL_BUILD = "25d7e2331c6f68a6";
 self.__SHELL_MANIFEST = [
   "/css/admin/admin-backup.css",
   "/css/admin/admin-home.css",
@@ -15,6 +15,7 @@ self.__SHELL_MANIFEST = [
   "/css/admin/logs.css",
   "/css/admin/parse-fails.css",
   "/css/analysis/analysis.css",
+  "/css/analysis/buchlandkarte.css",
   "/css/analysis/erzaehlprofil.css",
   "/css/analysis/heatmap.css",
   "/css/analysis/kapitel-review.css",
@@ -228,6 +229,7 @@ self.__SHELL_MANIFEST = [
   "/js/book/book-settings/merge.js",
   "/js/book/book-settings/settings.js",
   "/js/book/bookstats.js",
+  "/js/book/buchlandkarte.js",
   "/js/book/diary-calendar.js",
   "/js/book/ereignisse.js",
   "/js/book/erzaehlprofil.js",
@@ -319,6 +321,7 @@ self.__SHELL_MANIFEST = [
   "/js/cards/book-review-card.js",
   "/js/cards/book-settings-card.js",
   "/js/cards/book-stats-card.js",
+  "/js/cards/buchlandkarte-card.js",
   "/js/cards/card-lifecycle.js",
   "/js/cards/catalog-store.js",
   "/js/cards/catalog-ui-store.js",
@@ -452,6 +455,7 @@ self.__SHELL_MANIFEST = [
   "/js/editor/focus/trampoline.js",
   "/js/editor/focus/typewriter.js",
   "/js/editor/focus/viewport.js",
+  "/js/editor/lektorat-evidence.js",
   "/js/editor/lektorat.js",
   "/js/editor/notebook/card.js",
   "/js/editor/notebook/edit.js",
@@ -719,6 +723,7 @@ self.__SHELL_MANIFEST = [
   "/partials/bookoverview-songs.html",
   "/partials/bookoverview.html",
   "/partials/bookstats.html",
+  "/partials/buchlandkarte.html",
   "/partials/buchorganizer.html",
   "/partials/buchreview.html",
   "/partials/chat.html",

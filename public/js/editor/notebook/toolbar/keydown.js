@@ -6,6 +6,7 @@
 
 import { getEditEl, placeCaretIn, _brLeftOfCaret, _formatStamp, findTodoLi, findPoemP, findFigcaption, findBlock, topLevelBlock, caretAtBlockStart, caretAtBlockEnd, MERGE_BLOCK_TAGS, ATOMIC_BLOCK_TAGS, BOUNDARY_WRAPPER_SEL, wrapperInnerBlocks } from './_shared.js';
 import { createTodoItem, TODO_TEXT_SEL, TODO_LIST_SEL } from '../../shared/todo-html.js';
+import { matchHistoryCommand } from '../../shared/shortcuts.js';
 
 export const keydownMethods = {
   // Reihenfolge ist verhaltensrelevant (z.B. Shift+Enter vor Enter-in-Todo).
@@ -152,16 +153,22 @@ export const keydownMethods = {
     return true;
   },
 
-  // Undo/Redo — nur im Notebook (Focus fällt durch → Hard-Stop im Dispatcher).
-  // Cmd/Ctrl+Z → Undo, Cmd/Ctrl+Shift+Z + Ctrl+Y → Redo. Browser-Default
-  // bewusst überschrieben — eigener Stack ist nach Slash/HR-Mutationen
+  // Undo/Redo. Griffe kommen aus `matchHistoryCommand` (shared/shortcuts.js) —
+  // dieselbe Funktion bindet der Fokusmodus (focus/listeners.js). Browser-Default
+  // bewusst überschrieben: der eigene Stack ist nach Slash/HR-Mutationen
   // konsistent, der Browser-Stack ist es nicht.
+  //
+  // Der Fokusmodus fällt hier durch (→ Hard-Stop im Dispatcher) und wird von
+  // seinem eigenen Container-Listener bedient, der VOR diesem document-Level-
+  // Dispatcher läuft und das Event per stopPropagation verbraucht. Beide Wege
+  // landen auf derselben Historie (siehe notebook/history.js).
   _kbUndoRedo(e, app) {
-    if (app.focusActive || !(e.metaKey || e.ctrlKey) || e.altKey) return false;
-    if (!e.shiftKey && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); app.notebookUndo?.(); return true; }
-    if (e.shiftKey && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); app.notebookRedo?.(); return true; }
-    if (!e.shiftKey && (e.key === 'y' || e.key === 'Y')) { e.preventDefault(); app.notebookRedo?.(); return true; }
-    return false;
+    if (app.focusActive) return false;
+    const cmd = matchHistoryCommand(e);
+    if (!cmd) return false;
+    e.preventDefault();
+    if (cmd === 'undo') app.notebookUndo?.(); else app.notebookRedo?.();
+    return true;
   },
 
   // Slash-Menü-Navigation, wenn geöffnet. Bei offenem Menü werden ALLE Tasten
