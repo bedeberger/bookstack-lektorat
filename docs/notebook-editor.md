@@ -2,7 +2,7 @@
 
 Klassischer Bearbeitungsmodus **für eine einzelne Seite**: `contenteditable` mit Toolbar (Bubble + Slash), Inline-Findings, Draft-/Autosave-Pipeline, Stale-Write-Schutz und Snapshot-Wiederaufnahme. Einer von drei unabhängigen Editoren der App — die anderen beiden sind der [Focus-Editor](focus-editor.md) (eigenständiger Vollbild-Schreibmodus, läuft auf demselben Seiten-Container) und der [Bucheditor](book-editor.md) (eigenständige Karte mit Manuskript-Stream über das ganze Buch). Bei Änderungswünschen muss der User immer nennen, welcher Editor gemeint ist (Harte Regel in [CLAUDE.md](../CLAUDE.md)).
 
-Implementations-Detail: Notebook- und Focus-Editor teilen die Save-/HTML-Pipeline aus [public/js/editor/shared/](../public/js/editor/shared/) (`save-pipeline.js`, `html-clean.js`, `active-editor.js`); das macht sie nicht zu einem Editor — es ist eine geteilte Lib. Bucheditor nutzt `shared/` bewusst nicht (eigener Save-Pfad mit Per-Block-Queue). Alle drei Editoren schreiben über die [Content-Store-Facade](../lib/content-store/).
+Implementations-Detail: Notebook- und Focus-Editor teilen die Save-/HTML-Pipeline aus [public/js/editor/shared/](../public/js/editor/shared/) (`save-pipeline.js`, `html-clean.js`, `active-editor.js`, `edit-history.js`); das macht sie nicht zu einem Editor — es ist eine geteilte Lib. Bucheditor nutzt `shared/` bewusst nicht (eigener Save-Pfad mit Per-Block-Queue). Alle drei Editoren schreiben über die [Content-Store-Facade](../lib/content-store/).
 
 Code: [public/js/editor/notebook/edit.js](../public/js/editor/notebook/edit.js) (Facade, spreadet die Submodule aus `edit/` zu `notebookEditMethods`), [public/js/editor/notebook/toolbar.js](../public/js/editor/notebook/toolbar.js) (Facade für `editorToolbarCard`, spreadet aus `toolbar/`), [public/js/editor/notebook/storage.js](../public/js/editor/notebook/storage.js) (Snapshot), [public/js/editor/notebook/history.js](../public/js/editor/notebook/history.js) (Undo/Redo-Stack pro Edit-Session). Der Editor-Kern greift auf den Root nicht direkt via `window.__app` zu, sondern über `editorHost()` ([shared/editor-host.js](../public/js/editor/shared/editor-host.js)) — in der SPA ist das `window.__app`, in einer fremden Schale ein injizierter Host. Ausnahme: `card.js` (Reload-Restore-Glue) und `toolbar/` (notebook-only Chrome) bleiben auf `window.__app`. Card-Wrapper: [public/js/cards/editor-toolbar-card.js](../public/js/cards/editor-toolbar-card.js). Partials: [public/partials/editor-notebook.html](../public/partials/editor-notebook.html), [public/partials/editor-body-edit.html](../public/partials/editor-body-edit.html), [public/partials/editor-toolbar.html](../public/partials/editor-toolbar.html). CSS: [public/css/editor/notebook/](../public/css/editor/notebook/).
 
@@ -131,21 +131,23 @@ Reihenfolge = Pflicht-Invariante #11: Draft → Snapshot → Autosave → Online
 
 ## Undo/Redo (Session-scoped, pro Seite)
 
-Eigener Stack in [editor/notebook/history.js](../public/js/editor/notebook/history.js) — Browser-eigener Undo-Stack kollabiert sobald wir `innerHTML` oder `replaceChild` aufrufen (Slash-Menü, HR, Paste-Cleaner), darum eine eigene Snapshot-Kette.
+Eigener Stack statt Browser-Stack — der kollabiert, sobald wir `innerHTML` oder `replaceChild` aufrufen (Slash-Menü, HR, Paste-Cleaner). Der Kern liegt in [shared/edit-history.js](../public/js/editor/shared/edit-history.js) (`createEditHistory`, framework-frei, ohne Import) und wird mit dem **Fokusmodus in fremden Schalen** geteilt; [editor/notebook/history.js](../public/js/editor/notebook/history.js) ist nur noch die Karten-Glue darum: Container-Lookup, Mount-Pipeline, Dirty-Flag + Draft/Autosave. Der zweite Grund für den eigenen Stack steht in [focus-editor.md → Invariante 19](focus-editor.md) (WebKit führt eine ganze Tippstrecke als EINEN Schritt).
+
+**Diese Historie bedient BEIDE Modi derselben Edit-Session.** Der Fokusmodus ist in der SPA kein eigener Editor, sondern derselbe Edit-Vorgang auf einem gespiegelten Container: `_getEditEl` (→ `getActiveEditorContainer`) löst dorthin auf, und `@input="_markEditDirty()"` am Fokus-Container schiebt seine Snapshots hier herein. Ein zweiter Stack für den Fokusmodus wäre eine zweite Wahrheit über denselben Inhalt — stattdessen läuft die Historie durch den Modus-Wechsel hindurch. Eine eigene Instanz hat nur die fremde Schale ([focus/standalone.js](../public/js/editor/focus/standalone.js)), die ohne Alpine und ohne Notebook-Karte läuft.
 
 **Lifecycle:**
 - `startEdit` → `_historyReset(initialHtml)` legt Baseline-Snapshot.
 - `_markEditDirty` → `_historyPushSoon` (debounced 500 ms) — Tipp-Serien werden zu einem Schritt zusammengefasst. Dedup gegen Top-of-Stack.
-- Undo/Redo flush'en pending Debounce, dann `idx--/idx++` und `_historyRestore(snap)` setzt `innerHTML` + Caret.
-- `cancelEdit` / `saveEdit` (non-focus) → `_historyClear` — Session-Ende = Stack-Ende.
+- Undo/Redo lösen einen offenen Debounce zuerst ein (sonst ginge die gerade getippte Strecke verloren statt rückgängig gemacht zu werden), dann Index-Schritt + Restore.
+- `cancelEdit` / `saveEdit` (non-focus) → `_historyClear` — Session-Ende = Stack-Ende. **Der Focus-Branch von `saveEdit` clearet nicht** (User schreibt weiter, Autosave alle 1,5 s — ein Clear am Save nähme genau die Schritte weg, die er zurückholen will).
 
-**State** (Initial-Felder in [cards/editor-notebook-card.js](../public/js/cards/editor-notebook-card.js)): `_undoStack` (Array `{ html, caretOffset }`, Cap 100), `_undoIdx`, `_undoTimer`, `_undoApplying`.
+**State** (Initial-Feld in [cards/editor-notebook-card.js](../public/js/cards/editor-notebook-card.js)): `_editHistory` — die Instanz (Stack `{ html, caretOffset }`, Cap 100, Debounce 500 ms, Applying-Flag leben in ihrer Closure). Erzeugt beim ersten Zugriff über `_historyEnsure`; `startEdit` ist über `_historyReset` immer der erste Aufrufer.
 
 **Caret-Restore**: Text-Offset vom Editor-Root (Tree-Walker, SHOW_TEXT). Robust über strukturelle Mutationen (Slash, HR), bei reinen Text-Edits exakt.
 
-**Restore-Pfad**: setzt `_undoApplying=true`, schreibt `innerHTML`, restored Caret, ruft `_scheduleDraftSave`/`_scheduleAutosave` (Draft + Autosave laufen weiter), dispatcht `input`-Event (LanguageTool re-check). `_markEditDirty` skipt während des Flags den Push — so wird das Restore nicht selbst zum neuen Stack-Eintrag.
+**Restore-Pfad**: setzt intern das Applying-Flag, mountet über `mountEditorHtml` (dieselbe Pipeline wie `startEdit` — ein Snapshot kann einen transienten Zwischenstand ohne Block-Wrapper/Caret-Slot eingefangen haben), restored Caret, ruft `_scheduleDraftSave`/`_scheduleAutosave` (Draft + Autosave laufen weiter) und dispatcht ein **`InputEvent` mit `inputType: 'historyUndo'`/`'historyRedo'`**. Der `inputType` ist Vertrag mit dem nativen macOS-Client (Hinweis-Banner, Dirty-Flag, Auto-Save, Live-Statistik, Rechtschreib-Neuprüfung), nicht Kosmetik. Ein Push während des Flags ist ein No-op — so wird das Restore nicht selbst zum neuen Stack-Eintrag (sonst wäre Redo nach jedem Undo sofort tot).
 
-**UI**: Buttons in [editor-notebook.html](../public/partials/editor-notebook.html) `.page-editor-toolbar` (icons `#undo`/`#redo`), Disabled via `notebookCanUndo()`/`notebookCanRedo()`. Keybinds in [toolbar.js](../public/js/editor/notebook/toolbar.js) `_onEditKeydown`: Cmd/Ctrl+Z = Undo, Cmd/Ctrl+Shift+Z + Ctrl+Y = Redo. Im Focus-Editor deaktiviert (Gate `!app.focusActive`).
+**UI**: Buttons in [editor-notebook.html](../public/partials/editor-notebook.html) `.page-editor-toolbar` (icons `#undo`/`#redo`), Disabled via `notebookCanUndo()`/`notebookCanRedo()`. Keybinds in [toolbar/keydown.js](../public/js/editor/notebook/toolbar/keydown.js) `_kbUndoRedo`: Cmd/Ctrl+Z = Undo, Cmd/Ctrl+Shift+Z + Ctrl+Y = Redo — Griffe aus `matchHistoryCommand` ([shared/shortcuts.js](../public/js/editor/shared/shortcuts.js)), derselben SSoT, die der Fokusmodus bindet. Im Fokusmodus fällt dieser document-Level-Dispatcher durch; dort bedient der Container-Listener des Fokusmodus dieselbe Historie und verbraucht das Event vorher per `stopPropagation`.
 
 ## Autosave + Draft
 
@@ -366,7 +368,8 @@ Beide Editoren (Notebook + Focus) konsumieren ausschliesslich aus `shared/`:
 | [dom-block.js](../public/js/editor/shared/dom-block.js) | `TEXT_BLOCK_TAGS` + `composeBlockSel` (Vokabular-SSoT aller Blockselektoren), `CARET_BLOCK_SEL`, `findBlock`, `topLevelBlock`, `caretAtBlockStart/End` — Block-Lookup im contenteditable (Toolbar-Keydown + Grenz-Handler + HR-Insert) |
 | [edit-counter.js](../public/js/editor/shared/edit-counter.js) | `installEditCounter` (Re-Export; Container-Per-Instance) |
 | [active-editor.js](../public/js/editor/shared/active-editor.js) | `getActiveEditorContainer`, `getActiveEditorMode` — Smart-Switch zwischen Notebook + Focus |
-| [shortcuts.js](../public/js/editor/shared/shortcuts.js) | `matchInlineCommand` (Whitelist-Test), `bindInlineFormattingShortcuts` (Cmd/Ctrl+B/I/U Bindings) |
+| [shortcuts.js](../public/js/editor/shared/shortcuts.js) | `matchInlineCommand` (Whitelist-Test), `bindInlineFormattingShortcuts` (Cmd/Ctrl+B/I/U Bindings), `matchHistoryCommand` (Cmd/Ctrl+Z · +Shift+Z · +Y → `'undo'`/`'redo'` — SSoT beider Undo-Handler) |
+| [edit-history.js](../public/js/editor/shared/edit-history.js) | `createEditHistory({ getRoot, mountHtml, onRestored })` — Undo/Redo-Kern (Snapshot-Stack + Caret-Offset + Debounce + `inputType`-Vertrag), framework-frei und **importfrei**. Zwei Instanzen: die Notebook-Karte (beide SPA-Modi) und die Standalone-Schale. `mountHtml` ist injiziert, damit die Schale nicht die Notebook-Pipeline und mit ihr `cite`/`xref`/`mermaid`/`table`-html ins OTA-Bundle zieht |
 
 Kein Cross-Import `notebook/` ↔ `focus/`. Gemeinsames läuft strikt über `shared/`.
 

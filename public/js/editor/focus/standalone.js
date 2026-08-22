@@ -191,8 +191,6 @@ export async function mountStandaloneFocus({ mount, bridge, autosaveMs = DEFAULT
     // Tastengriff in listeners.js#onHistoryKey.
     focusUndo() { history.undo(); },
     focusRedo() { history.redo(); },
-    focusCanUndo() { return history.canUndo(); },
-    focusCanRedo() { return history.canRedo(); },
   };
 
   // Eingaben markieren dirty (Engine ruft _markEditDirty nur bei Inline-Format)

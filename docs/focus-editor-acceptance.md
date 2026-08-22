@@ -33,6 +33,7 @@ bzw. Cmd/Ctrl+Shift+E.
 | 8 | Granularität in den Einstellungen umschalten (Absatz ↔ Satz) | Umschaltung sofort, ohne Exit/Re-Entry, Markierung korrekt |
 | 9 | Escape (bzw. Exit-Button) | Speichert, Overlay weg, zurück in die Leseansicht, Kennzahlen aktualisiert |
 | 10 | Wieder betreten, Fenster schmal ziehen (< 500 px) | Schreiblinie sitzt weiter auf der Mitte, kein horizontaler Overflow |
+| 11a | Einen Satz tippen, **eine Sekunde warten** (nicht in den Text klicken!), einen zweiten Satz tippen, **einmal** Cmd/Ctrl+Z | Nur der zweite Satz ist weg, der erste steht. Danach Cmd/Ctrl+Shift+Z holt ihn zurück. In **Safari** prüfen: dort nahm der Browser-Undo die ganze Strecke (Invariante 19) |
 | 11 | Kurz vor der Umbruchkante weiterschreiben (Wörter mit Leerschlag), danach Shift+Enter mitten im Absatz **und** am Absatzende; Escape, Seite erneut öffnen | Das letzte Wort bleibt beim Leerschlag auf seiner Zeile (fällt nicht ab und springt zurück). Shift+Enter erzeugt an beiden Stellen eine sichtbare neue Zeile, die nach dem erneuten Öffnen noch da ist |
 
 Zusätzlich bei Änderungen an Save/Draft/Exit:
@@ -57,7 +58,7 @@ npm run test:focus     # Harness-Suite + App-Suite (echtes CSS)
 
 Grün ist die **Untergrenze**, nicht der Beweis: die App-Suite deckt Höhenkette,
 Schreiblinie, erste/letzte Zeile, Tipp-Recenter, Spotlight-bei-Scroll und Exit-Cleanup
-ab. Punkt 6 ist im Harness gegated, Punkt 11 in beiden Suiten; von 7, 8 und 12 jeweils nur die eine Hälfte
+ab. Punkt 6 ist im Harness gegated, Punkt 11 in beiden Suiten, Punkt 11a in `tests/e2e/focus-undo.webkit.spec.js` (WebKit) + der App-Suite (SPA); von 7, 8 und 12 jeweils nur die eine Hälfte
 (Doppelklick / Klassen-Tausch / Save-Reject-Stub), und **Punkt 10 gar nicht** —
 die Aufschlüsselung steht in [focus-editor.md](focus-editor.md#tests).
 

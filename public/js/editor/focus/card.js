@@ -142,8 +142,10 @@ export const focusCardMethods = {
     if (this._focusRaf) { cancelAnimationFrame(this._focusRaf); this._focusRaf = null; }
   },
 
-  // Undo/Redo-Einstiegspunkte des Fokusmodus. Aufrufer sind der Tastengriff
-  // (listeners.js#onHistoryKey) und — in einer fremden Schale — deren Menü.
+  // Undo/Redo-Einstiegspunkte des Fokusmodus. Aufrufer ist der Tastengriff
+  // (listeners.js#onHistoryKey). Ein „kann ich?"-Paar gibt es hier bewusst NICHT:
+  // der Fokusmodus hat keine Knopfleiste, die sie ausgrauen müsste, und die
+  // fremde Schale fragt für ihr Menü das Handle (`canUndo`/`canRedo`).
   //
   // SPA-Default: die Session-Historie der Notebook-Karte. Der Fokusmodus ist
   // hier kein eigener Editor, sondern derselbe Edit-Vorgang auf einem
@@ -156,8 +158,6 @@ export const focusCardMethods = {
   // geteilten Kerns (shared/edit-history.js).
   focusUndo() { editorHost()?.notebookUndo?.(); },
   focusRedo() { editorHost()?.notebookRedo?.(); },
-  focusCanUndo() { return !!editorHost()?.notebookCanUndo?.(); },
-  focusCanRedo() { return !!editorHost()?.notebookCanRedo?.(); },
 
   // Granularität live umschalten, ohne exit/enter: Cardroot-Klasse tauschen und
   // das Overlay neu rechnen. Aufrufer sind der `$watch` der SPA-Karte und
