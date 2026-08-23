@@ -183,6 +183,18 @@
   <!-- Strang-Leiste (Opt-in-Einstieg zu den Swimlanes) -->
   <div id="partial-plot-thread-bar"></div>
 
+  <!-- Archiv-Schalter: abgeschlossene Akte (Beats eingearbeitet) sind aus den
+       Board-Spalten raus — hier holt man sie zum Nachlesen/Wiederaufnehmen zurück.
+       Eigene Zeile statt Teil der Filter-Leiste: das ist keine Beat-Auswahl,
+       sondern eine Aussage über die Spalten, und muss auch dann erreichbar sein,
+       wenn das Buch (noch) keine Beats hat. -->
+  <div class="plot-archive-bar" x-show="archivedActCount() > 0" x-cloak>
+    <label class="filter-toggle">
+      <input type="checkbox" x-model="plotShowArchived">
+      <span x-text="$app.t('plot.archive.show', { n: archivedActCount() })"></span>
+    </label>
+  </div>
+
   <!-- Board: flach (ohne Stränge) ODER Akte×Stränge-Grid (mit Strängen) -->
   <div id="partial-plot-board-flat"></div>
   <div id="partial-plot-board-grid"></div>

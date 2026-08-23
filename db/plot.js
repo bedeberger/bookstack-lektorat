@@ -11,6 +11,13 @@
 // eingearbeitet"). verworfen (0/1) ist eine orthogonale Verwerfen-Achse (bleibt bei
 // Status-Wechsel erhalten). chapter_id (SET NULL) verknüpft den Beat mit dem
 // Kapitel, in dem er im Manuskript landet.
+//
+// archiviert (0/1) auf plot_acts ist die Akt-Ebene davon — und bewusst NICHT
+// dasselbe wie verworfen: „verworfen" heisst ausgemustert (soll nicht ins Buch),
+// „archiviert" heisst erledigt (ist im Buch, Akt abgeschlossen). Die Beats eines
+// archivierten Akts bleiben darum in allen Kennzahlen; das Flag wirkt auf die
+// Anzeige (Spalte hinter dem Archiv-Schalter) und auf den Konsistenz-Prompt (der
+// Akt wird als abgeschlossen deklariert statt weiter beanstandet).
 
 const { db } = require('./connection');
 const { NOW_ISO_SQL } = require('./now');
@@ -20,18 +27,18 @@ const { NOW_ISO_SQL } = require('./now');
 // thread_id NULL = geteilter Akt (Default, flaches Board + Stränge ohne eigene
 // Akte); thread_id = T = Akt gehört nur Strang T (Hybrid-Akte, Migration 193).
 const _stmtListActs = db.prepare(`
-  SELECT id, book_id, user_email, name, farbe, thread_id, position, created_at, updated_at
+  SELECT id, book_id, user_email, name, farbe, thread_id, archiviert, position, created_at, updated_at
     FROM plot_acts
    WHERE book_id = ? AND user_email = ?
    ORDER BY position, id
 `);
 const _stmtInsertAct = db.prepare(`
-  INSERT INTO plot_acts (book_id, user_email, name, farbe, thread_id, position, created_at, updated_at)
-  VALUES (?, ?, ?, ?, ?, ?, ${NOW_ISO_SQL}, ${NOW_ISO_SQL})
+  INSERT INTO plot_acts (book_id, user_email, name, farbe, thread_id, archiviert, position, created_at, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ${NOW_ISO_SQL}, ${NOW_ISO_SQL})
 `);
 const _stmtGetAct = db.prepare('SELECT * FROM plot_acts WHERE id = ?');
 const _stmtUpdateAct = db.prepare(`
-  UPDATE plot_acts SET name = ?, farbe = ?, updated_at = ${NOW_ISO_SQL} WHERE id = ?
+  UPDATE plot_acts SET name = ?, farbe = ?, archiviert = ?, updated_at = ${NOW_ISO_SQL} WHERE id = ?
 `);
 const _stmtSetActPosition = db.prepare(`
   UPDATE plot_acts SET position = ?, updated_at = ${NOW_ISO_SQL} WHERE id = ? AND book_id = ? AND user_email = ?
@@ -49,15 +56,18 @@ function getAct(id) {
   return _stmtGetAct.get(parseInt(id)) || null;
 }
 
-function createAct(bookId, userEmail, { name, farbe = null, threadId = null, position = null }) {
+function createAct(bookId, userEmail, { name, farbe = null, threadId = null, archiviert = 0, position = null }) {
   const tid = threadId != null ? parseInt(threadId) : null;
   const pos = position != null ? parseInt(position) : (_stmtMaxActPos.get(parseInt(bookId), userEmail, tid).m + 1);
-  const info = _stmtInsertAct.run(parseInt(bookId), userEmail, name, farbe, tid, pos);
+  const info = _stmtInsertAct.run(parseInt(bookId), userEmail, name, farbe, tid, archiviert ? 1 : 0, pos);
   return getAct(info.lastInsertRowid);
 }
 
-function updateAct(id, { name, farbe = null }) {
-  _stmtUpdateAct.run(name, farbe, parseInt(id));
+// archiviert wird wie name/farbe als Vollwert übergeben (der Route-Handler füllt
+// nicht übergebene Felder aus dem geladenen Akt auf) — ein Teil-UPDATE mit
+// dynamischem SET-Fragment lohnt bei drei Spalten nicht.
+function updateAct(id, { name, farbe = null, archiviert = 0 }) {
+  _stmtUpdateAct.run(name, farbe, archiviert ? 1 : 0, parseInt(id));
   return getAct(id);
 }
 
@@ -555,7 +565,7 @@ const reorderBeats = db.transaction((bookId, userEmail, order) => {
 // und später wieder auf die geteilten zurückfallen. „Eigene Akte" wird allein aus
 // der Existenz strang-eigener Akte abgeleitet (kein Flag).
 const _stmtSharedActsFull = db.prepare(`
-  SELECT id, name, farbe, position FROM plot_acts
+  SELECT id, name, farbe, archiviert, position FROM plot_acts
    WHERE book_id = ? AND user_email = ? AND thread_id IS NULL ORDER BY position, id
 `);
 const _stmtThreadActs = db.prepare(`
@@ -629,7 +639,9 @@ const forkThreadActs = db.transaction((bookId, userEmail, threadId) => {
   const shared = _stmtSharedActsFull.all(bid, userEmail);
   if (!shared.length) { const e = new Error('NO_SHARED_ACTS'); e.code = 'NO_SHARED_ACTS'; throw e; }
   for (const a of shared) {
-    const info = _stmtInsertAct.run(bid, userEmail, a.name, a.farbe, tid, a.position);
+    // Der Klon erbt archiviert — sonst tauchte ein abgeschlossener Akt beim
+    // Fork im Strang wieder als offene Spalte auf.
+    const info = _stmtInsertAct.run(bid, userEmail, a.name, a.farbe, tid, a.archiviert ? 1 : 0, a.position);
     _stmtRemapBeatAct.run(info.lastInsertRowid, bid, userEmail, tid, a.id);
   }
 });

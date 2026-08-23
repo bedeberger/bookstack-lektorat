@@ -5546,5 +5546,9 @@
   "evidence.search": "Beleg suchen",
   "evidence.searching": "Suche in der Bibliothek …",
   "evidence.unavailable": "Der Embedding-Endpunkt ist nicht erreichbar.",
-  "evidence.willLink": "wird dem Buch zugeordnet"
+  "evidence.willLink": "wird dem Buch zugeordnet",
+  "plot.act.archive": "Akt archivieren (abgeschlossen)",
+  "plot.act.unarchive": "Aus dem Archiv holen",
+  "plot.act.archivedBadge": "archiviert",
+  "plot.archive.show": "Archiv anzeigen ({n})"
 }

@@ -2,6 +2,7 @@
 // Zwei Job-Typen — beide rein planend/überwachend, NIE generativ in den Text:
 //   - Brainstorm:   schlägt Beats (Handlungspunkte) für einen Akt vor.
 //   - Consistency:  prüft den geplanten Plot gegen die Buchrealität
+//                   (archivierte Akte = abgeschlossen: Kontext, kein Arbeitsziel)
 //                   (Kapitel + extrahierte Szenen + Figuren) und meldet
 //                   Brüche, Lücken und „geplant vs. schon geschrieben"-Drift.
 //
@@ -62,9 +63,20 @@ function _boardOutline(acts, beats, threadInfo = null, anchorMap = null) {
     // EIGEN gehören (thread_id). Eigene Akte ausweisen, damit die KI versteht,
     // dass dieser Strang eine unabhängige Aktstruktur hat (kein „fehlt"-Befund).
     const owner = act.thread_id != null && threadInfo ? threadInfo[act.thread_id] : null;
-    const head = owner ? `AKT (eigener Akt von Strang „${owner.name}"): ${act.name}` : `AKT (geteilt): ${act.name}`;
-    return `${head}\n${own.length ? own.join('\n') : '  (noch keine Beats)'}`;
+    // Archivierter Akt: von der Autorin als abgeschlossen erklaert (Beats sind ins
+    // Manuskript eingearbeitet). Bleibt im Outline, weil Kausalitaets- und
+    // Setup/Payoff-Ketten hineinreichen — wird aber als erledigt gekennzeichnet.
+    const scope = owner ? `eigener Akt von Strang „${owner.name}"` : 'geteilt';
+    const arch = act.archiviert ? ', ARCHIVIERT: von der Autorin als abgeschlossen erklärt' : '';
+    return `AKT (${scope}${arch}): ${act.name}\n${own.length ? own.join('\n') : '  (noch keine Beats)'}`;
   }).join('\n\n');
+}
+
+// Gibt es archivierte (abgeschlossene) Akte? Dann braucht der Prompt den Hinweis,
+// wie er sie behandeln soll — sonst produziert er dort Befunde, die die Autorin
+// bewusst zugeklappt hat.
+function _hasArchivedActs(acts) {
+  return (acts || []).some(a => a && a.archiviert);
 }
 
 // Haben Stränge eine eigene Aktstruktur (Hybrid)? Dann lohnt der Erklär-Hinweis,
@@ -356,6 +368,14 @@ export function buildPlotConsistencyPrompt(acts, beats, kapitel = [], szenen = [
     ? '\nVERERBUNG: Ein Beat in einem Strang beteiligt IMPLIZIT dessen Hauptfigur; hat er kein eigenes Kapitel, gilt das Kapitel des Strangs (im Board als „(vom Strang)" markiert). Beanstande einen Beat NICHT als „Figur fehlt"/„Kapitel fehlt", wenn der Strang sie liefert.\n'
     : '';
   const strSeg = strLines ? `\nHANDLUNGSSTRÄNGE (Swimlanes — parallele Erzähllinien, oft je Hauptfigur; im Board hinter den Beats als {Strang: …} annotiert):\n${strLines}\n${inheritNote}` : '';
+  // Archiv-Regel: ein archivierter Akt ist ABGESCHLOSSEN, nicht ausgemustert
+  // (das ist „verworfen" auf Beat-Ebene). Er bleibt im Outline, damit Kausalität
+  // und Setup/Payoff über ihn hinweg prüfbar sind — aber er ist kein Arbeitsziel
+  // mehr. Ausnahme: ein Widerspruch, der IN den offenen Plot hineinreicht, bleibt
+  // meldepflichtig (sonst wäre Archivieren ein Weg, Befunde zu verstecken).
+  const archNote = _hasArchivedActs(acts)
+    ? '\nARCHIVIERTE AKTE: Mit „ARCHIVIERT" gekennzeichnete Akte hat die Autorin als abgeschlossen erklärt — ihre Beats sind ins Manuskript eingearbeitet. Behandle sie als Vorgeschichte/Setup-Kontext, nicht als Arbeitsvorrat: melde dort KEINE Status-Pflege, keine fehlenden Beats und keine dramaturgischen Lücken. Melde einen Befund in einem archivierten Akt nur, wenn er in den noch offenen Plot hineinwirkt (Widerspruch zu einem geplanten Beat, unaufgelöstes Setup, gebrochene Kausalkette) — dann nenne ihn ausdrücklich als Rückwirkung.\n'
+    : '';
   const hybridNote = _hasOwnActs(acts)
     ? '\nHYBRID-AKTE: Manche Stränge haben eine EIGENE Aktstruktur (im Board als „eigener Akt von Strang …" gekennzeichnet), andere teilen sich die geteilten Akte. Ein Strang mit eigenen Akten plant absichtlich unabhängig — beanstande NICHT, dass er die geteilten Akte „überspringt". Prüfe seinen dramaturgischen Bogen INNERHALB seiner eigenen Akte.\n'
     : '';
@@ -401,7 +421,7 @@ Der Marker ist Ähnlichkeit, kein Beweis — urteile am Beleg-Ausschnitt, nicht 
 
 GEPLANTES BEAT-BOARD:
 ${_boardOutline(acts, beats, _threadInfoMap(threads), anchorMap)}
-${anchorSeg}${ctxSeg}${kapSeg}${szSeg}${figSeg}${wfSeg}${orteSeg}${zeitSeg}${kontiSeg}${rechSeg}${strSeg}${hybridNote}${relSeg}
+${anchorSeg}${ctxSeg}${kapSeg}${szSeg}${figSeg}${wfSeg}${orteSeg}${zeitSeg}${kontiSeg}${rechSeg}${strSeg}${hybridNote}${archNote}${relSeg}
 Status-Legende der Beats: geplant (Idee, noch nicht eingearbeitet) · im Buch (laut Plan schon geschrieben). Zusätzlich kann ein Beat als "verworfen" markiert sein (ausgemustert, soll nicht mehr ins Buch).
 
 Prüfe auf:

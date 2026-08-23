@@ -1,6 +1,7 @@
 /* Plot-Werkstatt — Analyse-/Planungs-Widgets rund ums Board: KI-Brainstorm,
    Consistency-Panel, Kapitel-Coverage, Status-Verteilungsbalken, Akt-Farbpalette,
-   Beat-Intensität + Editor und der Spannungsbogen. Ergänzt plot/board.css
+   Beat-Intensität + Editor, der Spannungsbogen und der Archiv-Schalter.
+   Ergänzt plot/board.css
    (lädt NACH board.css; wiederverwendet dessen --col-accent/Tokens). */
 
 @layer components {
@@ -268,5 +269,17 @@
   /* ── Mobile ────────────────────────────────────────────────────────────── */
   @media (max-width: 600px) {
     .plot-tension-chart { height: 88px; }
+  }
+
+  /* ── Archiv-Schalter (abgeschlossene Akte) ─────────────────────────────────
+     Eigene Zeile über dem Board (nicht in der Filter-Leiste): der Schalter sagt
+     etwas über die SPALTEN, nicht über die Beats. Die „archiviert"-Plakette an
+     der Spalte ist das generische `.badge .badge-neutral` (DESIGN.md „Badges &
+     Tags" — wertfreie Einordnung), die Dämpfung liegt in plot/board.css. */
+  .plot-archive-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-2xs) var(--space-2xs) 0;
   }
 }

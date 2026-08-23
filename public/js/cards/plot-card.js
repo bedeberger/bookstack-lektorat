@@ -11,6 +11,7 @@ import { EVT } from '../events.js';
 import { getUserPref, setUserPref } from '../local-prefs.js';
 
 const HIDE_IM_BUCH_PREF_KEY = 'plotHideImBuch';
+const SHOW_ARCHIVED_PREF_KEY = 'plotShowArchived';
 
 // Filterleiste pro Buch im localStorage (siehe public/js/filter-persist.js).
 // `resetPlot` (book/plot/lifecycle.js) fasst `plotFilters` deshalb nicht an.
@@ -73,6 +74,13 @@ export function registerPlotCard() {
     // `resetFilterScopes` abräumen; ebenso weist die Cross-Feature-Landung
     // applyDraftFigureFilter plotFilters komplett neu zu.
     plotHideImBuch: false,
+
+    // Archivierte Akte einblenden. Ein archivierter Akt ist abgeschlossen (Beats
+    // eingearbeitet) und verlässt die Board-Spalten — dieser Schalter holt ihn
+    // zurück ins Bild (zum Nachlesen oder Wiederaufnehmen). Wie plotHideImBuch
+    // eine per User persistierte Arbeitsgewohnheit, kein buch-skopierter Filter,
+    // darum NEBEN plotFilters und nicht in PLOT_FILTER_SCOPES.
+    plotShowArchived: false,
 
     // Beat-Edit / -Add
     editingBeatId: null,
@@ -190,6 +198,14 @@ export function registerPlotCard() {
       // der Karte). Muster wie bookStatsMetric.
       const email = Alpine.store('session').currentUser?.email;
       this.plotHideImBuch = getUserPref(email, HIDE_IM_BUCH_PREF_KEY, false) === true;
+      this.plotShowArchived = getUserPref(email, SHOW_ARCHIVED_PREF_KEY, false) === true;
+      this.$watch('plotShowArchived', (v) => {
+        setUserPref(Alpine.store('session').currentUser?.email, SHOW_ARCHIVED_PREF_KEY, v);
+        // Spalten-Set wechselt → SortableJS muss die Beat-Zellen neu binden
+        // (dasselbe wie beim Akt-/Strang-CRUD, siehe die $watch auf `acts`).
+        this._memos = {};
+        this._scheduleReattach();
+      });
       this.$watch('plotHideImBuch', (v) => {
         setUserPref(Alpine.store('session').currentUser?.email, HIDE_IM_BUCH_PREF_KEY, v);
         // Widerspruchsfreie Leiste: „nur im Buch" + „im Buch ausblenden" ergäbe

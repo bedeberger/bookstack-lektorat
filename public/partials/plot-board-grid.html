@@ -22,7 +22,9 @@
             <div class="plot-swim-corner" :class="{ 'plot-swim-corner--thread': row.thread }"
                  x-text="row.thread ? row.thread.name : $app.t('plot.thread.axisLabel')"></div>
             <template x-for="act in row.acts" :key="act.id">
-              <div class="plot-swim-acthead" :style="{ '--col-accent': actAccent(act) }">
+              <div class="plot-swim-acthead"
+                   :class="{ 'plot-swim-acthead--archiviert': !!act.archiviert }"
+                   :style="{ '--col-accent': actAccent(act) }">
                 <div class="color-picker" x-show="editingActId !== act.id">
                   <button type="button" class="color-picker__swatch"
                           @click.stop="toggleActColorPicker(act.id)"
@@ -44,6 +46,8 @@
                 <template x-if="editingActId !== act.id">
                   <span class="plot-column-title" @dblclick="startEditAct(act)" x-text="act.name"></span>
                 </template>
+                <span class="badge badge-neutral" x-show="act.archiviert" x-cloak
+                      x-text="$app.t('plot.act.archivedBadge')"></span>
                 <template x-if="editingActId === act.id">
                   <input type="text" class="plot-column-title-input" x-model="actDraft"
                          data-spellcheck="spelling"
@@ -59,6 +63,15 @@
                   </button>
                   <button type="button" class="icon-btn icon-btn--ghost plot-icon-btn" @click="startEditAct(act)" :data-tip="$app.t('plot.act.rename')" :aria-label="$app.t('plot.act.rename')">
                     <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=691#pencil"/></svg>
+                  </button>
+                  <!-- Archivieren (Pendant zum flachen Board): Akt abgeschlossen →
+                       Spalte verlässt das Raster, bis der Archiv-Schalter sie holt. -->
+                  <button type="button" class="icon-btn icon-btn--ghost plot-icon-btn"
+                          :class="{ 'is-active': act.archiviert }" :disabled="busy"
+                          @click="toggleActArchive(act)"
+                          :data-tip="act.archiviert ? $app.t('plot.act.unarchive') : $app.t('plot.act.archive')"
+                          :aria-label="act.archiviert ? $app.t('plot.act.unarchive') : $app.t('plot.act.archive')">
+                    <svg class="icon" aria-hidden="true"><use :href="'/icons.svg?v=691#' + (act.archiviert ? 'rotate-ccw' : 'archive')"/></svg>
                   </button>
                   <button type="button" class="icon-btn icon-btn--ghost plot-icon-btn plot-icon-btn--danger" @click="deleteAct(act)" :data-tip="$app.t('plot.act.delete')" :aria-label="$app.t('plot.act.delete')">
                     <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=691#trash"/></svg>
@@ -209,7 +222,9 @@
                     </div>
                   </div>
                 </template>
-                <div class="plot-swim-cell-foot" x-show="addingCell !== (act.id + ':' + (row.lane.id === null ? 'null' : row.lane.id))">
+                <!-- Fuss der Zelle (Beat anlegen + Strang-Brainstorm) — im
+                     archivierten Akt aus: dort ist die Planung abgeschlossen. -->
+                <div class="plot-swim-cell-foot" x-show="!act.archiviert && addingCell !== (act.id + ':' + (row.lane.id === null ? 'null' : row.lane.id))">
                   <button type="button" class="plot-add-beat-btn plot-add-beat-btn--cell" @click="startAddBeatCell(act.id, row.lane.id)"
                           :data-tip="$app.t('plot.addBeat')" :aria-label="$app.t('plot.addBeat')">
                     <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=691#plus"/></svg>

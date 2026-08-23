@@ -113,22 +113,46 @@ export const boardMethods = {
     });
   },
 
-  // ── Hybrid-Akte (Derived) ───────────────────────────────────────────────────
-  // Geteilte Akte (thread_id NULL) — die Spalten des flachen Boards und aller
-  // Stränge ohne eigene Aktstruktur.
-  sharedActs() {
-    return this._memo('sharedActs', [this.acts], () =>
-      (this.acts || []).filter(a => a.thread_id == null).sort((a, b) => a.position - b.position));
+  // ── Archiv (Derived) ────────────────────────────────────────────────────────
+  // Ein archivierter Akt ist abgeschlossen (seine Beats sind eingearbeitet) und
+  // verlässt die Board-Spalten, bis der Archiv-Schalter (plotShowArchived) ihn
+  // wieder einblendet. Das Flag wirkt AUSSCHLIESSLICH auf die Spalten-Sichtbarkeit:
+  // seine Beats bleiben in boardStats/actStats, im Spannungsbogen, in der
+  // Kapitel-/Figuren-Coverage und in der Beat-Verankerung — sie stehen im Buch.
+  // Deshalb filtert keine der beatsFor*-Methoden nach Archiv.
+  _actVisible(act) {
+    return !!this.plotShowArchived || !(act && act.archiviert);
   },
 
-  // Strang-eigene Akte (thread_id === threadId), positionsgeordnet.
+  // Wie viele Akte liegen im Archiv (über alle Scopes)? Treibt Sichtbarkeit +
+  // Label des Archiv-Schalters.
+  archivedActCount() {
+    return this._memo('archActs', [this.acts], () =>
+      (this.acts || []).filter(a => a.archiviert).length);
+  },
+
+  // ── Hybrid-Akte (Derived) ───────────────────────────────────────────────────
+  // Geteilte Akte (thread_id NULL) — die Spalten des flachen Boards und aller
+  // Stränge ohne eigene Aktstruktur. Archiv-gefiltert: das IST die Render-Quelle
+  // beider Boards. Im flachen Board sind alle Akte geteilt (ein strang-eigener
+  // Akt kann ohne Strang nicht existieren, plot_acts.thread_id CASCADEt), darum
+  // braucht es dort keine zweite, scope-blinde Liste.
+  sharedActs() {
+    return this._memo('sharedActs', [this.acts, this.plotShowArchived], () =>
+      (this.acts || []).filter(a => a.thread_id == null && this._actVisible(a)).sort((a, b) => a.position - b.position));
+  },
+
+  // Strang-eigene Akte (thread_id === threadId), positionsgeordnet, archiv-gefiltert.
   actsForThread(threadId) {
-    return this._memo(`tacts:${threadId}`, [this.acts, threadId], () =>
-      (this.acts || []).filter(a => a.thread_id === threadId).sort((a, b) => a.position - b.position));
+    return this._memo(`tacts:${threadId}`, [this.acts, threadId, this.plotShowArchived], () =>
+      (this.acts || []).filter(a => a.thread_id === threadId && this._actVisible(a)).sort((a, b) => a.position - b.position));
   },
 
   // Hat der Strang eine eigene Aktstruktur (≥1 strang-eigener Akt)? Aus den Daten
   // abgeleitet — kein Flag (kein Drift). Für null (ohne Strang) immer false.
+  // ABSICHTLICH ungefiltert nach Archiv: sind alle eigenen Akte archiviert, hat
+  // der Strang weiterhin eine eigene Struktur — sonst kippte er im Grid zurück in
+  // die geteilte Region und seine Beats hingen an Akten, die dort nicht stehen.
   _threadHasOwn(threadId) {
     return threadId != null && (this.acts || []).some(a => a.thread_id === threadId);
   },
@@ -144,7 +168,7 @@ export const boardMethods = {
   //     Lane darunter (eigene Spaltenzahl, nicht ausgerichtet — gewollt).
   // kind: 'header' → { acts, thread } ; kind: 'lane' → { lane, acts }.
   gridRows() {
-    return this._memo('gridRows', [this.acts, this.threads], () => {
+    return this._memo('gridRows', [this.acts, this.threads, this.plotShowArchived], () => {
       const lanes = this.threadLanes();
       const shared = this.sharedActs();
       const rows = [];

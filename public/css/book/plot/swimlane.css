@@ -134,6 +134,10 @@
      bleibt lesbar auf einer Zeile), die Icons rutschen auf eine eigene Zeile
      darunter. */
   .plot-swim-acthead .plot-column-actions { flex: 1 0 100%; }
+  /* Archivierter Akt im Raster: gedämpft wie die Spalte im flachen Board. */
+  .plot-swim-acthead--archiviert { opacity: 0.72; }
+  .plot-swim-acthead--archiviert:hover,
+  .plot-swim-acthead--archiviert:focus-within { opacity: 1; }
 
   /* ── Lane-Label (sticky) ────────────────────────────────────────────────── */
   .plot-swim-lane {

@@ -106,22 +106,31 @@ function createBookScopedSession(req, res, { kind, minRole }) {
   res.json({ id: result.lastInsertRowid });
 }
 
-// Buch-weite Chat-Sessions auflisten (neueste zuerst, max. 20). Leere Sessions
+// Kappung des Listen-`preview` (erste User-Nachricht). Die Session-Liste zeigt
+// davon nur 80 Zeichen (partials/chat.html); der Rest reist ungenutzt mit und
+// waere bei vielen Sessions der eigentliche Antwort-Umfang.
+const PREVIEW_CHARS = 200;
+
+// Buch-weite Chat-Sessions auflisten (neueste zuerst, vollstaendig). Leere Sessions
 // (ohne Nachrichten) werden ausgefiltert — sie entstehen beim Öffnen der Karte
 // (auto-`startNewSession`) und sollen erst auftauchen, wenn der User schreibt.
+// Kein Zeilen-Deckel: ein gekappter Verlauf laesst aeltere Sessions unerreichbar
+// in der DB liegen — es gibt keinen zweiten Weg zu ihnen ausser der Session-ID.
+// Stattdessen ist der `preview` serverseitig gekappt (die Liste zeigt ohnehin nur
+// 80 Zeichen), damit die Antwort nicht mit der Zahl der Sessions mitwaechst.
 function listBookScopedSessions(req, res, { kind }) {
   const userEmail = sessionEmail(req);
   const bookId = toIntId(req.params.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
   const rows = db.prepare(`
     SELECT cs.id, cs.book_id, b.name AS book_name, cs.title, cs.created_at, cs.last_message_at,
-           (SELECT content FROM chat_messages WHERE session_id = cs.id ORDER BY created_at ASC LIMIT 1) AS preview
+           (SELECT substr(content, 1, ${PREVIEW_CHARS}) FROM chat_messages
+             WHERE session_id = cs.id ORDER BY created_at ASC LIMIT 1) AS preview
     FROM chat_sessions cs
     LEFT JOIN books b ON b.book_id = cs.book_id
     WHERE cs.book_id = ? AND cs.kind = ? AND cs.user_email = ?
       AND EXISTS (SELECT 1 FROM chat_messages WHERE session_id = cs.id)
     ORDER BY cs.last_message_at DESC
-    LIMIT 20
   `).all(bookId, kind, userEmail);
   res.json(rows);
 }

@@ -4,7 +4,7 @@
 // Richtungen):
 //   { kind: 'beat-place',    before: [{id,act_id,thread_id,sort_order}], after: [...] }
 //   { kind: 'beat-fields',   id, before: {...}, after: {...} }   — Beat-PATCH-Felder
-//   { kind: 'act-fields',    id, before: {...}, after: {...} }   — name / farbe
+//   { kind: 'act-fields',    id, before: {...}, after: {...} }   — name / farbe / archiviert
 //   { kind: 'act-order',     before: [actIds], after: [actIds] } — PRO Scope
 //   { kind: 'thread-fields', id, before: {...}, after: {...} }
 //   { kind: 'thread-order',  before: [threadIds], after: [threadIds] }

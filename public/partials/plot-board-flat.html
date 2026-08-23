@@ -4,8 +4,9 @@
      der erste Strang existiert, übernimmt plot-board-grid.html. Beat-Markup
      (Ansicht/Bearbeiten) ist mit dem Grid-Board synchron zu halten. -->
 <div class="plot-board" x-show="(acts.length || addingAct) && !threads.length" x-cloak>
-  <template x-for="act in acts" :key="act.id">
+  <template x-for="act in sharedActs()" :key="act.id">
     <div class="plot-column"
+         :class="{ 'plot-column--archiviert': !!act.archiviert }"
          :style="{ '--col-accent': actAccent(act) }">
 
       <!-- Spalten-Kopf -->
@@ -32,6 +33,8 @@
         <template x-if="editingActId !== act.id">
           <span class="plot-column-title" @dblclick="startEditAct(act)" x-text="act.name"></span>
         </template>
+        <span class="badge badge-neutral" x-show="act.archiviert" x-cloak
+              x-text="$app.t('plot.act.archivedBadge')"></span>
         <template x-if="editingActId === act.id">
           <input type="text" class="plot-column-title-input" x-model="actDraft"
                  data-spellcheck="spelling"
@@ -48,6 +51,15 @@
           </button>
           <button type="button" class="icon-btn icon-btn--ghost plot-icon-btn" @click="startEditAct(act)" :data-tip="$app.t('plot.act.rename')" :aria-label="$app.t('plot.act.rename')">
             <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=691#pencil"/></svg>
+          </button>
+          <!-- Archivieren: Akt abgeschlossen (Beats eingearbeitet) → Spalte verlässt
+               das Board, bis der Archiv-Schalter sie einblendet. Kein Löschen. -->
+          <button type="button" class="icon-btn icon-btn--ghost plot-icon-btn"
+                  :class="{ 'is-active': act.archiviert }" :disabled="busy"
+                  @click="toggleActArchive(act)"
+                  :data-tip="act.archiviert ? $app.t('plot.act.unarchive') : $app.t('plot.act.archive')"
+                  :aria-label="act.archiviert ? $app.t('plot.act.unarchive') : $app.t('plot.act.archive')">
+            <svg class="icon" aria-hidden="true"><use :href="'/icons.svg?v=691#' + (act.archiviert ? 'rotate-ccw' : 'archive')"/></svg>
           </button>
           <button type="button" class="icon-btn icon-btn--ghost plot-icon-btn plot-icon-btn--danger" @click="deleteAct(act)" :data-tip="$app.t('plot.act.delete')" :aria-label="$app.t('plot.act.delete')">
             <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=691#trash"/></svg>
@@ -103,15 +115,16 @@
             </div>
           </div>
         </template>
-        <button type="button" class="plot-add-beat-btn" x-show="addingActId !== act.id" @click="startAddBeat(act.id)">
+        <button type="button" class="plot-add-beat-btn" x-show="addingActId !== act.id && !act.archiviert" @click="startAddBeat(act.id)">
           <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=691#plus"/></svg>
           <span x-text="$app.t('plot.addBeat')"></span>
         </button>
 
-        <!-- KI-Brainstorm pro Akt -->
+        <!-- KI-Brainstorm pro Akt. Im Archiv nicht angeboten: dort ist nichts mehr
+             zu planen, und ein Vorschlag landete in einer Spalte, die zugeht. -->
         <button type="button" class="plot-brainstorm-btn" @click="runBrainstorm(act)"
                 :disabled="brainstormLoading"
-                x-show="!(brainstormResult && brainstormResult.actId === act.id)"
+                x-show="!(brainstormResult && brainstormResult.actId === act.id) && !act.archiviert"
                 x-text="$app.t('plot.brainstorm.run')"></button>
 
         <div class="plot-brainstorm-loading" x-show="brainstormLoading && brainstormActId === act.id">

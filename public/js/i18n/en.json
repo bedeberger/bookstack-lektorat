@@ -5546,5 +5546,9 @@
   "evidence.search": "Find evidence",
   "evidence.searching": "Searching your library …",
   "evidence.unavailable": "The embedding endpoint is unreachable.",
-  "evidence.willLink": "will be linked to this book"
+  "evidence.willLink": "will be linked to this book",
+  "plot.act.archive": "Archive act (completed)",
+  "plot.act.unarchive": "Restore from archive",
+  "plot.act.archivedBadge": "archived",
+  "plot.archive.show": "Show archive ({n})"
 }

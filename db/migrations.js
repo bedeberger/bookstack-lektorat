@@ -11141,6 +11141,29 @@ function _runMigrationsLocked() {
     logger.info('DB-Migration auf Version 274 abgeschlossen (ideen.page_id/chapter_id ON DELETE CASCADE — SET NULL verletzte den XOR-CHECK und blockierte jedes Seiten-/Kapitel-/Buch-Loeschen).');
   }
 
+  if (version < 275) {
+    // plot_acts.archiviert (0/1): abgeschlossener Akt — seine Beats sind ins
+    // Manuskript eingearbeitet, die Spalte soll das Board nicht mehr fuellen.
+    // Eigene Achse NEBEN plot_beats.verworfen und NEBEN dem Beat-status:
+    // „verworfen" heisst ausgemustert (soll NICHT ins Buch), „archiviert" heisst
+    // erledigt (ist im Buch). Darum bleiben die Beats eines archivierten Akts in
+    // allen Kennzahlen (Verteilung, Spannungsbogen, Kapitel-Coverage, Beat-
+    // Verankerung) — sie sind Teil des Buchs; archiviert wirkt auf die ANZEIGE
+    // (Spalte hinter dem Archiv-Schalter) und auf die Konsistenzpruefung (der
+    // Akt wird als abgeschlossen deklariert statt weiter beanstandet).
+    // Additiv (ADD COLUMN), Default 0 = heutiges Verhalten.
+    const actCols275 = db.pragma('table_info(plot_acts)').map(c => c.name);
+    if (!actCols275.includes('archiviert')) {
+      db.exec('ALTER TABLE plot_acts ADD COLUMN archiviert INTEGER NOT NULL DEFAULT 0 CHECK(archiviert IN (0,1))');
+    }
+    const fkErrors275 = db.pragma('foreign_key_check');
+    if (fkErrors275.length) {
+      throw new Error(`Migration 275: foreign_key_check meldet ${fkErrors275.length} Verstoesse.`);
+    }
+    db.prepare('UPDATE schema_version SET version = 275').run();
+    logger.info('DB-Migration auf Version 275 abgeschlossen (plot_acts.archiviert).');
+  }
+
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);
   if (feColsCheck.length > 0 && !feColsCheck.includes('typ')) {

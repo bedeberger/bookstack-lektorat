@@ -12,7 +12,7 @@ Trigger: `tile.plot` (Quick-Pill / Palette-Aliase `handlung|beat|board|akt|struk
 
 ```
 plot_acts (id, book_id→books CASCADE, user_email, name, farbe,
-           thread_id→plot_threads CASCADE, position, created_at, updated_at)
+           thread_id→plot_threads CASCADE, archiviert, position, created_at, updated_at)
 plot_threads (id, book_id→books CASCADE, user_email, name, farbe,
               figure_id→figures SET NULL, draft_figure_id→draft_figures SET NULL,
               chapter_id→chapters SET NULL,
@@ -28,7 +28,7 @@ plot_threads (id, book_id→books CASCADE, user_email, name, farbe,
                                            PK(beat_id, draft_figure_id))
 ```
 
-- **`plot_acts`** — Board-Spalten (Akte/Phasen), geordnet via `position` **pro Scope** (geteilt vs. je Strang eine eigene 0..n-Sequenz). `farbe` optional (max 32 chars). **Hybrid-Akte (`thread_id`, FK → `plot_threads` CASCADE):** `NULL` = **geteilter** Akt (flaches Board + alle Stränge ohne eigene Aktstruktur); gesetzt = der Akt gehört **nur** Strang `T`. „Strang hat eigene Akte" wird allein aus der Existenz strang-eigener Akte abgeleitet (kein Flag, kein Drift). `forkThreadActs` klont die geteilten Akte in den Strang + hängt dessen Beats auf die Klone um; `unforkThreadActs` hängt sie positionsweise zurück (Überzahl → letzte geteilte Spalte) + löscht die eigenen Akte. Invariante: ein Beat sitzt nur auf einem Akt, der **geteilt** ist oder **seinem eigenen Strang** gehört (`ACT_THREAD_MISMATCH` sonst).
+- **`plot_acts`** — Board-Spalten (Akte/Phasen), geordnet via `position` **pro Scope** (geteilt vs. je Strang eine eigene 0..n-Sequenz). `farbe` optional (max 32 chars). **Hybrid-Akte (`thread_id`, FK → `plot_threads` CASCADE):** `NULL` = **geteilter** Akt (flaches Board + alle Stränge ohne eigene Aktstruktur); gesetzt = der Akt gehört **nur** Strang `T`. „Strang hat eigene Akte" wird allein aus der Existenz strang-eigener Akte abgeleitet (kein Flag, kein Drift). `forkThreadActs` klont die geteilten Akte in den Strang + hängt dessen Beats auf die Klone um (der Klon **erbt `archiviert`** — sonst tauchte ein abgeschlossener Akt beim Fork als offene Spalte wieder auf); `unforkThreadActs` hängt sie positionsweise zurück (Überzahl → letzte geteilte Spalte) + löscht die eigenen Akte. Invariante: ein Beat sitzt nur auf einem Akt, der **geteilt** ist oder **seinem eigenen Strang** gehört (`ACT_THREAD_MISMATCH` sonst). **`archiviert` (0/1)** = der Akt ist abgeschlossen, seine Beats sind ins Manuskript eingearbeitet → siehe „Archiv" unten.
 - **`plot_threads`** — Board-Zeilen (Handlungsstränge / Swimlanes), geordnet via `position`. `farbe` = Palette-Key (analog `plot_acts.farbe`). Optionale Hauptfigur-Bindung: `figure_id` (FK → `figures.id`, INTEGER; nach aussen als TEXT-`fig_id` exponiert via `_THREAD_SELECT`-JOIN) **oder** `draft_figure_id` (FK → `draft_figures.id`, INTEGER, bereits Frontend-Identität). Beide SET NULL — Figur löschen entkoppelt nur die Bindung. Ein Strang darf auch ungebunden sein (z. B. „B-Story"). Optionale Kapitel-Bindung: `chapter_id` (FK → `chapters` SET NULL; `chapter_name` via `_THREAD_SELECT`-JOIN). **Live-Vererbung Strang → Beat:** ein Beat einer Strang-Lane erbt implizit die Hauptfigur des Strangs (immer als beteiligt) und — sofern er kein eigenes `chapter_id` hat — dessen Kapitel. Die geerbten Werte werden **nie** auf den Beat geschrieben (nur Anzeige im Grid als gedämpfte/gepunktete Badges via `inheritedFigureForBeat`/`inheritedChapterForBeat` + KI-Kontext); Strang-Bindung ändern → alle Beats der Lane folgen automatisch.
 - **`plot_beats`** — Karten in einer Zelle (Akt × Strang), geordnet via `sort_order` **pro Zelle** (`act_id` + `thread_id`). `thread_id` (SET NULL) ist die Strang-Zuordnung (`NULL` = „ohne Strang"-Lane; null Stränge → flaches Board). `status ∈ {geplant, im_buch}` (CHECK-Constraint) ist die binäre Realisierungsachse (Idee ↔ eingearbeitet). `verworfen` (0/1, CHECK) ist eine eigene, orthogonale Verwerfen-Achse — bleibt bei Status-Wechsel erhalten, hält verworfene Beats aus Spannungsbogen/Coverage/aktiver Verteilung raus. `chapter_id` (SET NULL) verknüpft den Beat mit dem Zielkapitel im Manuskript.
 - **`plot_beat_figures`** — M:N-Brücke Beat ↔ Katalog-Figur (`figures.id`, INTEGER-FK), welche Figuren ein Handlungspunkt involviert. Nach aussen wird die TEXT-`fig_id` exponiert (Frontend-Identität), Schreib-/Lesepfad übersetzt via `resolveFigureIds`.
@@ -51,7 +51,7 @@ Alle unter `/plot` ([routes/plot.js](../routes/plot.js)), ACL via `requireBookAc
 | `GET`    | `/page-beat-counts?book_id=X`    | Map `page_id` → Anzahl nicht-verworfener Beats im Kapitel der Seite (`pageBeatCounts`). Speist den Plot-Verknüpfungs-Indikator im Notebook-Editor (analog `/ideen/counts`, `/research/page-counts`) |
 | `GET`    | `/chapter-beat-counts?book_id=X` | Map `chapter_id` → Anzahl nicht-verworfener Beats im Kapitel (`chapterBeatCounts`). Speist den Indikator in der Kapitelansicht |
 | `POST`   | `/acts`            | `{ book_id, name, farbe?, thread_id? }` — neuer Akt ans Spaltenende (gesetzter `thread_id` → strang-eigener Akt, Hybrid; sonst geteilt) |
-| `PATCH`  | `/acts/:id`        | `{ name?, farbe? }` umbenennen/umfärben |
+| `PATCH`  | `/acts/:id`        | `{ name?, farbe?, archiviert? }` umbenennen/umfärben/archivieren (nicht übergebene Felder bleiben stehen) |
 | `DELETE` | `/acts/:id`        | Akt löschen — `plot_beats` hängen via CASCADE dran |
 | `PUT`    | `/acts/order`      | `{ book_id, order:[actId,…] }` — Spalten-Reihenfolge (`position`) |
 | `POST`   | `/threads`         | `{ book_id, name, farbe?, figure_id?, draft_figure_id?, chapter_id? }` — neuer Strang ans Zeilenende |
@@ -112,6 +112,23 @@ Die beiden **planenden** Jobs laufen via Job-Queue ([routes/jobs/plot.js](../rou
 **Severity-Skala** `kritisch|stark|mittel|schwach|niedrig` (Schema-enforced enum `PLOT_SEVERITY_ENUM`), kompatibel zu `.severity-tag--*` aus [DESIGN.md](../DESIGN.md) — gleiche Skala wie die [Figuren-Werkstatt](figur-werkstatt.md).
 
 **Job-Labels:** `job.label.plotBrainstorm` (`{ akt }`-Param) / `job.label.plotConsistency`. Dedup via `findActiveJobId(type, entityKey, userEmail)`.
+
+## Archiv: abgeschlossene Akte (`plot_acts.archiviert`)
+
+Ein Akt, dessen Beats **ins Manuskript eingearbeitet** sind, ist erledigt — er soll das Board nicht weiter füllen und in der Konsistenzprüfung nicht weiter als Arbeitsvorrat auftauchen. Genau dafür ist `archiviert` (0/1, Migration 275, additiv).
+
+**Nicht zu verwechseln mit `plot_beats.verworfen`** — die beiden sagen das Gegenteil: *verworfen* = ausgemustert, soll **nicht** ins Buch; *archiviert* = fertig, **ist** im Buch. Daraus folgt die tragende Invariante:
+
+> **Archivieren ist eine Anzeige- und Review-Achse, keine Daten-Achse.** Die Beats eines archivierten Akts bleiben unangetastet und zählen **weiter** in jeder Kennzahl: Status-Verteilung (`boardStats`/`actStats`), Spannungsbogen, Kapitel- und Figuren-Coverage, `pageBeatCounts`/`chapterBeatCounts`, Beat-Verankerung, Buchübersichts-Tile. **Why:** sie stehen im Buch — würde der Bogen sie ausblenden, verlöre er beim Archivieren von Akt 1 seinen Anfang, und die Kapitel-Coverage meldete plötzlich Lücken für längst geschriebene Kapitel. Keine `beatsFor*`-Methode filtert nach Archiv.
+
+**Was das Flag wirklich tut:**
+
+- **Board:** die Spalte verlässt das Render-Set. Gefiltert wird an genau zwei Stellen in [derived/board.js](../public/js/book/plot/derived/board.js) — `sharedActs()` (flaches Board **und** geteilte Grid-Region) und `actsForThread()` (strang-eigene Grid-Blöcke, via `gridRows()`); beide über `_actVisible()`. Das flache Board rendert bewusst `sharedActs()` statt einer eigenen, scope-blinden Liste: ohne Strang ist jeder Akt geteilt (`plot_acts.thread_id` CASCADEt mit dem Strang), eine zweite Liste wäre nur eine zweite Filterstelle zum Vergessen. Der Schalter `plotShowArchived` (per User persistiert wie `plotHideImBuch`, **nicht** in `PLOT_FILTER_SCOPES` — Gewohnheit, kein buch-skopierter Filter) holt sie zurück ins Bild, sichtbar erst ab `archivedActCount() > 0`. Die eingeblendete Spalte ist gedämpft + gestrichelt (`.plot-column--archiviert` / `.plot-swim-acthead--archiviert`) und trägt eine `archiviert`-Plakette (generisches `.badge .badge-neutral` — wertfreie Einordnung, siehe [DESIGN.md](../DESIGN.md) „Badges & Tags"; kein eigenes Badge daneben) — bewusst **nicht** durchgestrichen, das ist die Sprache der verworfenen Beat-Karte.
+- **`_threadHasOwn` bleibt ungefiltert** — sind alle eigenen Akte eines Strangs archiviert, hat er weiterhin eine eigene Struktur. Sonst kippte er im Grid zurück in die geteilte Region und seine Beats hingen an Akten, die dort nicht stehen.
+- **Kein Planen im Archiv:** „Beat hinzufügen" und der Brainstorm-Knopf fallen in der archivierten Spalte weg (flach **und** Grid-Zellfuss) — ein Vorschlag landete sonst in einer Spalte, die zugeht. DnD bleibt erlaubt: einen Beat aus dem Archiv zu ziehen (oder bewusst hineinzuschieben) ist eine legitime Korrektur, kein Integritätsbruch — darum auch **kein** Server-Guard, `archiviert` ist keine Vorbedingung für Beat-Schreibpfade.
+- **Konsistenzprüfung:** der Akt bleibt im Board-Outline (`AKT (…, ARCHIVIERT: …)`), weil Kausalketten und Setup/Payoff-Kanten über ihn hinweg prüfbar bleiben müssen — dazu der `ARCHIVIERTE AKTE`-Regelblock: keine Status-Pflege, keine fehlenden Beats, keine Lücken dort melden, **aber** jeden Befund melden, der in den offenen Plot hineinwirkt. **Why beides:** ihn ganz aus dem Prompt zu schneiden machte Archivieren zum Weg, Befunde zu verstecken; ihn unmarkiert zu lassen, produziert genau die Meldungen, die die Autorin zugeklappt hat.
+- **Akt-Reihenfolge:** `moveAct` überspringt unsichtbare Nachbarn (`_actVisible`) — ein Tausch mit einer archivierten Spalte wäre ein Klick ohne sichtbare Wirkung.
+- **Undo/Redo:** ein `act-fields`-Record wie name/farbe (`{ archiviert }`), damit über den generischen `_hPatchAct`-Applier. Kein Confirm beim Archivieren — es geht nichts verloren, und der Weg zurück ist derselbe Knopf.
 
 ## Beat-Verankerung (Soll status vs. Ist-Fundstellen)
 

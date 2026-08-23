@@ -551,6 +551,17 @@
     color: var(--color-muted);
   }
 
+  /* ── Archivierte Spalte (abgeschlossener Akt) ──────────────────────────────
+       Erledigt, nicht verworfen — darum gedämpft/gestrichelt, aber NICHT
+       durchgestrichen (das ist die Sprache der verworfenen Beat-Karte).
+       Archiv-Schalter + Plakette liegen in plot/widgets.css. */
+  .plot-column--archiviert {
+    opacity: 0.72;
+    border-style: dashed;
+  }
+  .plot-column--archiviert:hover,
+  .plot-column--archiviert:focus-within { opacity: 1; }
+
   /* ── Vollbild: ganze Karte nimmt den Viewport, Board scrollt horizontal über
        die volle Breite (mehr Platz für alle Akte). Header/Filter bleiben oben. */
   .card--plot:fullscreen {

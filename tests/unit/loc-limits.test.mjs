@@ -72,7 +72,7 @@ const CATEGORIES = [
       'public/partials/book-editor.html': 358,
       'public/partials/admin-users.html': 351,
       'public/partials/epub-export.html': 321,
-      'public/partials/plot-board-grid.html': 307,
+      'public/partials/plot-board-grid.html': 321,
       'public/partials/motiv-panel.html': 271,
       'public/partials/szenen.html': 273,
       'public/partials/orte.html': 277,
@@ -115,7 +115,7 @@ const CATEGORIES = [
       'routes/jobs/book-chat-tools/tools-text.js': 646,
       'routes/share/reader.js': 623,
       'routes/jobs/lektorat.js': 605,
-      'db/plot.js': 930,
+      'db/plot.js': 942,
     },
   },
 ];

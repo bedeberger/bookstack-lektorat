@@ -484,6 +484,78 @@ test('plot prompts: Board-Outline kennzeichnet geteilte vs. strang-eigene Akte +
   assert.ok(out.includes('HYBRID-AKTE'));
 });
 
+test('plot DB: Akt archivieren/reaktivieren + Teil-PATCH laesst archiviert stehen', () => {
+  const act = plot.createAct(BOOK, USER, { name: 'Archiv-Akt', farbe: 'blau' });
+  assert.equal(act.archiviert, 0, 'neu angelegte Akte sind nicht archiviert');
+
+  // Beats des Akts bleiben unangetastet — archiviert ist keine Daten-Achse.
+  const beat = plot.createBeat(BOOK, act.id, USER, { titel: 'Eingearbeitet', status: 'im_buch' });
+
+  const arch = plot.updateAct(act.id, { name: act.name, farbe: act.farbe, archiviert: 1 });
+  assert.equal(arch.archiviert, 1);
+  const stillThere = plot.getBeat(beat.id);
+  assert.equal(stillThere.status, 'im_buch');
+  assert.equal(stillThere.act_id, act.id);
+
+  // Umbenennen ohne archiviert-Angabe darf das Flag nicht abraeumen (der
+  // Route-Handler fuellt es aus dem geladenen Akt auf).
+  const loaded = plot.getAct(act.id);
+  const renamed = plot.updateAct(act.id, { name: 'Neu', farbe: loaded.farbe, archiviert: loaded.archiviert });
+  assert.equal(renamed.name, 'Neu');
+  assert.equal(renamed.archiviert, 1);
+
+  // listActs liefert das Flag mit (Render-Quelle des Boards).
+  const listed = plot.listActs(BOOK, USER).find(a => a.id === act.id);
+  assert.equal(listed.archiviert, 1);
+
+  assert.equal(plot.updateAct(act.id, { name: 'Neu', archiviert: 0 }).archiviert, 0);
+});
+
+test('plot DB: CHECK-Constraint lehnt archiviert ausserhalb 0/1 ab', () => {
+  const act = plot.createAct(BOOK, USER, { name: 'Check-Akt' });
+  assert.throws(
+    () => db.prepare('UPDATE plot_acts SET archiviert = 2 WHERE id = ?').run(act.id),
+    /CHECK/i
+  );
+});
+
+test('plot DB: forkThreadActs vererbt archiviert an den Strang-Klon', () => {
+  const shared = plot.createAct(BOOK, USER, { name: 'Fork-Archiv-Akt' });
+  plot.updateAct(shared.id, { name: shared.name, farbe: null, archiviert: 1 });
+  const thread = plot.createThread(BOOK, USER, { name: 'Fork-Archiv-Strang' });
+  plot.forkThreadActs(BOOK, USER, thread.id);
+  // Der Fork klont ALLE geteilten Akte in den Strang — geprueft wird der Klon
+  // des archivierten (Name traegt die Identitaet, die ID ist neu).
+  const own = plot.listActs(BOOK, USER).filter(a => a.thread_id === thread.id);
+  const klon = own.find(a => a.name === 'Fork-Archiv-Akt');
+  assert.ok(klon, 'der geteilte Akt wurde in den Strang geklont');
+  assert.equal(klon.archiviert, 1, 'ein abgeschlossener Akt bleibt beim Fork abgeschlossen');
+  assert.ok(own.some(a => a.name !== 'Fork-Archiv-Akt' && a.archiviert === 0),
+    'nicht-archivierte Klone bleiben offen');
+});
+
+test('plot prompts: archivierter Akt wird als abgeschlossen markiert + Regelblock erscheint', () => {
+  const acts = [{ id: 1, name: 'Akt 1', archiviert: 1 }, { id: 2, name: 'Akt 2' }];
+  const beats = [
+    { id: 9, act_id: 1, titel: 'Fertig', status: 'im_buch', chapter_name: null },
+    { id: 10, act_id: 2, titel: 'Offen', status: 'geplant', chapter_name: null },
+  ];
+  const out = prompts.buildPlotConsistencyPrompt(acts, beats);
+  // Der Akt bleibt im Outline (Kausalitaet/Setup-Payoff reichen hinein) …
+  assert.ok(out.includes('Fertig'), 'Beats des archivierten Akts bleiben im Outline');
+  assert.ok(out.includes('ARCHIVIERT: von der Autorin als abgeschlossen erklärt'));
+  // … wird aber als erledigt gerahmt, ohne die Rueckwirkungs-Ausnahme zu verlieren.
+  assert.ok(out.includes('ARCHIVIERTE AKTE'));
+  assert.ok(/Rückwirkung/.test(out));
+  assert.ok(out.includes('AKT (geteilt): Akt 2'), 'nicht-archivierte Akte bleiben unmarkiert');
+});
+
+test('plot prompts: ohne archivierten Akt fehlt der Archiv-Regelblock', () => {
+  const out = prompts.buildPlotConsistencyPrompt([{ id: 1, name: 'Akt 1' }], []);
+  assert.ok(!out.includes('ARCHIVIERTE AKTE'));
+  assert.ok(!out.includes('ARCHIVIERT'));
+});
+
 test('plot DB: figurePlotUsage — direkt verlinkt + via Strang + via Quell-Figur', () => {
   const mm = { meta: {}, format: 'node_tree', data: { id: 'root', topic: 'Held', children: [] } };
   const draft = draftFigures.createDraftFigure(BOOK, USER, { name: 'Held-Draft', mindmap: mm });
@@ -722,15 +794,63 @@ test('plot prompts: System-Prompt verbietet Fliesstext + erzwingt JSON (Claude-M
 const { plotMethods } = await import('../../public/js/book/plot.js');
 
 // Minimaler Karten-Kontext: plotMethods auf ein Plain-Object gemappt, `this`=ctx.
-function makeCtx({ beats = [], acts = [], threads = [], verworfenOpen = {}, plotFilters, plotHideImBuch = false } = {}) {
+function makeCtx({ beats = [], acts = [], threads = [], verworfenOpen = {}, plotFilters, plotHideImBuch = false, plotShowArchived = false } = {}) {
   return Object.assign(
     {
-      _memos: {}, beats, acts, threads, verworfenOpen, plotHideImBuch,
+      _memos: {}, beats, acts, threads, verworfenOpen, plotHideImBuch, plotShowArchived,
       plotFilters: plotFilters || { kapitel: '', figurId: '', draftFigurId: '', status: '', text: '' },
     },
     plotMethods,
   );
 }
+
+// ── Akt-Archiv (abgeschlossene Akte) ────────────────────────────────────────
+test('plotMethods: archivierter Akt fällt aus den Render-Spalten (flach + Grid)', () => {
+  const acts = [
+    { id: 1, name: 'Akt 1', thread_id: null, archiviert: 1, position: 0 },
+    { id: 2, name: 'Akt 2', thread_id: null, archiviert: 0, position: 1 },
+    { id: 3, name: 'Eigen', thread_id: 7, archiviert: 1, position: 0 },
+  ];
+  const zu = makeCtx({ acts });
+  assert.deepEqual(zu.sharedActs().map(a => a.id), [2]);
+  assert.deepEqual(zu.actsForThread(7).map(a => a.id), []);
+  assert.equal(zu.archivedActCount(), 2);
+
+  const auf = makeCtx({ acts, plotShowArchived: true });
+  assert.deepEqual(auf.sharedActs().map(a => a.id), [1, 2]);
+  assert.deepEqual(auf.actsForThread(7).map(a => a.id), [3]);
+});
+
+test('plotMethods: Archiv ist eine ANZEIGE-Achse — Beats zählen weiter in den Kennzahlen', () => {
+  const acts = [{ id: 1, name: 'Fertig', thread_id: null, archiviert: 1, position: 0 }];
+  const beats = [
+    { id: 10, act_id: 1, status: 'im_buch', verworfen: 0, intensitaet: 3, chapter_name: 'Kap 1', fig_ids: [], draft_fig_ids: [] },
+    { id: 11, act_id: 1, status: 'geplant', verworfen: 0, intensitaet: 4, chapter_name: 'Kap 1', fig_ids: [], draft_fig_ids: [] },
+  ];
+  const ctx = makeCtx({ acts, beats });
+  // Spalte ist unsichtbar …
+  assert.equal(ctx.sharedActs().length, 0);
+  // … die Beats bleiben aber in Verteilung, Akt-Stats und Beat-Listen.
+  assert.equal(ctx.boardStats().total, 2);
+  assert.equal(ctx.boardStats().by.im_buch, 1);
+  assert.equal(ctx.actStats(1).total, 2);
+  assert.equal(ctx.beatsForAct(1).length, 2);
+});
+
+test('plotMethods._threadHasOwn: archivierte eigene Akte zählen weiter als eigene Struktur', () => {
+  // Sonst kippte der Strang im Grid zurück in die geteilte Region, während seine
+  // Beats an strang-eigenen Akten hängen.
+  const ctx = makeCtx({ acts: [{ id: 3, thread_id: 7, archiviert: 1, position: 0 }] });
+  assert.equal(ctx.threadHasOwnActs(7), true);
+  assert.deepEqual(ctx.actsForThread(7), []);
+});
+
+test('plotMethods._actVisible: Schalter entscheidet, nicht das Flag allein', () => {
+  const arch = { id: 1, archiviert: 1 };
+  assert.equal(makeCtx().  _actVisible(arch), false);
+  assert.equal(makeCtx({ plotShowArchived: true })._actVisible(arch), true);
+  assert.equal(makeCtx()._actVisible({ id: 2, archiviert: 0 }), true);
+});
 
 test('plotMethods.actAccent: Palette-Key → --palette-*, sonst Karten-Akzent', () => {
   const ctx = makeCtx();

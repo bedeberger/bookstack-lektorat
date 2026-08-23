@@ -98,6 +98,37 @@ export const actsMethods = {
     } finally { this.busy = false; }
   },
 
+  // ── Archiv ─────────────────────────────────────────────────────────────────
+  // Akt abschliessen: seine Beats sind ins Manuskript eingearbeitet, die Spalte
+  // soll das Board nicht mehr füllen. Rein eine Sichtbarkeits-/Review-Achse —
+  // die Beats bleiben unangetastet (Status, Kapitel, Verankerung, Kennzahlen).
+  // Bewusst KEIN Confirm beim Archivieren: nichts geht verloren, der Weg zurück
+  // ist derselbe Knopf (und Undo trägt es ohnehin).
+  async toggleActArchive(act) {
+    const app = window.__app;
+    const next = act.archiviert ? 0 : 1;
+    this.busy = true;
+    try {
+      const updated = await fetchJson(`/plot/acts/${act.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ archiviert: next }),
+      });
+      this.acts = this.acts.map(a => (a.id === updated.id ? updated : a));
+      this._memos = {};
+      this._recordActFields(act.id, { archiviert: next ? 0 : 1 }, { archiviert: next });
+      // Ein offener Beat-Edit in der gerade archivierten Spalte hätte keinen
+      // sichtbaren Träger mehr (die Spalte verschwindet, solange das Archiv zu ist).
+      if (next && !this.plotShowArchived && this.editingBeatId != null
+          && this.beats.some(b => b.id === this.editingBeatId && b.act_id === act.id)) {
+        this.cancelEditBeat();
+      }
+      this.errorMessage = '';
+    } catch (e) {
+      this.errorMessage = app.t('plot.error.save');
+    } finally { this.busy = false; }
+  },
+
   async deleteAct(act) {
     const app = window.__app;
     const beatCount = this.beatsForAct(act.id).length;
@@ -131,8 +162,13 @@ export const actsMethods = {
       .filter(a => (a.thread_id ?? null) === scope)
       .sort((a, b) => a.position - b.position);
     const idx = ordered.findIndex(a => a.id === act.id);
-    const swap = idx + dir;
-    if (idx < 0 || swap < 0 || swap >= ordered.length) return;
+    if (idx < 0) return;
+    // Nächsten SICHTBAREN Nachbarn suchen: liegt ein archivierter Akt dazwischen,
+    // wäre der Tausch mit ihm ein Klick ohne sichtbare Wirkung. Der übersprungene
+    // Akt behält seinen Platz in der Sequenz (reiner Tausch der beiden Enden).
+    let swap = idx + dir;
+    while (swap >= 0 && swap < ordered.length && !this._actVisible(ordered[swap])) swap += dir;
+    if (swap < 0 || swap >= ordered.length) return;
     const orderBefore = ordered.map(a => a.id); // Undo-Ziel (Reihenfolge dieses Scopes)
     [ordered[idx], ordered[swap]] = [ordered[swap], ordered[idx]];
     ordered.forEach((a, i) => { a.position = i; });

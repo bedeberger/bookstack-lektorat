@@ -20,7 +20,8 @@ const router = express.Router();
 const jsonBody = express.json();
 
 // Status ist die binäre Realisierungsachse (Idee ↔ eingearbeitet). „Verworfen" ist
-// ein eigenes Flag (verworfen 0/1), keine Status-Stufe.
+// ein eigenes Flag (verworfen 0/1), keine Status-Stufe. Auf Akt-Ebene gibt es
+// dazu archiviert (0/1) — abgeschlossen/eingearbeitet, nicht ausgemustert.
 const STATUSES = ['geplant', 'im_buch'];
 const MAX_TITEL = 200;
 const MAX_BESCHREIBUNG = 4000;
@@ -192,7 +193,13 @@ router.patch('/acts/:id', jsonBody, (req, res) => {
   if (name.length > MAX_ACT_NAME) return res.status(400).json({ error_code: 'NAME_TOO_LONG' });
   const farbe = typeof req.body?.farbe === 'string' ? req.body.farbe.slice(0, 32)
     : (req.body?.farbe === null ? null : act.farbe);
-  res.json(plotDb.updateAct(id, { name, farbe }));
+  // archiviert (0/1): Akt abgeschlossen (Beats eingearbeitet) → raus aus dem
+  // Board-Alltag. Eigene Achse, kein Status: die Beats bleiben unangetastet und
+  // zaehlen weiter in allen Kennzahlen (siehe db/plot.js).
+  const archiviert = typeof req.body?.archiviert !== 'undefined'
+    ? (req.body.archiviert ? 1 : 0)
+    : (act.archiviert ? 1 : 0);
+  res.json(plotDb.updateAct(id, { name, farbe, archiviert }));
 });
 
 router.delete('/acts/:id', (req, res) => {
