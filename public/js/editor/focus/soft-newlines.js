@@ -58,7 +58,16 @@ function textNodesOf(block, root) {
 // bleiben unangetastet — der Container selbst ist `white-space: normal`, dort
 // rendert der Zeilenumbruch nicht und eine Ersetzung wäre eine grundlose
 // Änderung am gespeicherten HTML.
-export function collapseSoftNewlines(root) {
+//
+// `trimEdges: false` lässt die Blockränder stehen. Genau ein Aufrufer nutzt
+// das: der Undo/Redo-Restore des Fokusmodus. Der Blockrand-Trim gehört an die
+// Grenze, an der FREMDES HTML hereinkommt (Mount, Paste, Spiegelung in den
+// Fokus-Klon) — eine Momentaufnahme des eigenen Editor-DOM ist keine solche
+// Grenze. Ein Trim beim Restore machte das Undo unvollständig: das eben
+// getippte Leerzeichen am Blockende verschwände, und `restoreCaretAtOffset`
+// klemmte den Caret auf die um eins kürzere Länge — wer danach weiterschreibt,
+// bekommt zusammengeklebte Wörter, ohne dass eine Taste gefehlt hätte.
+export function collapseSoftNewlines(root, { trimEdges = true } = {}) {
   if (!root) return false;
   const sel = (root.ownerDocument || document).getSelection?.();
   const saved = sel && sel.rangeCount > 0 && root.contains(sel.anchorNode)
@@ -77,8 +86,10 @@ export function collapseSoftNewlines(root) {
       // Blockränder trimmen — unter pre-wrap rendern sie sonst als Einzug bzw.
       // als hängender Leerraum. Gleiche Regel wie `stripBlockEdgeNbsp` im
       // Server-Cleaner, damit der Save nichts Neues zu tun findet.
-      if (i === 0) next = next.replace(/^[\s ]+/u, '');
-      if (i === nodes.length - 1) next = next.replace(/[\s ]+$/u, '');
+      if (trimEdges) {
+        if (i === 0) next = next.replace(/^[\s ]+/u, '');
+        if (i === nodes.length - 1) next = next.replace(/[\s ]+$/u, '');
+      }
       if (next === node.nodeValue) return;
       if (saved && saved.node === node) {
         caret = { node, offset: mapOffset(saved.value, saved.offset, next.length) };

@@ -162,14 +162,21 @@ export async function mountStandaloneFocus({ mount, bridge, autosaveMs = DEFAULT
   // Zwingend eigene Instanz: hier gibt es keine Notebook-Karte, an deren
   // Session-Historie der SPA-Fokusmodus haengt.
   //
-  // `mountHtml` ist GENAU die Mount-Pipeline dieses Moduls (innerHTML +
-  // collapseSoftNewlines), nicht die des Notebooks. Zwei Gruende: der Restore
-  // darf nicht anders normalisieren als der Mount, und `shared/mount-html.js`
+  // `mountHtml` ist die Mount-Pipeline dieses Moduls (innerHTML +
+  // collapseSoftNewlines), nicht die des Notebooks: `shared/mount-html.js`
   // zoege cite-/xref-/mermaid-/table-html in die Import-Closure und damit ins
   // OTA-Bundle des Clients.
+  //
+  // EINZIGER Unterschied zum Mount: `trimEdges: false`. Ein Restore muss seine
+  // Momentaufnahme ZEICHENGENAU reproduzieren — der Blockrand-Trim gehoert an
+  // die Grenze, an der fremdes HTML hereinkommt, nicht in einen
+  // editor-internen Zustandswechsel. Sonst frisst jedes Undo das Leerzeichen
+  // am Blockende und der wiederhergestellte Caret klebt am letzten Wort.
+  // Damit verhaelt sich der Restore hier wie der des Notebooks
+  // (`mountEditorHtml` trimmt Textraender ebenfalls nicht).
   const history = createEditHistory({
     getRoot: () => content,
-    mountHtml: (el, html) => { el.innerHTML = html; collapseSoftNewlines(el); },
+    mountHtml: (el, html) => { el.innerHTML = html; collapseSoftNewlines(el, { trimEdges: false }); },
   });
   history.reset(content.innerHTML);
 

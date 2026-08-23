@@ -40,6 +40,22 @@ test('Blockränder werden getrimmt (sonst Einzug unter pre-wrap)', () => {
   assert.equal(root.querySelector('p').textContent, 'Eingerueckter Text');
 });
 
+// Der Restore der Undo-Historie ist der einzige Aufrufer mit `trimEdges: false`:
+// er reproduziert eine Momentaufnahme des eigenen Editor-DOM und darf daran
+// nichts saeubern (sonst frisst jedes Undo das eben getippte Leerzeichen am
+// Blockende und der Caret klebt danach am letzten Wort).
+test('trimEdges:false laesst das Leerzeichen am Blockende stehen', () => {
+  const root = mount('<p>Satz. </p>');
+  assert.equal(collapseSoftNewlines(root, { trimEdges: false }), false);
+  assert.equal(root.querySelector('p').textContent, 'Satz. ');
+});
+
+test('trimEdges:false ebnet \\n trotzdem ein — nur die Raender bleiben', () => {
+  const root = mount('<p>  a\nb  </p>');
+  assert.equal(collapseSoftNewlines(root, { trimEdges: false }), true);
+  assert.equal(root.querySelector('p').textContent, '  a b  ');
+});
+
 test('pre bleibt unangetastet — dort ist \\n Struktur', () => {
   const root = mount('<pre>zeile1\nzeile2</pre>');
   assert.equal(collapseSoftNewlines(root), false);

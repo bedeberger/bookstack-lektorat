@@ -62,6 +62,17 @@ test('mountEditorHtml: sauberes HTML meldet keine Reparatur', () => {
   assert.equal(repaired, false, 'sonst wäre jede Edit-Session sofort dirty');
 });
 
+// Gegenstueck zu `collapseSoftNewlines(..., { trimEdges: false })` im
+// Fokusmodus: `mountEditorHtml` traegt denselben Restore-Pfad der Undo-Historie
+// und darf Textinhalte darum ebenfalls nicht saeubern. Wuerde es die
+// Blockraender trimmen, frasse jedes Undo das eben getippte Leerzeichen am
+// Blockende und `restoreCaretAtOffset` klemmte den Caret aufs letzte Wort.
+test('mountEditorHtml: Rand-Whitespace bleibt stehen (Undo-Restore ist zeichengenau)', () => {
+  const c = el();
+  mountEditorHtml(c, '<p>Satz. </p><p>zweiter</p>');
+  assert.equal(c.querySelector('p').textContent, 'Satz. ');
+});
+
 test('mountEditorHtml: idempotent (zweiter Lauf ändert nichts)', () => {
   const c = el();
   mountEditorHtml(c, '<p>Text</p><hr>');

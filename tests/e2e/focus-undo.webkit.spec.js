@@ -167,6 +167,23 @@ test('Caret sitzt nach dem Undo an der wiederhergestellten Stelle — Tippen geh
   expect(txt).not.toContain('WEG');
 });
 
+test('Undo reproduziert die Momentaufnahme zeichengenau — auch das Leerzeichen am Blockende', async ({ page }) => {
+  // Gemessen am macOS-Client: der Restore lief durch collapseSoftNewlines MIT
+  // Blockrand-Trim und schnitt das eben getippte Leerzeichen weg (533 → 532
+  // Zeichen). Sichtbar wird das erst danach: restoreCaretAtOffset klemmt den
+  // Offset auf die kuerzere Laenge, der Caret sitzt hinter dem letzten Wort
+  // statt hinter dem Leerzeichen — und das naechste Wort klebt an.
+  await page.keyboard.type(' ANKER ');
+  await page.waitForTimeout(650);
+  await page.keyboard.type('WEG');
+  await page.keyboard.press('ControlOrMeta+z');
+
+  expect(await firstParagraph(page)).toMatch(/ANKER $/);
+
+  await page.keyboard.type('X');
+  expect(await firstParagraph(page)).toContain('ANKER X');
+});
+
 test('Handle-API (undo/redo/canUndo/canRedo) — Weg des AppKit-Menüs', async ({ page }) => {
   // Im macOS-Client erreicht Cmd+Z die WebView nie: das Menü „Bearbeiten ▸
   // Widerrufen" verbraucht das Kürzel vorher. Die Schale ruft darum diese
