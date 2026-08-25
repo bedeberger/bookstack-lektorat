@@ -235,6 +235,22 @@
     flex-shrink: 1;
     justify-content: flex-end;
   }
+
+  /* Ausnahme von der Ein-Zeile-Regel: eine Tab-/Modus-Reihe in der Action-
+     Leiste. `.tabs` ist ein Scroll-Container, seine automatische Minimalbreite
+     ist damit 0 — neben dem 55%-Floor der Titelspalte bleibt ein ~120px-
+     Splitter, in dem ein halber Tab steht und der Rest nur per Wischen
+     erreichbar ist. Darum bricht eine Action-Leiste MIT Tab-Reihe auf Touch in
+     die eigene, volle Zeile; dort passt die Reihe meist ganz hinein und muss
+     gar nicht scrollen. Icon-Leisten ohne Tabs behalten die Kopfzeile. */
+  .card-header:has(.card-header-titlebar):has(> .card-actions > .tabs) {
+    flex-wrap: wrap;
+  }
+  .card-header:has(.card-header-titlebar) > .card-actions:has(> .tabs) {
+    flex-basis: 100%;
+    justify-content: flex-start;
+    margin-left: 0;
+  }
 }
 
 }

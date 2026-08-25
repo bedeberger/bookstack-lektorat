@@ -1,7 +1,13 @@
 /* === Tabs / Segmented-Toggle ===
    SSoT-Pattern für Tab-Reihen und Modus-/Filter-Toggles. Generisches `.tabs` +
-   `.tabs-btn` + `--active`. Modifier: `.tabs--scrollable` (horizontaler Scroll),
-   `.tabs--fullwidth` (Buttons füllen Container gleichmässig).
+   `.tabs-btn` + `--active`. Modifier: `.tabs--scrollable` (Reihe füllt die
+   Container-Breite), `.tabs--fullwidth` (Buttons füllen Container gleichmässig).
+
+   Horizontaler Scroll ist BASIS-Verhalten, nicht Modifier und nicht
+   viewport-gegated: eine Reihe, die breiter ist als ihr Platz, scrollt — auf
+   jeder Breite. Ein Viewport-Gate (z.B. nur ≤600px) hilft genau dort nicht, wo
+   der Platzmangel entsteht: eine schmale Karte, ein Header-Flex-Item oder ein
+   Tablet-Viewport schneiden die hinteren Tabs sonst unerreichbar ab.
 
    Markup (a11y-Soll: role="tablist" + role="tab" + aria-selected):
      <div class="tabs" role="tablist">
@@ -24,17 +30,46 @@
 */
 @layer components {
   .tabs {
+    --tabs-edge-shadow: color-mix(in oklab, var(--color-text) 15%, transparent);
     display: inline-flex;
+    max-width: 100%;
     border: 0.5px solid var(--color-border);
     border-radius: var(--radius-sm);
-    overflow: hidden;
-    background: var(--color-surface);
+    background-color: var(--color-surface);
+    /* Scrollen statt Clippen. overflow-y bleibt hidden, damit der Radius die
+       Buttons weiter beschneidet. */
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    /* Kein Scrollbar-Gutter: in einer ~27–34px hohen Reihe frisst er ein
+       Drittel der Höhe und bricht die Höhen-Invariante der .filter-bar
+       (DESIGN.md). Die Scrollbarkeit signalisiert stattdessen der
+       Rand-Schatten unten — er ist auf Touch ohnehin die einzige Anzeige,
+       weil mobile Overlay-Scrollbars nur während des Wischens erscheinen. */
+    scrollbar-width: none;
+    /* Rand-Schatten nur wenn wirklich scrollbar: die beiden `local`-Ebenen
+       (deckend, in Flächenfarbe) liegen über den beiden `scroll`-Ebenen
+       (Schatten) und wandern mit dem Inhalt. Am jeweiligen Anschlag deckt die
+       local-Ebene ihren Schatten ab, weggescrollt gibt sie ihn frei. */
+    background-image:
+      linear-gradient(to right,  var(--color-surface) 55%, transparent),
+      linear-gradient(to left,   var(--color-surface) 55%, transparent),
+      linear-gradient(to right,  var(--tabs-edge-shadow), transparent),
+      linear-gradient(to left,   var(--tabs-edge-shadow), transparent);
+    background-position: left center, right center, left center, right center;
+    background-size: 26px 100%, 26px 100%, 13px 100%, 13px 100%;
+    background-repeat: no-repeat;
+    background-attachment: local, local, scroll, scroll;
   }
+  .tabs::-webkit-scrollbar { display: none; }
 
   .tabs-btn {
     position: relative;
     display: inline-flex;
     align-items: center;
+    /* Nicht zusammenquetschen — die Reihe scrollt stattdessen. */
+    flex-shrink: 0;
     padding: var(--space-sm) 14px;
     font-size: var(--font-size-sm);
     font-weight: var(--fw-medium);
@@ -134,17 +169,11 @@
     opacity: 0.7;
   }
 
-  /* Scrollable-Variante: viele Tabs in schmaler Karte (PDF-Export, Mobile). */
+  /* Scrollable-Variante: die Reihe füllt die Container-Breite statt auf
+     Content-Breite zu schrumpfen (Block-Level statt inline). Das Scrollen
+     selbst kommt aus der Basis — der Modifier entscheidet nur die Breite. */
   .tabs--scrollable {
     display: flex;
-    max-width: 100%;
-    overflow-x: auto;
-    scrollbar-width: thin;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .tabs--scrollable .tabs-btn {
-    flex-shrink: 0;
   }
 
   /* Fullwidth-Variante: Tabs füllen Container, jeder Button gleich breit.
@@ -157,22 +186,6 @@
   .tabs--fullwidth .tabs-btn {
     flex: 1;
     text-align: center;
-  }
-
-  /* Mobile-Viewport: generelle .tabs-Reihen werden scrollbar, damit sie nicht
-     aus der Karte herausragen (z.B. Schwere-Filter in Szenen/Kontinuität bei
-     vier Buttons mit Counts auf engen Viewports). */
-  @media (max-width: 600px) {
-    .tabs:not(.tabs--fullwidth) {
-      display: flex;
-      max-width: 100%;
-      overflow-x: auto;
-      scrollbar-width: thin;
-      -webkit-overflow-scrolling: touch;
-    }
-    .tabs:not(.tabs--fullwidth) .tabs-btn {
-      flex-shrink: 0;
-    }
   }
 
 }
