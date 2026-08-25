@@ -339,6 +339,13 @@ export {
 } from './prompts/motiv.js';
 
 export {
+  buildFigurAlterSystemPrompt,
+  buildFigurAlterPrompt,
+  SCHEMA_FIGUR_ALTER,
+  FIGUR_ALTER_ARTEN,
+} from './prompts/figur-alter.js';
+
+export {
   buildSourceDetectSystemPrompt,
   buildSourceDetectPrompt,
   SCHEMA_SOURCE_DETECT,

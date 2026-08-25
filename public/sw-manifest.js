@@ -4,7 +4,7 @@
 //
 // __SHELL_BUILD: content hash over all listed assets → drives SHELL_CACHE.
 // __SHELL_MANIFEST: the coherent set precached atomically at SW install.
-self.__SHELL_BUILD = "7d15add07d653efb";
+self.__SHELL_BUILD = "9d0c7731491d5e51";
 self.__SHELL_MANIFEST = [
   "/css/admin/admin-backup.css",
   "/css/admin/admin-home.css",
@@ -109,6 +109,7 @@ self.__SHELL_MANIFEST = [
   "/css/entities/ereignisse-span.css",
   "/css/entities/ereignisse-subtyp.css",
   "/css/entities/figur-werkstatt.css",
+  "/css/entities/figuren-alter.css",
   "/css/entities/figuren.css",
   "/css/entities/ideen.css",
   "/css/entities/orte-map.css",
@@ -235,6 +236,7 @@ self.__SHELL_MANIFEST = [
   "/js/book/erzaehlprofil.js",
   "/js/book/export.js",
   "/js/book/fehler-heatmap.js",
+  "/js/book/figuren-alter.js",
   "/js/book/figuren-presence.js",
   "/js/book/figuren.js",
   "/js/book/finetune-export.js",
@@ -564,6 +566,7 @@ self.__SHELL_MANIFEST = [
   "/js/prompts/book-chat-tools.js",
   "/js/prompts/chat.js",
   "/js/prompts/core.js",
+  "/js/prompts/figur-alter.js",
   "/js/prompts/figur-werkstatt.js",
   "/js/prompts/finetune.js",
   "/js/prompts/geocode.js",
@@ -758,6 +761,7 @@ self.__SHELL_MANIFEST = [
   "/partials/export.html",
   "/partials/fehler-heatmap.html",
   "/partials/figur-werkstatt.html",
+  "/partials/figuren-alter.html",
   "/partials/figuren-graph-legend.html",
   "/partials/figuren-presence-strip.html",
   "/partials/figuren-presence.html",

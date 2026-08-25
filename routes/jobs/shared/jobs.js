@@ -302,6 +302,7 @@ const JOB_TYPE_LABELS = {
   'struktur-check':        'job.label.strukturCheck',
   'headline-variants':     'job.label.headlineVariants',
   'interview-transcribe':  'job.label.interviewTranscribe',
+  'figur-alter':           'job.label.figurAlter',
 };
 
 // Job-Typen, die vom Superjob (komplett-analyse) abgedeckt werden und nicht in der Statistik erscheinen sollen

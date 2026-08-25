@@ -36,9 +36,10 @@ export const coreMethods = {
   },
 
   async renderFigurGraph() {
-    // Präsenz-Tab ist eine reine DOM-Heatmap (kein vis-network) → nichts rendern,
-    // vis-Bundle nicht lazy-laden. Der Präsenz-Block lebt separat im Partial.
-    if (this.figurenGraphModus === 'praesenz') return;
+    // Präsenz- und Alters-Tab sind reine DOM-Ansichten (Heatmap bzw. Tabelle, kein
+    // vis-network) → nichts rendern, vis-Bundle nicht lazy-laden. Beide Blöcke
+    // leben separat in ihren Partials.
+    if (this.figurenGraphModus === 'praesenz' || this.figurenGraphModus === 'alter') return;
     const container = document.getElementById('figuren-graph');
     if (!container) return;
     const figuren = this._graphFiguren();

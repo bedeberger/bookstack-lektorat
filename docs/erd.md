@@ -1,6 +1,6 @@
 # ERD — schreibwerkstatt
 
-Stand: Schema-Version 275, 154 Tabellen (ohne `sqlite_*`/`schema_version`/FTS5-Shadow-Tables; inkl. FTS5-Virtual `search_index`/`search_trigram` + `search_meta`).
+Stand: Schema-Version 276, 157 Tabellen (ohne `sqlite_*`/`schema_version`/FTS5-Shadow-Tables; inkl. FTS5-Virtual `search_index`/`search_trigram` + `search_meta`).
 
 Quelle: Squashed-Schema-Snapshot in [db/squashed-schema.js](../db/squashed-schema.js) (regeneriert via `node tools/dump-schema.js`) + [db/migrations.js](../db/migrations.js). Drift gegen die Legacy-Migration-Kette ist durch [tests/unit/squash-drift.test.mjs](../tests/unit/squash-drift.test.mjs) gegated. Mermaid-Diagramme — in VSCode mit „Markdown Preview Mermaid Support" (oder GitHub) direkt sichtbar.
 
@@ -214,6 +214,8 @@ erDiagram
   figures ||--o{ figure_relations        : from
   figures ||--o{ figure_relations        : to
   figures ||--o{ draft_figures           : "imported as"
+  figures ||--o| figure_ages             : "age index"
+  figures ||--o{ figure_age_belege       : "age evidence"
 
   locations ||--o{ scene_locations       : in
   locations ||--o{ location_figures      : has
@@ -780,6 +782,47 @@ erDiagram
     INTEGER chapter_id  FK
     INTEGER haeufigkeit
   }
+  figure_ages {
+    INTEGER figure_id          PK,FK "ON DELETE CASCADE — eine Zeile pro Figur"
+    INTEGER book_id            FK "ON DELETE CASCADE"
+    INTEGER alter_von          "Altersspanne im Buch (Textangabe, sonst gerechnet)"
+    INTEGER alter_bis
+    INTEGER bezugsjahr_von
+    INTEGER bezugsjahr_bis
+    INTEGER geburtsjahr
+    TEXT    geburtsjahr_quelle "CHECK IN ('kuratiert','text','zeitstrahl')"
+    TEXT    quelle             "CHECK IN ('text','geburtsjahr','zeitstrahl')"
+    REAL    konfidenz
+    TEXT    widerspruch_json   "JSON [{typ,a,b,zitat,page_id}] — Steckbrief vs. Text, Alter sinkt, Text vs. Rechnung"
+    TEXT    begruendung
+    TEXT    scanned_at
+  }
+  figure_age_belege {
+    INTEGER id          PK
+    INTEGER figure_id   FK "ON DELETE CASCADE"
+    INTEGER book_id     FK "ON DELETE CASCADE"
+    TEXT    art         "CHECK IN ('alter','geburtsjahr','todesjahr')"
+    INTEGER wert
+    INTEGER bezugsjahr
+    TEXT    zitat       "woertlich, vor dem Schreiben im Seitentext nachgeschlagen"
+    INTEGER page_id     FK "SET NULL — Sprungziel"
+    INTEGER chapter_id  FK "SET NULL"
+    INTEGER unsicher    "1 = Modell meldet die Stelle selbst als unsicher"
+    TEXT    begruendung
+    INTEGER sort_order
+  }
+  figure_age_scans {
+    INTEGER book_id       PK,FK "ON DELETE CASCADE"
+    TEXT    user_email    PK,FK "ON DELETE CASCADE"
+    TEXT    scanned_at
+    TEXT    content_sig   "Buchstand + Figurenstamm + Analyse-Version → Delta-Skip"
+    INTEGER age_version
+    TEXT    model
+    INTEGER figuren_total
+    INTEGER mit_alter
+    INTEGER belege_total
+    INTEGER embed_used    "1 = semantische Nachlese lief mit"
+  }
   figure_events {
     INTEGER id              PK
     INTEGER figure_id       FK
@@ -957,6 +1000,9 @@ erDiagram
     TEXT    result_json "vollständiges Job-Result (vorschlaege oder { konflikte, fazit })"
     TEXT    model
   }
+  figures ||--o| figure_ages : "age index (CASCADE)"
+  figures ||--o{ figure_age_belege : "age evidence (CASCADE)"
+  books ||--o{ figure_age_scans : "scan head (CASCADE)"
   figures ||--o{ draft_figures : "imported as (SET NULL)"
   draft_figures ||--o{ werkstatt_runs : "ki-history"
 ```

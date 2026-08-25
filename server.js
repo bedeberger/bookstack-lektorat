@@ -72,6 +72,7 @@ setImmediate(() => {
 const authRouter = require('./routes/auth');
 const historyRouter = require('./routes/history');
 const figuresRouter = require('./routes/figures');
+const figuresAlterRouter = require('./routes/figures-alter');
 const locationsRouter = require('./routes/locations');
 const songsRouter = require('./routes/songs');
 const { router: jobsRouter, runKomplettAnalyseAll } = require('./routes/jobs');
@@ -515,6 +516,7 @@ app.use((req, res, next) => {
 // ── Geschützte Routen ────────────────────────────────────────────────────────
 app.use(proxiesRouter);
 app.use('/history', historyRouter);
+app.use('/figures', figuresAlterRouter);
 app.use('/figures', figuresRouter);
 app.use('/locations', locationsRouter);
 app.use('/world-facts', require('./routes/world-facts'));

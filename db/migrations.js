@@ -11164,6 +11164,86 @@ function _runMigrationsLocked() {
     logger.info('DB-Migration auf Version 275 abgeschlossen (plot_acts.archiviert).');
   }
 
+  if (version < 276) {
+    // Alters-Analyse der Figuren (Job `figur-alter`): ABGELEITETER INDEX, pro Lauf
+    // als Ganzes ersetzt. Er beantwortet „wie alt ist diese Figur im Buch" aus dem
+    // TEXT, nicht aus dem Extraktions-Stand der Komplettanalyse — die kann Monate
+    // alt sein, waehrend im Manuskript weitergeschrieben wurde.
+    //
+    // Warum eine eigene Tabelle und nicht Spalten an `figures`: `figures` ist der
+    // vom Autor gepflegte Stamm (`geburtstag` gehoert ihm). Ein Analyse-Ergebnis
+    // darf ihn nicht ueberschreiben, sondern steht daneben — inklusive der Faelle,
+    // in denen beide sich widersprechen (genau die will der Autor sehen).
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS figure_ages (
+        figure_id          INTEGER PRIMARY KEY REFERENCES figures(id) ON DELETE CASCADE,
+        book_id            INTEGER NOT NULL REFERENCES books(book_id) ON DELETE CASCADE,
+        alter_von          INTEGER,
+        alter_bis          INTEGER,
+        bezugsjahr_von     INTEGER,
+        bezugsjahr_bis     INTEGER,
+        geburtsjahr        INTEGER,
+        geburtsjahr_quelle TEXT    CHECK(geburtsjahr_quelle IN ('kuratiert','text','zeitstrahl') OR geburtsjahr_quelle IS NULL),
+        quelle             TEXT    CHECK(quelle IN ('text','geburtsjahr','zeitstrahl') OR quelle IS NULL),
+        konfidenz          REAL    NOT NULL DEFAULT 0,
+        widerspruch_json   TEXT,
+        begruendung        TEXT,
+        scanned_at         TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      )
+    `);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_figure_ages_book ON figure_ages(book_id)');
+
+    // Belege: die Fundstellen, auf denen die Zeile steht. Ohne sie ist eine Zahl
+    // aus einem Sprachmodell nicht pruefbar — `zitat` ist woertlich und wurde vor
+    // dem Schreiben im Seitentext nachgeschlagen, `page_id` ist das Sprungziel.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS figure_age_belege (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        figure_id   INTEGER NOT NULL REFERENCES figures(id) ON DELETE CASCADE,
+        book_id     INTEGER NOT NULL REFERENCES books(book_id) ON DELETE CASCADE,
+        art         TEXT    NOT NULL CHECK(art IN ('alter','geburtsjahr','todesjahr')),
+        wert        INTEGER NOT NULL,
+        bezugsjahr  INTEGER,
+        zitat       TEXT    NOT NULL,
+        page_id     INTEGER REFERENCES pages(page_id) ON DELETE SET NULL,
+        chapter_id  INTEGER REFERENCES chapters(chapter_id) ON DELETE SET NULL,
+        unsicher    INTEGER NOT NULL DEFAULT 0 CHECK(unsicher IN (0,1)),
+        begruendung TEXT,
+        sort_order  INTEGER NOT NULL DEFAULT 0
+      )
+    `);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_figure_age_belege_fig ON figure_age_belege(figure_id, sort_order)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_figure_age_belege_book ON figure_age_belege(book_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_figure_age_belege_page ON figure_age_belege(page_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_figure_age_belege_chapter ON figure_age_belege(chapter_id)');
+
+    // Lauf-Ebene: „Stand vom" fuer die Anzeige + `content_sig` fuer den Delta-Skip.
+    // User-skopiert wie `figures` selbst (die Figuren eines Buchs gehoeren dem
+    // Bearbeiter, nicht dem Buch).
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS figure_age_scans (
+        book_id       INTEGER NOT NULL REFERENCES books(book_id) ON DELETE CASCADE,
+        user_email    TEXT    NOT NULL DEFAULT '' REFERENCES app_users(email) ON DELETE CASCADE,
+        scanned_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        content_sig   TEXT,
+        age_version   INTEGER NOT NULL DEFAULT 0,
+        model         TEXT,
+        figuren_total INTEGER NOT NULL DEFAULT 0,
+        mit_alter     INTEGER NOT NULL DEFAULT 0,
+        belege_total  INTEGER NOT NULL DEFAULT 0,
+        embed_used    INTEGER NOT NULL DEFAULT 0 CHECK(embed_used IN (0,1)),
+        PRIMARY KEY (book_id, user_email)
+      )
+    `);
+
+    const fkErrors276 = db.pragma('foreign_key_check');
+    if (fkErrors276.length) {
+      throw new Error(`Migration 276: foreign_key_check meldet ${fkErrors276.length} Verstoesse.`);
+    }
+    db.prepare('UPDATE schema_version SET version = 276').run();
+    logger.info('DB-Migration auf Version 276 abgeschlossen (figure_ages/figure_age_belege/figure_age_scans).');
+  }
+
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);
   if (feColsCheck.length > 0 && !feColsCheck.includes('typ')) {

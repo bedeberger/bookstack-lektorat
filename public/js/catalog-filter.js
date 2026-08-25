@@ -27,6 +27,8 @@ const FILTER_KINDS = {
   subtyp:  { placeholder: 'events.filter.subtyp', empty: 'events.filter.allSubtypes' },
   kategorie: { placeholder: 'filter.kategorie', empty: 'filter.allKategorien' },
   status:  { placeholder: 'filter.status',  empty: 'filter.allStatus' },
+  figurTyp: { placeholder: 'filter.figurTyp', empty: 'filter.allFigurTypen' },
+  alterStatus: { placeholder: 'filter.alterStatus', empty: 'filter.allAlter' },
 };
 
 export function registerCatalogFilter() {

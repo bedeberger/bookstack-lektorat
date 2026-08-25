@@ -1,0 +1,153 @@
+<!-- Alterstabelle-Tab der Figuren-Karte: alle Figuren mit ihrem Alter im Buch,
+     filterbar nach Figurentyp. Nested Partial (Placeholder `partial-figuren-alter`
+     in figuren.html), laeuft im figurenCard-Scope. Logik: js/book/figuren-alter.js
+
+     ZWEI ALTERS-SPALTEN FUER EINE FRAGE, mit Absicht: „Alter" ist die woertliche
+     Angabe des Manuskripts (mit Beleg), „gerechnet" die Rekonstruktion aus
+     Geburtsjahr und erzaehlter Zeit. Weichen sie ab, ist genau das der Befund —
+     eine einzige Spalte muesste sich fuer eine Quelle entscheiden und den
+     Widerspruch verschweigen.
+
+     Zeilen-Aufbau wie in book-settings-stats.html: ein <tbody> pro Zeile aus dem
+     x-for (mehrere tbody sind gueltiges HTML, ein tbody im tbody nicht), Zeile
+     klappt ihre Belege auf. -->
+<div x-show="figurenGraphModus === 'alter'" class="figur-alter" x-cloak>
+  <div class="figur-alter-head">
+    <p class="figur-alter-intro" x-text="$app.t('figuren.alter.intro')"></p>
+    <div class="figur-alter-actions">
+      <span class="muted-msg muted-msg--sm" x-show="figurenAlterScanLabel() && !figurenAlterLoading"
+            x-text="figurenAlterScanLabel()"></span>
+      <button type="button" class="primary" data-label-ok
+              :disabled="figurenAlterLoading || !$store.nav.selectedBookId"
+              @click="runFigurenAlterScan()"
+              x-text="$app.t(figurenAlterData && figurenAlterData.scan ? 'figuren.alter.rerun' : 'figuren.alter.run')"></button>
+    </div>
+  </div>
+
+  <div x-show="figurenAlterLoading && figurenAlterProgress > 0" class="progress-bar-wrap">
+    <div class="progress-bar" :style="{ '--progress': figurenAlterProgress + '%' }"></div>
+  </div>
+  <div x-show="figurenAlterStatus" class="card-status" x-text="figurenAlterStatus"></div>
+
+  <!-- Filter -->
+  <div class="filter-bar">
+    <span class="filter-search-wrap">
+      <input type="text" x-model="figurenAlterFilters.suche" :placeholder="$app.t('common.search')"
+             :aria-label="$app.t('common.search')" class="filter-search-input">
+      <button type="button" class="search-clear--icon" x-show="figurenAlterFilters.suche"
+              @click="figurenAlterFilters.suche = ''" :aria-label="$app.t('search.clear')"
+              :data-tip="$app.t('search.clear')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=690#x"/></svg></button>
+    </span>
+    <div x-data="catalogFilter('figurTyp')"
+         x-modelable="value" x-model="figurenAlterFilters.typ"
+         x-effect="options = figurenAlterTypListe().map(k => ({ value: k, label: $app.t('figuren.type.' + k) }))"></div>
+    <div x-data="catalogFilter('alterStatus')"
+         x-modelable="value" x-model="figurenAlterFilters.nur"
+         x-effect="options = ['mitAlter', 'ohneAlter', 'beleg', 'widerspruch'].map(k => ({ value: k, label: $app.t('figuren.alter.only.' + k) }))"></div>
+    <span class="filter-count"
+          x-text="figurenAlterSummary().mitAlter + ' / ' + figurenAlterSummary().total"></span>
+  </div>
+
+  <p class="figur-alter-hint" x-show="figurenAlterSummary().widerspruch > 0"
+     x-text="$app.t('figuren.alter.widerspruchCount', { n: figurenAlterSummary().widerspruch })"></p>
+  <p class="figur-alter-hint" x-show="!figurenAlterData || !figurenAlterData.scan"
+     x-text="$app.t('figuren.alter.noScanHint')"></p>
+
+  <div x-show="!figurenAlterRows().length" class="muted-msg muted-msg--spaced"
+       x-text="$app.t('figuren.alter.empty')"></div>
+
+  <div class="table-scroll" x-show="figurenAlterRows().length">
+    <table class="figur-alter-table"
+           x-data="sortableTable({
+             rows: () => figurenAlterRows(),
+             defaultKey: 'name',
+             defaultDir: 'asc',
+             persistKey: 'figuren.alter',
+             types: { name: 'string', typ: 'string', geburtsjahr: 'number', alter_von: 'number', alter_abgeleitet: 'number' },
+           })">
+      <thead>
+        <tr>
+          <th class="sortable-th" :class="sortClass('name')" :aria-sort="ariaSort('name')"
+              @click="sortBy('name')" x-text="$app.t('figuren.alter.col.figur')"></th>
+          <th class="sortable-th" :class="sortClass('typ')" :aria-sort="ariaSort('typ')"
+              @click="sortBy('typ')" x-text="$app.t('figuren.alter.col.typ')"></th>
+          <th class="sortable-th" :class="sortClass('alter_von')" :aria-sort="ariaSort('alter_von')"
+              @click="sortBy('alter_von')" x-text="$app.t('figuren.alter.col.alter')"></th>
+          <th class="sortable-th" :class="sortClass('geburtsjahr')" :aria-sort="ariaSort('geburtsjahr')"
+              @click="sortBy('geburtsjahr')" x-text="$app.t('figuren.alter.col.birthYear')"></th>
+          <th class="sortable-th" :class="sortClass('alter_abgeleitet')" :aria-sort="ariaSort('alter_abgeleitet')"
+              :data-tip="$app.t('figuren.alter.col.derivedTip')"
+              @click="sortBy('alter_abgeleitet')" x-text="$app.t('figuren.alter.col.derived')"></th>
+          <th x-text="$app.t('figuren.alter.col.reference')"></th>
+          <th x-text="$app.t('figuren.alter.col.source')"></th>
+          <th x-text="$app.t('figuren.alter.col.evidence')"></th>
+        </tr>
+      </thead>
+      <template x-for="row in sorted" :key="row.id">
+        <tbody>
+          <tr class="figur-alter-row"
+              :class="{ 'figur-alter-row--open': figurenAlterOpenId === row.id,
+                        'figur-alter-row--conflict': row.widerspruch,
+                        'figur-alter-row--clickable': row.belege.length }"
+              :role="row.belege.length ? 'button' : null"
+              :tabindex="row.belege.length ? 0 : null"
+              :aria-expanded="row.belege.length ? (figurenAlterOpenId === row.id) : null"
+              @click="row.belege.length && figurenAlterToggleBelege(row)"
+              @keydown.enter.prevent="row.belege.length && figurenAlterToggleBelege(row)"
+              @keydown.space.prevent="row.belege.length && figurenAlterToggleBelege(row)">
+            <td class="figur-alter-name">
+              <span class="history-chevron" :class="{ open: figurenAlterOpenId === row.id }"
+                    x-show="row.belege.length" aria-hidden="true">›</span>
+              <span class="figur-typ-dot" :class="'figur-typ-dot--' + row.typ"></span>
+              <span class="internal-link" @click.stop="$app.openFigurById(row.id)"
+                    :data-tip="$app.t('figuren.alter.openFigur')" x-text="row.name"></span>
+              <span class="figur-alter-kurzname" x-show="row.kurzname && row.kurzname !== row.name"
+                    x-text="row.kurzname"></span>
+            </td>
+            <td><span class="tag" x-text="$app.t('figuren.type.' + row.typ)"></span></td>
+            <td class="figur-alter-num figur-alter-age" x-text="figurenAlterLabel(row)"></td>
+            <td class="figur-alter-num">
+              <span x-text="row.geburtsjahr != null ? row.geburtsjahr : '–'"></span>
+              <span class="figur-alter-sub" x-show="row.geburtsjahr_quelle"
+                    :data-tip="$app.t('figuren.alter.birthSourceTip')"
+                    x-text="row.geburtsjahr_quelle ? $app.t('figuren.alter.birthSource.' + row.geburtsjahr_quelle) : ''"></span>
+            </td>
+            <td class="figur-alter-num" x-text="row.alter_abgeleitet != null ? row.alter_abgeleitet : '–'"></td>
+            <td class="figur-alter-num" x-text="figurenAlterBezugLabel(row) || '–'"></td>
+            <td class="figur-alter-quelle">
+              <span class="tag" x-show="row.quelle" x-text="figurenAlterQuelleLabel(row)"></span>
+              <span class="tag figur-alter-konf" x-show="figurenAlterKonfidenzLabel(row)"
+                    :class="'figur-alter-konf--' + figurenAlterKonfidenzStufe(row)"
+                    x-text="figurenAlterKonfidenzLabel(row)"></span>
+              <span class="tag tag--stale" x-show="row.widerspruch"
+                    :data-tip="figurenAlterWiderspruchTip(row)"
+                    x-text="$app.t('figuren.alter.conflictBadge')"></span>
+            </td>
+            <td class="figur-alter-num">
+              <span x-show="row.belege.length" x-text="row.belege.length"></span>
+              <span class="muted-msg muted-msg--sm" x-show="!row.belege.length" x-text="'–'"></span>
+            </td>
+          </tr>
+          <tr x-show="figurenAlterOpenId === row.id" class="figur-alter-belege-row">
+            <td colspan="8">
+              <ul class="figur-alter-belege">
+                <template x-for="(b, bi) in row.belege" :key="bi">
+                  <li class="figur-alter-beleg">
+                    <span class="tag" x-text="$app.t('figuren.alter.art.' + b.art) + ' ' + b.wert"></span>
+                    <span class="tag" x-show="b.unsicher"
+                          :data-tip="$app.t('figuren.alter.uncertainTip')"
+                          x-text="$app.t('figuren.alter.uncertain')"></span>
+                    <span class="figur-alter-zitat" x-text="'«' + b.zitat + '»'"></span>
+                    <span class="internal-link figur-alter-beleg-ort" x-show="b.page_id"
+                          @click.stop="figurenAlterGotoBeleg(b)"
+                          x-text="[b.chapter_name, b.page_name].filter(Boolean).join(' › ') || ('#' + b.page_id)"></span>
+                  </li>
+                </template>
+              </ul>
+            </td>
+          </tr>
+        </tbody>
+      </template>
+    </table>
+  </div>
+</div>

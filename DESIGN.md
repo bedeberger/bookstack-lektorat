@@ -1196,6 +1196,41 @@ CSS: [public/css/entities/entity-list.css](public/css/entities/entity-list.css).
 
 ---
 
+## Aufklappbare Tabellenzeile (Drilldown im `sortableTable`)
+
+**Use:** Tabellenzeile, die ihre Belege/Detailzeilen unter sich aufklappt (Job-Statistik → Läufe, Alterstabelle → Fundstellen). **Ein** offener Block pro Tabelle, gehalten als `xxxOpenId === row.id` in der Karte — kein `Alpine.data('collapsible')` (das ist für eigenständige Sektionen; siehe CLAUDE.md „Klappbare Section via `collapsible`" → „Nicht für Listen-/Tree-Row-Chevrons").
+
+**Markup-Pflicht:** ein `<tbody>` **pro Zeile** aus dem `x-for`, direkt unter `<table>` nach `</thead>`. Mehrere `tbody` sind gültiges HTML, ein `tbody` im `tbody` nicht — der Parser hebt es sonst heraus und die Tabelle zerfällt. Zwei `<tr>` aus einem `x-for` gehen nur so, weil `<template x-for>` genau ein Wurzelelement erlaubt.
+
+```html
+<table x-data="sortableTable({ rows: () => xxxRows(), … })">
+  <thead>…</thead>
+  <template x-for="row in sorted" :key="row.id">
+    <tbody>
+      <tr :class="{ 'xxx-row--open': openId === row.id }"
+          :role="row.belege.length ? 'button' : null"
+          :tabindex="row.belege.length ? 0 : null"
+          :aria-expanded="row.belege.length ? (openId === row.id) : null"
+          @click="row.belege.length && toggle(row)"
+          @keydown.enter.prevent="row.belege.length && toggle(row)"
+          @keydown.space.prevent="row.belege.length && toggle(row)">
+        <td><span class="history-chevron" :class="{ open: openId === row.id }" aria-hidden="true">›</span> …</td>
+      </tr>
+      <tr x-show="openId === row.id"><td :colspan="N">…Detail…</td></tr>
+    </tbody>
+  </template>
+</table>
+```
+
+**Regeln:**
+- `role="button"` / `tabindex` / `aria-expanded` nur setzen, wenn es wirklich etwas aufzuklappen gibt — eine Zeile ohne Details, die sich als Button ausgibt, ist ein Tastatur-Stop ins Nichts.
+- Ein Link **innerhalb** der Zeile (Sprung zur Figur/Seite) braucht `@click.stop`, sonst klappt derselbe Klick auch die Zeile um.
+- `colspan` von Hand mit der Spaltenzahl des `<thead>` gleichhalten.
+
+**Beispiele:** [public/partials/book-settings-stats.html](public/partials/book-settings-stats.html) (Job-Läufe), [public/partials/figuren-alter.html](public/partials/figuren-alter.html) (Alters-Belege)
+
+---
+
 ## Table-Scroll (`.table-scroll`)
 
 **Use:** Wrapper um breite Tabellen, damit sie auf engen Viewports horizontal scrollen statt aus der Karte zu ragen. Pflicht für mehrspaltige Admin-/Listen-Tables.
@@ -2729,6 +2764,7 @@ Drei Editoren leben in eigenen Subfoldern (`book/`, `focus/`, `notebook/`); edit
 | File | Inhalt |
 |------|--------|
 | [entities/figuren.css](public/css/entities/figuren.css) | Figuren-Karte (Graph, Familie, Soziogramm). |
+| [entities/figuren-alter.css](public/css/entities/figuren-alter.css) | Alterstabelle der Figuren (5. Reiter): Kopfzeile mit Analyse-Knopf, Tabelle mit aufklappbarer Beleg-Zeile, Konfidenz-/Widerspruch-Tags. Akzent via `var(--card-accent)` von `.card--figuren`. |
 | [entities/figur-werkstatt.css](public/css/entities/figur-werkstatt.css) | Figuren-Werkstatt (Mindmap, Drafts-Sidebar, Read-only-Tree). |
 | [entities/szenen.css](public/css/entities/szenen.css) | Szenen-Karte. |
 | [entities/world-facts.css](public/css/entities/world-facts.css) | Welt-Fakten-Karte (read-only): Kategorie-Gruppierung (`.weltfakten-*`), Fakt-Zeile mit Akzent-Leiste. |

@@ -1,0 +1,132 @@
+/* === Alterstabelle der Figuren (5. Reiter der Figuren-Karte) ===
+   Eigene Datei statt Anbau an entities/figuren.css: die liegt bei 531 Zeilen und
+   der 600er-Cap aus CLAUDE.md („File-Limits / Modularität") ist maschinell
+   gegated. Markup: public/partials/figuren-alter.html
+   Akzentfarbe kommt über var(--card-accent) von .card--figuren. */
+
+.figur-alter { margin-top: var(--space-10); }
+
+.figur-alter-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
+}
+.figur-alter-intro {
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+  margin: 0;
+  flex: 1 1 22rem;
+}
+.figur-alter-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.figur-alter-hint {
+  font-size: var(--font-size-mini);
+  color: var(--color-muted);
+  margin: 0 0 var(--space-xs);
+}
+
+.figur-alter-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+.figur-alter-table th {
+  text-align: left;
+  color: var(--color-muted);
+  font-weight: var(--fw-regular);
+  padding: var(--space-2xs) 12px 5px 0;
+  border-bottom: 0.5px solid var(--color-border);
+  white-space: nowrap;
+}
+.figur-alter-table td {
+  padding: var(--space-xs) 12px 4px 0;
+  border-bottom: 0.5px solid var(--color-separator-on-dark);
+  vertical-align: baseline;
+}
+
+.figur-alter-row--clickable { cursor: pointer; }
+.figur-alter-row--clickable:hover td { background: var(--color-hover); }
+.figur-alter-row--open td { background: var(--color-hover); }
+.figur-alter-row--clickable .history-chevron { margin-right: var(--space-6); }
+/* Widerspruch: der Balken links markiert die Zeile, ohne die Zahlen einzufärben —
+   der Befund ist die Abweichung, nicht ein einzelner Wert. */
+.figur-alter-row--conflict td:first-child {
+  box-shadow: inset 3px 0 0 0 var(--color-warn-text);
+}
+
+.figur-alter-name {
+  white-space: nowrap;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2xs);
+}
+.figur-alter-kurzname {
+  font-size: var(--font-size-mini);
+  color: var(--color-muted);
+}
+.figur-alter-num {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+/* Das Alter ist die Antwort auf die Frage der Tabelle — es darf optisch führen. */
+.figur-alter-age { font-weight: var(--fw-medium); }
+.figur-alter-sub {
+  display: block;
+  font-size: var(--font-size-mini);
+  color: var(--color-muted);
+}
+.figur-alter-quelle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs);
+}
+.figur-alter-konf--hoch { color: var(--color-text); }
+.figur-alter-konf--mittel { color: var(--color-muted); }
+.figur-alter-konf--niedrig {
+  color: var(--color-warn-text);
+  background: var(--color-warn-bg);
+}
+
+/* Belege einer Zeile (aufgeklappt) */
+.figur-alter-belege-row td {
+  padding: var(--space-6) 0 10px 18px;
+  background: var(--color-card-bg);
+}
+.figur-alter-belege {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+.figur-alter-beleg {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-xs);
+  font-size: var(--font-size-xs);
+}
+.figur-alter-zitat {
+  color: var(--color-text);
+  font-style: italic;
+  flex: 1 1 20rem;
+  min-width: 0;
+}
+.figur-alter-beleg-ort {
+  font-size: var(--font-size-mini);
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+
+/* Mobile: die Tabelle behält ihre natürliche Breite und scrollt im .table-scroll
+   (Utility-Regel `.table-scroll > table { min-width: 100% }` überschreiben). */
+@media (max-width: 720px) {
+  .table-scroll > .figur-alter-table { min-width: max-content; }
+}

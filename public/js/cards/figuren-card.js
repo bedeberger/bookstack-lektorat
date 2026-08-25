@@ -2,6 +2,8 @@
 //
 // Eigener State:
 //   - Graph-Modus (figurenGraphModus, figurenGraphKapitel, figurenGraphFullscreen)
+//   - Alterstabelle (figurenAlterData/-Filters/-Loading/-Progress/-Status,
+//     figurenAlterOpenId) — der Index wird erst beim Oeffnen des Reiters geholt
 //   - vis-network-Internals (_figurenNetwork, _figurenHash, _figurenNodes, _figurenEdges)
 //   - aufgelöste Canvas-Farben (_graphTheme) + Theme-Observer (_themeObserver)
 //   - figurenUpdatedAt (Render-Timestamp im Card-Header)
@@ -16,6 +18,7 @@
 
 import { graphMethods } from '../graph.js';
 import { presenceMethods } from '../book/figuren-presence.js';
+import { figurenAlterMethods } from '../book/figuren-alter.js';
 import { setupCardLifecycle } from './card-lifecycle.js';
 import { attachFullscreenSync } from '../fullscreen.js';
 import { observeThemeChange } from '../graph-kit.js';
@@ -76,6 +79,16 @@ export function registerFigurenCard() {
     figurenGraphModus: 'figur',
     figurenGraphKapitel: null,
     figurenGraphFullscreen: false,
+    // Alterstabelle (5. Reiter). `figurenAlterData` = { figuren, scan } aus
+    // GET /figures/:id/alter; null heisst „noch nicht geladen", nicht „leer".
+    figurenAlterData: null,
+    figurenAlterFilters: { suche: '', typ: '', nur: '' },
+    figurenAlterLoading: false,
+    figurenAlterProgress: 0,
+    figurenAlterStatus: '',
+    figurenAlterOpenId: null,
+    _figurenAlterPollTimer: null,
+    _figurenAlterLoadedBookId: null,
     _figurenNetwork: null,
     _figurenHash: null,
     _figurenNodes: null,
@@ -105,6 +118,7 @@ export function registerFigurenCard() {
         showFlag: 'showFiguresCard',
         load: async (root) => {
           this._memos = {};
+          if (this.figurenGraphModus === 'alter') this.ensureFigurenAlter();
           await root.loadFiguren(Alpine.store('nav').selectedBookId);
           await this.$nextTick();
           this.renderFigurGraph();
@@ -121,6 +135,7 @@ export function registerFigurenCard() {
           ctx._memos = {};
           ctx.figurenUpdatedAt = null;
           ctx.figurenGraphKapitel = null;
+          ctx._resetFigurenAlter();
           if (!root.showFiguresCard) return;
           const bookId = Alpine.store('nav').selectedBookId;
           if (!bookId) return;
@@ -133,11 +148,20 @@ export function registerFigurenCard() {
         },
         onViewReset: (e, ctx) => {
           destroyNet();
+          ctx._resetFigurenAlter();
           ctx.figurenUpdatedAt = null;
           ctx.figurenGraphModus = 'figur';
           ctx.figurenGraphKapitel = null;
           ctx.figurenGraphFullscreen = false;
         },
+      });
+
+      // Reiter „Alter" ist der einzige, der Daten nachlaedt (der Alters-Index
+      // gehoert nicht in den heissen Katalog-Fetch). Darum hier und nicht in
+      // graph/core.js#setFigurenGraphModus — die Methode teilt sich die Karte mit
+      // dem Graph-Modul und weiss nichts von der Tabelle.
+      this.$watch('figurenGraphModus', (mode) => {
+        if (mode === 'alter') this.ensureFigurenAlter();
       });
 
       // Sprachwechsel → Graph-Labels neu rendern (uiLocale Teil des Hash).
@@ -194,6 +218,7 @@ export function registerFigurenCard() {
         try { document.exitFullscreen?.(); } catch {}
       }
       this._lifecycle?.destroy();
+      if (this._figurenAlterPollTimer) { clearTimeout(this._figurenAlterPollTimer); this._figurenAlterPollTimer = null; }
       this._themeObserver?.disconnect();
       this._themeObserver = null;
       if (this._figurenNetwork) { this._figurenNetwork.destroy(); this._figurenNetwork = null; }
@@ -242,7 +267,21 @@ export function registerFigurenCard() {
         () => computeFilteredFiguren(figuren, chapterMap, { suche, kapitel, seite }));
     },
 
+    // Buchwechsel/View-Reset: geladener Index gehoert zum alten Buch, ein
+    // laufender Poll zu einem Job, dessen Ergebnis niemand mehr anzeigt.
+    _resetFigurenAlter() {
+      if (this._figurenAlterPollTimer) { clearTimeout(this._figurenAlterPollTimer); this._figurenAlterPollTimer = null; }
+      this.figurenAlterData = null;
+      this._figurenAlterLoadedBookId = null;
+      this.figurenAlterLoading = false;
+      this.figurenAlterProgress = 0;
+      this.figurenAlterStatus = '';
+      this.figurenAlterOpenId = null;
+      this.figurenAlterFilters = { suche: '', typ: '', nur: '' };
+    },
+
     ...graphMethods,
     ...presenceMethods,
+    ...figurenAlterMethods,
   }));
 }
