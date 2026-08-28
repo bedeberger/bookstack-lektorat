@@ -30,12 +30,21 @@
   gap: var(--space-xs);
 }
 
-/* === Figuren: kollabierbare Legende === */
+/* === Figuren: kollabierbare Legende ===
+   Die Legende steht zwischen der Modus-Tab-Reihe und der Graph-Toolbar und
+   muss ihren Abstand nach BEIDEN Seiten selbst mitbringen: die Tab-Reihe hat
+   keine Bottom-Margin, sonst klebt die Caps-Zeile an deren Unterkante.
+   Nach unten faellt der Wert etwas kleiner aus als nach oben — die Legende
+   gehoert zum Graphen, den sie erklaert, nicht zur Tab-Reihe darueber.
+   Achtung beim Nachjustieren: `.figuren-graph-toolbar` bringt 8px Top-Margin
+   mit, die durch die randlose `.figuren-graph-wrap` nach aussen durchschlaegt
+   und mit der Bottom-Margin hier kollabiert (wirksam ist der groessere Wert). */
 .figur-legend-wrap {
-  margin-bottom: var(--space-6);
+  margin-top: var(--space-md);
+  margin-bottom: var(--space-10);
 }
 .figur-legend-body {
-  margin-top: var(--space-xs);
+  margin-top: var(--space-sm);
 }
 .figur-legend-body .figur-soziogramm-hint {
   margin: var(--space-xs) 0 0;

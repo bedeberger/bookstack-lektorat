@@ -1,6 +1,9 @@
 <!-- Graph-Legende (klappbar, Chevron-Stil wie Kontinuität). Nested-Partial der
-     Figuren-Karte (Placeholder `partial-figuren-graph-legend`), figurenCard-Scope. -->
-<div class="figur-legend-wrap" x-data="collapsible()" x-show="figurenGraphModus !== 'praesenz' && figurenGraphModus !== 'alter'">
+     Figuren-Karte (Placeholder `partial-figuren-graph-legend`), figurenCard-Scope.
+     Die Modus-Liste im x-show ist dieselbe wie am `.figuren-graph-wrap` in
+     figuren.html: die Legende erklaert die Knoten/Kanten DES GRAPHEN — wo kein
+     Graph steht (Praesenz-, Alters-, Lebenslauf-Tab), erklaert sie nichts. -->
+<div class="figur-legend-wrap" x-data="collapsible()" x-show="!['praesenz', 'alter', 'lebenslauf'].includes(figurenGraphModus)">
   <button type="button" class="collapsible-toggle" x-bind="trigger">
     <span class="history-chevron" x-bind="chevron" aria-hidden="true"></span>
     <span x-text="$app.t('figuren.legend.toggle')"></span>

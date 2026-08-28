@@ -24,24 +24,34 @@
    Dropdown breiter als sein Trigger und x-anchor haengt es schief darunter. */
 .figur-cv .filter-bar .combobox-wrap { min-width: 180px; }
 
+/* ── Figurenwahl ───────────────────────────────────────────────────────────── */
+/* Der Aussenabstand des Auswahl-Schritts sitzt am Wrapper, nicht an Hinweis oder
+   Chip-Reihe: der Hinweis ist bedingt (`x-show`), und haenge der Abstand an ihm,
+   ruecken Chips und Tabelle zusammen, sobald er verschwindet. Oben collabiert die
+   Margin mit der `margin-bottom` der `.filter-bar` (normaler Fluss) — die Trennlinie
+   der Leiste behaelt also ihren Abstand, statt ihn zu addieren. */
+.figur-cv-pick { margin: var(--space-md) 0 var(--space-lg); }
+
 .figur-cv-hint {
   font-size: var(--font-size-mini);
   color: var(--color-muted);
-  margin: 0 0 var(--space-xs);
+  margin: 0 0 var(--space-sm);
 }
 
-/* ── Figurenwahl ───────────────────────────────────────────────────────────── */
 .figur-cv-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2xs);
-  margin-bottom: var(--space-sm);
+  /* Zeilen-Gap groesser als der Spalten-Gap: bei umbrechenden Chips klebten die
+     Reihen sonst aufeinander, weil die Chips flach sind. */
+  gap: var(--space-sm) var(--space-6);
 }
 .figur-cv-chip {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2xs);
-  padding: 3px var(--space-xs);
+  /* Badge-Padding aus den Tokens: die Chips sind Klickziele, keine Inline-Tags —
+     3px/4px liessen sie bei 2px Gap zu einem Block verschmelzen. */
+  padding: var(--pad-badge);
   border: 0.5px solid var(--color-border);
   /* Eckig, nicht Pille: `--radius-sm` ist 0 und DESIGN.md haelt „Editorial-Eckig"
      fuer Badges/Tags/Chips fest. Rund ist dort dem An/Aus-Schalter vorbehalten. */

@@ -1,0 +1,36 @@
+{
+  "version": "4.2.0",
+  "date": "2026-08-28",
+  "entries": [
+    {
+      "kind": "behoben",
+      "de": "Die Alters-Analyse der Figuren brach auf bestehenden Installationen ab: der Platz für das aus dem Geburtsjahr gerechnete Alter fehlte, und damit genau die zweite der beiden Spalten, deren Vergleich das Feature ist.",
+      "en": "The character age analysis failed on existing installations: there was no place to store the age calculated from the birth year — precisely the second of the two columns whose comparison is the point of the feature."
+    },
+    {
+      "kind": "behoben",
+      "de": "Die Kapitelnamen über den Spalten des Figuren-Graphen wurden fast unsichtbar gezeichnet. Sie stehen jetzt wieder in der Textfarbe des jeweiligen Hell- oder Dunkelmodus.",
+      "en": "The chapter names above the character graph's columns were drawn almost invisibly. They are back in the text colour of the current light or dark mode."
+    },
+    {
+      "kind": "behoben",
+      "de": "Im Reiter „Lebenslauf\" der Figuren-Karte stand die Graph-Legende, obwohl dort gar kein Graph zu sehen ist — sie erklärte Knoten und Kanten, die es auf dieser Ansicht nicht gibt.",
+      "en": "The graph legend appeared on the characters card's “Life course” tab even though no graph is shown there — it explained nodes and edges that this view does not have."
+    },
+    {
+      "kind": "verbessert",
+      "de": "Die Alterstabelle der Figuren liest sich ruhiger: gleichmässige Zellabstände, alle Zeilen gleich hoch (die Herkunft des Geburtsjahrs steht neben der Zahl statt darunter), und die aufgeklappte Zeile hebt sich jetzt vom blossen Überfahren mit der Maus ab — samt ihren Belegstellen als ein zusammenhängender Block.",
+      "en": "The character age table reads more calmly: even cell spacing, rows of equal height (the source of a birth year now sits beside the number instead of below it), and an expanded row is clearly distinct from a mere mouse-over — together with its cited passages as one coherent block."
+    },
+    {
+      "kind": "verbessert",
+      "de": "Im Lebenslauf der Figuren sind die Namen zur Auswahl der Spalten jetzt als Schaltflächen erkennbar, statt zu einem Block zu verschmelzen. Der Abstand zur Vergleichstabelle bleibt gleich, ob der Hinweis auf Figuren ohne Geburtsjahr angezeigt wird oder nicht.",
+      "en": "In the character life course, the names used to pick columns now read as buttons instead of merging into one block. The spacing above the comparison table stays the same whether or not the note about characters without a birth year is shown."
+    },
+    {
+      "kind": "verbessert",
+      "de": "Die Funktionsbeschreibungen in der Hilfe und auf der Startseite sind auf eine einheitliche Länge gebracht: gleich grosse Kacheln, je ein Satz zur Sache und einer zum Unterschied. Vorher stand ein Feature mit drei Zeilen neben einem mit fünfzehn.",
+      "en": "The feature descriptions in the help card and on the start page are now of consistent length: tiles of equal size, one sentence on what it does and one on what sets it apart. Before, a three-line feature sat next to one with fifteen."
+    }
+  ]
+}

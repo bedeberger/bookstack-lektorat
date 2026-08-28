@@ -12,6 +12,7 @@ Token-Referenz (Farben, Radien, Spacing, Schriftgrössen): [public/css/tokens.cs
 - [Motion-Patterns](#motion-patterns) — cardFadeIn, `@starting-style`-Eintritt, View Transition beim Kartenwechsel, Hover-Mechaniken
 - [Alpine-Plugins](#alpine-plugins-inventar) — was geladen ist (`x-anchor`/`x-trap`/`x-collapse`/`x-resize`), was mit Absicht nicht
 - [Mikro-Typografie](#mikro-typografie-memory-regeln) — Doppelpunkt, Zahlen, Icons, Konsistenz
+- [Feature-Text (Landing + Hilfe)](#feature-text-landing--hilfe) — Titel- und Längenrahmen für `landing.feat<N>Title/Desc`
 - [Mobile-Breakpoints + Darkmode](#mobile-breakpoints--darkmode) — 480/600/768/1024 + Token-Pflicht für Farben
 - [Container-Queries vs. Media-Queries](#container-queries-vs-media-queries)
 - [Print-Styles](#print-styles) — nicht supported
@@ -1242,14 +1243,18 @@ CSS: [public/css/entities/entity-list.css](public/css/entities/entity-list.css).
 **Warum ein Chip und keine Multi-Combobox:** die Auswahl bleibt sichtbar, während man die Vergleichsansicht darunter liest. Eine geschlossene Combobox verbirgt genau die Angabe, die man beim Deuten der Tabelle braucht.
 
 ```html
-<div class="xxx-chips" role="group" :aria-label="$app.t('…pickLabel')">
-  <template x-for="k in kandidaten()" :key="k.id">
-    <button type="button" class="xxx-chip"
-            :class="{ 'xxx-chip--on': istGewaehlt(k.id) }"
-            :aria-pressed="istGewaehlt(k.id)"
-            :disabled="!istGewaehlt(k.id) && istVoll()"
-            @click="toggle(k.id)">…</button>
-  </template>
+<!-- Wrapper traegt den Aussenabstand des Auswahl-Schritts, nicht der bedingte Hinweis -->
+<div class="xxx-pick">
+  <p class="xxx-hint" x-show="ausgeschlossen() > 0" x-text="…"></p>
+  <div class="xxx-chips" role="group" :aria-label="$app.t('…pickLabel')">
+    <template x-for="k in kandidaten()" :key="k.id">
+      <button type="button" class="xxx-chip"
+              :class="{ 'xxx-chip--on': istGewaehlt(k.id) }"
+              :aria-pressed="istGewaehlt(k.id)"
+              :disabled="!istGewaehlt(k.id) && istVoll()"
+              @click="toggle(k.id)">…</button>
+    </template>
+  </div>
 </div>
 ```
 
@@ -1260,6 +1265,8 @@ CSS: [public/css/entities/entity-list.css](public/css/entities/entity-list.css).
 - **Eckig** (`--radius-sm`), wie jedes Badge/Tag; die Pillenform gehört dem An/Aus-Schalter.
 - **Wer nicht in Frage kommt, erscheint gar nicht** — und wie viele das sind, wird als Hinweis ausgewiesen. Eine stumm gekürzte Liste liest sich als „mehr gibt es nicht".
 - Erste Öffnung wählt selbst vor (die stärksten Kandidaten), statt eine leere Ansicht mit Aufforderung zu zeigen.
+- **Der Abstand hängt am Wrapper, nicht an einem bedingten Kind.** Die Reihe ist ein eigener Arbeitsschritt zwischen Filterleiste und Vergleichsansicht und braucht oben wie unten Luft (`margin: var(--space-md) 0 var(--space-lg)`); der Hinweis darüber ist `x-show`-bedingt, und säße der untere Abstand an ihm, rückten Chips und Tabelle zusammen, sobald er verschwindet. Nach oben **kollabiert** die Wrapper-Margin mit der `margin-bottom` der `.filter-bar` (normaler Fluss) — sie addiert sich nicht.
+- **Chips sind Klickziele, keine Inline-Tags:** `--pad-badge` (4/8) und ein Gap ab `--space-6`, Zeilen-Gap grösser als der Spalten-Gap (`gap: var(--space-sm) var(--space-6)`). Mit dem 2-px-Gap der dichten Tag-Reihen verschmilzt die Auswahl zu einem Block, in dem man die einzelne Schaltfläche nicht mehr sieht.
 
 **Beispiele:** [public/partials/figuren-lebenslauf.html](public/partials/figuren-lebenslauf.html)
 
@@ -1356,6 +1363,26 @@ Niemals reine `<div>`s mit Inline-Text dafür — immer durch `.card-status*`-Kl
 Markup-Fallback-Glyph (`›`) bleibt im DOM, wird per `text-indent: 100%; overflow: hidden` versteckt. Schadlos bei deaktiviertem CSS, kein Screen-Reader-Lärm (Konsumenten setzen `aria-hidden="true"` am Chevron-Span).
 
 Kein neuer Marker ohne Eintrag hier.
+
+---
+
+## Feature-Text (Landing + Hilfe)
+
+**Use:** Die Kurzbeschreibung eines Features, die in der öffentlichen Landing-Page **und** in der In-App-Hilfe als Kachel steht. Beide lesen dieselben i18n-Keys `landing.feat<N>Title` / `landing.feat<N>Desc` (SSoT, siehe CLAUDE.md „Hilfe-Karte + Landing pflegen").
+
+**Markup:** Kachel in einem Raster — [landing.html](public/landing.html) `li.public-feature`, [help.html](public/partials/help.html) `li.help-feature`. Beide sind `<h3>` + `<p>`, kein Markdown, keine Links, keine Icons. Die Hilfe zeigt **alle** Nummern aus `HELP_FEATURES`, die Landing-Page bewusst nur die ersten als kuratierten Einstieg — dieselben Keys, dieselbe Reihenfolge, kein zweiter Textsatz.
+
+**Regeln:**
+- **Titel: 1–3 Wörter, höchstens 26 Zeichen.** Der Name des Features, nicht seine Erklärung — kein „und", kein Klammerzusatz, kein Doppelpunkt-Anhang. Steht auf einer Zeile, auch mobil.
+- **Beschreibung: 160–200 Zeichen, ein bis zwei Sätze.** Das ist der harte Rahmen; **Why:** die Kacheln liegen im selben Raster nebeneinander, und ein 700-Zeichen-Block neben einem 80-Zeichen-Block lässt das Raster zerfallen und die kurzen Features nebensächlich wirken. Der Rahmen gilt **für alle Features gleich** — ein neues, komplexes Feature bekommt keinen längeren Text als „Export", es bekommt einen schärferen.
+- **Inhalt: was es tut, dann der eine Unterschied.** Satz 1 nennt die Sache in der Sprache des Autors (nicht der Architektur). Satz 2 nennt genau **eine** Eigenschaft, die das Feature von der naheliegenden Erwartung abhebt. Kein dritter Gedanke — der gehört in die Deep-Doc unter [docs/](docs/).
+- **Nicht hineinschreiben:** Tabellen-/Spalten-/Routen-/Job-Namen, Dateipfade, Konfigurations-Keys, Begründungen im **Why:**-Stil, Aufzählungen mit mehr als vier Gliedern, Zukunftsversprechen.
+- **Beide Locales im selben Commit**, in derselben Länge — `de` ist nicht die Langfassung von `en`.
+- **Reihenfolge = Erscheinungsreihenfolge**: `<N>` hängt hinten an, das neueste Feature steht unten. Bestehende Nummern nie umnummerieren (der Landing-Block trägt sie hartcodiert).
+
+**Gate:** [tests/unit/landing-feature-text.test.mjs](tests/unit/landing-feature-text.test.mjs) — Titel-/Beschreibungslänge in beiden Locales, Lückenlosigkeit von `HELP_FEATURES`, Landing als Prefix davon.
+
+**Beispiele:** `landing.feat6Desc` (Export — breites Feature, ein Satz Umfang + ein Satz Beigabe), `landing.feat23Desc` (Buchlandkarte — abstraktes Feature, Satz 1 sagt was es ist, Satz 2 was man sieht).
 
 ---
 

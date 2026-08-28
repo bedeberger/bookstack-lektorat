@@ -1,8 +1,14 @@
+@layer components {
 /* === Alterstabelle der Figuren (5. Reiter der Figuren-Karte) ===
    Eigene Datei statt Anbau an entities/figuren.css: die liegt bei 531 Zeilen und
    der 600er-Cap aus CLAUDE.md („File-Limits / Modularität") ist maschinell
    gegated. Markup: public/partials/figuren-alter.html
-   Akzentfarbe kommt über var(--card-accent) von .card--figuren. */
+   Akzentfarbe kommt über var(--card-accent) von .card--figuren.
+
+   Tabellen-Grundton folgt `entities/entity-grid.css` (Szenen/Schauplätze) statt
+   der Job-Statistik-Tabelle: das hier ist eine Analyse-Tabelle in einer
+   Entity-Karte mit acht Spalten, Plaketten und Zweitzeilen — nicht die dichte
+   Zahlenliste einer Einstellungs-Karte. */
 
 .figur-alter { margin-top: var(--space-10); }
 
@@ -34,38 +40,48 @@
 .figur-alter-hint {
   font-size: var(--font-size-mini);
   color: var(--color-muted);
-  margin: 0 0 var(--space-xs);
+  margin: 0 0 var(--space-sm);
 }
+
+/* ── Tabelle ──────────────────────────────────────────────────────────────── */
 
 .figur-alter-table {
   width: 100%;
   border-collapse: collapse;
   font-size: var(--font-size-sm);
 }
-.figur-alter-table th {
+/* Symmetrisches Zellpadding auf BEIDEN Achsen. Ein linksseitig padding-loses
+   `td` laesst den Zeilen-Hintergrund (hover/open) und den Widerspruchs-Balken
+   direkt am Text kleben und gibt der ersten Spalte keinen Innenrand. */
+.figur-alter-table th,
+.figur-alter-table td {
   text-align: left;
-  color: var(--color-muted);
-  font-weight: var(--fw-regular);
-  padding: var(--space-2xs) 12px 5px 0;
+  padding: var(--space-xs) var(--space-sm);
   border-bottom: 0.5px solid var(--color-border);
+}
+.figur-alter-table th {
+  font-size: var(--font-size-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
   white-space: nowrap;
 }
-/* Platz fuer das Sortier-Chevron zurueckholen. `.sortable-th` reserviert ihn per
-   `padding-right`, liegt aber in `@layer components` — die Padding-Shorthand oben
-   ist ungelayert und gewinnt damit unabhaengig von der Reihenfolge, worauf das
-   Chevron im Spaltentitel sitzt. Wer hier die Shorthand anfasst, muss diese Zeile
-   mitdenken. */
+/* Chevron-Platzreservierung aus `.sortable-th` (0,1,0) muss die th-Default-Regel
+   darueber (0,1,1) schlagen, sonst laeuft der Sortier-Chevron in kurze
+   Header-Labels („Typ") hinein. Specificity 0,2,1 gewinnt. */
 .figur-alter-table th.sortable-th { padding-right: calc(var(--space-md) + 14px); }
-.figur-alter-table td {
-  padding: var(--space-xs) 12px 4px 0;
-  border-bottom: 0.5px solid var(--color-separator-on-dark);
-  vertical-align: baseline;
-}
+/* Ausrichtung an der Textgrundlinie, nicht mittig: die Zeile mischt blossen
+   Text (Name, Jahreszahlen) mit Plaketten und dem Figurenpunkt, die eigene
+   Innenabstaende haben. `middle` zentrierte jedes davon in seiner eigenen Hoehe
+   und die Zahlen einer Zeile staenden nicht mehr auf derselben Linie. */
+.figur-alter-table td { vertical-align: baseline; }
 
 .figur-alter-row--clickable { cursor: pointer; }
 .figur-alter-row--clickable:hover td { background: var(--color-hover); }
-.figur-alter-row--open td { background: var(--color-hover); }
-.figur-alter-row--clickable .history-chevron { margin-right: var(--space-6); }
+/* Offen ist ein Zustand, Hover ein Zeigefinger — mit demselben Ton waere beim
+   Ueberfahren nicht mehr erkennbar, welche Zeile ihre Belege zeigt. */
+.figur-alter-row--open td { background: var(--color-hover-strong); }
 /* Widerspruch: der Balken links markiert die Zeile, ohne die Zahlen einzufärben —
    der Befund ist die Abweichung, nicht ein einzelner Wert. */
 .figur-alter-row--conflict td:first-child {
@@ -82,9 +98,15 @@
 .figur-alter-tags {
   display: flex;
   align-items: center;
-  gap: var(--space-2xs);
 }
-.figur-alter-tags { flex-wrap: wrap; }
+/* Der Abstand steht am Flex-Gap, NICHT als `margin-right` an einem Chevron, das
+   nur klickbare Zeilen haben: die Reservierung des Chevron-Platzes waere sonst
+   in Zeilen ohne Belege um genau diesen Abstand schmaler, und Punkt wie Name
+   ruecken dort nach links — die Namensspalte franst zeilenweise aus. Der Gap
+   traegt zugleich Punkt/Name und Name/Kurzname auseinander; bei 2px lasen sich
+   „Daniel Tannenberg" und sein Kurzname als ein Wort. */
+.figur-alter-name-inner { gap: var(--space-6); }
+.figur-alter-tags { flex-wrap: wrap; gap: var(--space-2xs); }
 /* Zeile ohne Belege: Chevron unsichtbar, Platz bleibt (siehe Partial). */
 .figur-alter-chevron--empty { visibility: hidden; }
 .figur-alter-kurzname {
@@ -97,8 +119,14 @@
 }
 /* Das Alter ist die Antwort auf die Frage der Tabelle — es darf optisch führen. */
 .figur-alter-age { font-weight: var(--fw-medium); }
+/* Die Herkunft des Geburtsjahrs steht NEBEN der Zahl, nicht darunter: als
+   eigene Zeile trieb sie genau die Zeilen auf die anderthalbfache Hoehe, in
+   denen eine Figur eine Geburtsjahr-Quelle hat — der Zeilenrhythmus der Tabelle
+   wechselte damit zeilenweise. Inline bleibt sie eine Anmerkung zur Zahl und
+   alle Zeilen sind gleich hoch (`.figur-alter-num` haelt sie per `nowrap`
+   zusammen). */
 .figur-alter-sub {
-  display: block;
+  margin-left: var(--space-6);
   font-size: var(--font-size-mini);
   color: var(--color-muted);
 }
@@ -113,10 +141,15 @@
   background: var(--color-warn-bg);
 }
 
-/* Belege einer Zeile (aufgeklappt) */
+/* Belege einer Zeile (aufgeklappt).
+   Hintergrund IDENTISCH zur offenen Zeile darueber: mit der Kartenfarbe zerfiel
+   die aufgeklappte Zeile in zwei fremde Bloecke — die getoente Kopfzeile und ein
+   danebenstehender Kasten. Der eigene `border-bottom` schliesst den Block nach
+   unten ab, sonst laeuft er in die naechste Figur. */
 .figur-alter-belege-row td {
-  padding: var(--space-6) 0 10px 18px;
-  background: var(--color-card-bg);
+  padding: var(--space-sm) var(--space-sm) var(--space-md) var(--space-xl);
+  background: var(--color-hover-strong);
+  border-bottom: 0.5px solid var(--color-border);
 }
 .figur-alter-belege {
   list-style: none;
@@ -149,4 +182,7 @@
    (Utility-Regel `.table-scroll > table { min-width: 100% }` überschreiben). */
 @media (max-width: 720px) {
   .table-scroll > .figur-alter-table { min-width: max-content; }
+  .figur-alter-table th,
+  .figur-alter-table td { padding: var(--space-xs) var(--space-6); }
+}
 }

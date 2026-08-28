@@ -130,6 +130,7 @@ export function graphTheme(container) {
     dark,
     text, muted, surface, bg, surfaceRgb,
     // Chrome des Figurengraphen
+    headerText: text,                           // Kapitel-Kopfzeile ueber den Spalten
     stripe:   rgba(ink, dark ? 0.05 : 0.028),   // alternierende Kapitel-Spalte
     gridLine: rgba(ink, dark ? 0.10 : 0.06),    // Spalten-Trennlinie
     trackBg:  rgba(ink, dark ? 0.14 : 0.07),    // Presence-Bar-Untergrund
