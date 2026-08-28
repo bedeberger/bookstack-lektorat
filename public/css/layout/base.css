@@ -11,7 +11,7 @@
   z-index: var(--z-toast);
   background: var(--color-primary);
   color: var(--color-on-primary);
-  padding: 0.5rem 0.875rem;
+  padding: var(--space-sm) var(--space-14);
   border-radius: var(--radius-sm);
   font-weight: var(--fw-semibold);
   text-decoration: none;
@@ -95,17 +95,17 @@ body {
   font-feature-settings: "kern", "liga", "calt", "cv11";
   min-height: 100vh;
   min-height: 100dvh;
-  padding: 1rem 1rem 56px;
+  padding: var(--space-lg) var(--space-lg) 56px;
   max-width: 860px;
   margin: 0 auto;
 }
 
 @media (min-width: 600px) {
-  body { padding: 1.5rem 1.5rem 56px; }
+  body { padding: var(--space-xl) var(--space-xl) 56px; }
 }
 
 @media (min-width: 960px) {
-  body { padding: 2rem 1.5rem 56px; max-width: 1600px; }
+  body { padding: var(--space-2xl) var(--space-xl) 56px; max-width: 1600px; }
 }
 
 h1 {
@@ -113,7 +113,7 @@ h1 {
   font-size: var(--font-size-2xl);
   font-weight: var(--fw-medium);
   letter-spacing: -0.015em;
-  margin-bottom: 0.25rem;
+  margin-bottom: var(--space-xs);
 }
 
 /* === Keyboard-Shortcut-Anzeige (kbd) ===
@@ -124,7 +124,7 @@ kbd {
   align-items: center;
   justify-content: center;
   min-width: 1.5em;
-  padding: var(--space-1) 6px;
+  padding: var(--space-1) var(--space-6);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: var(--font-size-xs);
   font-weight: var(--fw-medium);
@@ -138,7 +138,7 @@ kbd {
 .site-title {
   display: flex;
   align-items: baseline;
-  gap: 0.6rem;
+  gap: var(--space-10);
   cursor: pointer;
   font-family: var(--font-serif);
   font-weight: var(--fw-semibold);
@@ -159,7 +159,7 @@ kbd {
 code {
   font-family: monospace;
   background: var(--color-tag-bg);
-  padding: var(--space-1) 5px;
+  padding: var(--space-1) var(--space-5);
   border-radius: var(--radius-sm);
   font-size: var(--font-size-mini);
 }

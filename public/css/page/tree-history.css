@@ -1,26 +1,4 @@
 @layer components {
-/* === Progress bar === */
-.progress-bar-wrap {
-  height: 4px;
-  background: var(--color-tag-bg);
-  border-radius: 0;
-  margin-top: var(--space-md);
-  margin-bottom: var(--space-md);
-  overflow: hidden;
-}
-
-.progress-bar {
-  height: 100%;
-  width: var(--progress, 0%);
-  background: var(--color-text);
-  border-radius: 0;
-  transition: width 0.3s;
-}
-
-.progress-bar-wrap + .card-status {
-  margin-bottom: var(--space-20);
-}
-
 /* === Tree view === */
 /* Während Buchwechsel-Fetch bleibt alter Tree sichtbar (kein leerer Sackgassen-
    Zustand bei Fetch-Fail), wird aber gedimmt + Klicks blockiert, damit der
@@ -51,7 +29,7 @@
   column-gap: var(--space-6);
   row-gap: var(--space-2xs);
   align-items: start;
-  padding: var(--space-6) 10px 6px 2px;
+  padding: var(--space-6) var(--space-10) var(--space-6) var(--space-2xs);
   border: 0.5px solid transparent;
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -137,7 +115,7 @@
 }
 
 .history-bar {
-  margin-top: 1rem;
+  margin-top: var(--space-lg);
   padding-top: var(--space-md);
   border-top: 1px solid var(--color-border);
 }
@@ -145,8 +123,8 @@
 .history-item {
   display: flex;
   align-items: center;
-  gap: var(--space-6) 10px;
-  padding: var(--space-sm) 12px;
+  gap: var(--space-6) var(--space-10);
+  padding: var(--space-sm) var(--space-md);
   border-radius: var(--radius-md);
   border: 0.5px solid var(--color-border);
   margin-bottom: var(--space-xs);
@@ -203,7 +181,7 @@
   justify-content: center;
   font-size: var(--font-size-base);
   line-height: 1;
-  padding: var(--space-2xs) 5px;
+  padding: var(--space-2xs) var(--space-5);
   border: none;
   background: none;
   color: var(--color-subtle);
@@ -217,7 +195,7 @@
 
 @media (max-width: 480px) {
   .history-item-delete {
-    padding: var(--space-6) 10px;
+    padding: var(--space-6) var(--space-10);
     font-size: var(--font-size-reading);
   }
 }
@@ -237,7 +215,7 @@
 
 .btn-toggle-saved {
   font-size: var(--font-size-xs);
-  padding: var(--space-2xs) 8px;
+  padding: var(--space-2xs) var(--space-sm);
   border-radius: 0;
   border: 1px solid transparent;
   cursor: pointer;
@@ -269,8 +247,8 @@
   border: 0.5px solid var(--color-border);
   border-top: 0.5px dashed var(--color-border);
   border-radius: 0 0 var(--radius-md) var(--radius-md);
-  padding: var(--space-lg) 18px 18px;
-  margin: 0 0 8px;
+  padding: var(--space-lg) var(--space-18) var(--space-18);
+  margin: 0 0 var(--space-sm);
   background: transparent;
 }
 .history-detail > :first-child { margin-top: 0; }
@@ -281,7 +259,7 @@
 .history-detail .stilbox {
   background: transparent;
   padding: 0;
-  margin: 0 0 14px;
+  margin: 0 0 var(--space-14);
   border-radius: 0;
 }
 .history-detail .bewertung-section { margin-top: var(--space-lg); }
@@ -291,7 +269,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: var(--space-xs) 12px;
+  padding: var(--space-xs) var(--space-md);
   font-size: var(--font-size-xs);
   border: 1px solid var(--color-err-text);
   background: none;

@@ -2,12 +2,6 @@
    Akzentfarbe kommt über var(--card-accent) aus card-accents.css. */
 
 @layer components {
-  .struktur-intro {
-    margin: 0 0 var(--space-lg);
-    color: var(--color-muted);
-    font-size: var(--font-size-sm);
-    line-height: 1.5;
-  }
 
   .struktur-default-row {
     margin-bottom: var(--space-lg);

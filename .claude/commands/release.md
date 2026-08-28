@@ -8,7 +8,7 @@ Du führst einen Release der App durch. SSoT der Version ist die Datei `VERSION`
 
 Bump-Argument: `$ARGUMENTS` (leer = `patch`).
 
-**Ein Release endet immer gepusht.** Commit, Tag, `git push` und GitHub-Release gehören zum Befehl — sie sind nicht optional und werden nicht zurückgestellt. Ein Lauf, der nur `VERSION` hochzählt und den Tree liegen lässt, ist ein fehlgeschlagener Lauf. Ausser der Bestätigung der Release-Notizen (Schritt 9) wird **nicht** nachgefragt; ab Schritt 11 läuft alles in einem Zug durch.
+**Ein Release endet immer gepusht.** Commit, Tag, `git push` und GitHub-Release gehören zum Befehl — sie sind nicht optional und werden nicht zurückgestellt. Ein Lauf, der nur `VERSION` hochzählt und den Tree liegen lässt, ist ein fehlgeschlagener Lauf. **Es wird nicht nachgefragt** — weder für die Release-Notizen noch sonst. Der Lauf hält nur an, wenn ein Schritt fehlschlägt oder die Änderungslage nicht eindeutig ist (Schritt 9); andernfalls läuft er von Schritt 1 bis zum Abschlussbericht in einem Zug durch.
 
 ## Vorprüfung
 
@@ -41,7 +41,7 @@ Das ist der Teil, den nur du machen kannst — der Rest ist Mechanik.
    - `date` = heutiges Datum (`YYYY-MM-DD`).
    - Bringt eine Version **nichts** User-Sichtbares (reiner Wartungs-Release), schreibe genau einen ehrlichen Eintrag dazu (`kind: 'verbessert'`, z. B. „Wartung und interne Verbesserungen ohne Änderungen an der Oberfläche.") — eine Version ohne Datei lässt `npm run test:unit` rot werden, und das ist Absicht.
 
-9. Die geschriebenen Notizen **dem User zeigen** (kompakte Liste, DE) und bestätigen lassen, bevor es weitergeht. Er kennt die Änderungen aus seiner Sicht besser als der Commit-Log sie hergibt. Bei Korrekturwünschen die Datei anpassen und erneut zeigen.
+9. Die geschriebenen Notizen **ohne Rückfrage** übernehmen und weiterfahren — sie werden im Abschlussbericht ohnehin gezeigt, und der User kann danach jederzeit korrigieren lassen. **Warten ist die Ausnahme, nicht die Regel:** nachgefragt wird nur, wenn (a) ein Schritt fehlschlägt, (b) der Commit-Log die Änderung nicht eindeutig hergibt — mehrere plausible Lesarten, unklar ob überhaupt User-sichtbar, oder Fremdarbeit im Tree, die du nicht zuordnen kannst. Dann die kompakte DE-Liste zeigen, bestätigen lassen und bei Korrekturwünschen die Datei anpassen und erneut zeigen. Im Normalfall läuft der Befehl ohne Halt durch.
 
 ## Drift-Artefakte + Tests (vor dem Tag)
 

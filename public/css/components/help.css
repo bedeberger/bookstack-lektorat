@@ -4,13 +4,6 @@
    aber in der SPA-Karten-Optik. Akzent = globaler var(--color-accent), wie in
    „Meine Statistik". Markup: public/partials/help.html. */
 
-.help-intro {
-  margin: 0 0 var(--space-lg);
-  color: var(--color-muted);
-  line-height: var(--lh-base);
-  max-width: 60ch;
-}
-
 .help-features {
   list-style: none;
   margin: 0;
@@ -36,20 +29,6 @@
   font-size: var(--font-size-md);
   font-weight: var(--fw-semibold);
   color: var(--color-text);
-}
-
-.help-feature-desc {
-  margin: 0;
-  font-size: var(--font-size-sm);
-  color: var(--color-muted);
-  line-height: var(--lh-base);
-}
-
-.help-palette-hint {
-  margin: var(--space-lg) 0 0;
-  font-size: var(--font-size-mini);
-  color: var(--color-muted);
-  line-height: var(--lh-base);
 }
 
 /* ── Reiter ──────────────────────────────────────────────────────────────
@@ -238,11 +217,6 @@
   font-size: var(--font-size-md);
   font-weight: var(--fw-semibold);
   color: var(--color-text);
-}
-.welcome-step-desc {
-  font-size: var(--font-size-sm);
-  color: var(--color-muted);
-  line-height: var(--lh-base);
 }
 .welcome-philosophy {
   margin: var(--space-md) 0 0;

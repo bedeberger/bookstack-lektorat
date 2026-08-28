@@ -47,7 +47,7 @@
     padding-bottom: var(--space-xs);
     border-bottom: 1px solid var(--color-border);
   }
-  .plot-vorschlag-body { flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; }
+  .plot-vorschlag-body { flex: 1 1 auto; display: flex; flex-direction: column; gap: var(--space-2xs); }
   .plot-vorschlag-label { font-size: var(--font-size-sm); font-weight: var(--fw-semibold); color: var(--color-text); }
   .plot-vorschlag-begruendung { font-size: var(--font-size-xs); color: var(--color-muted); }
 
@@ -95,7 +95,7 @@
   .plot-konflikt-vorschlag {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: var(--space-2xs);
     margin-top: var(--space-xs);
     padding-top: var(--space-xs);
     border-top: 1px solid var(--color-border);
@@ -167,7 +167,7 @@
     flex: 0 0 auto;
     display: inline-flex;
     align-items: flex-end;
-    gap: 2px;
+    gap: var(--space-2xs);
     height: 12px;
   }
   .plot-beat-intensity-pip { width: 3px; background: var(--color-tag-bg); }

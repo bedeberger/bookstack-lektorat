@@ -62,7 +62,7 @@
   color: var(--color-text);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  padding: var(--space-3) 8px;
+  padding: var(--space-3) var(--space-sm);
   font-size: var(--font-size-sm);
   cursor: pointer;
   font-family: inherit;
@@ -76,7 +76,7 @@
   background: var(--color-hover-strong);
   border-color: var(--color-accent);
 }
-.edit-find-btn--text { padding: var(--space-3) 10px; }
+.edit-find-btn--text { padding: var(--space-3) var(--space-10); }
 .edit-find-close {
   display: inline-flex;
   align-items: center;
@@ -85,7 +85,7 @@
   background: transparent;
   color: var(--color-muted);
   border: none;
-  padding: var(--space-3) 6px;
+  padding: var(--space-3) var(--space-6);
   font-size: var(--font-size-md);
   cursor: pointer;
   line-height: 1;

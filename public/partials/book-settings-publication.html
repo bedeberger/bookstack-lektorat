@@ -3,7 +3,7 @@
     <div class="card-form-grid" x-bind="panel('publication')" x-cloak>
 
       <section class="book-settings-section">
-        <h3 class="book-settings-section-title" x-text="$app.t('publication.section.images')"></h3>
+        <h3 class="card-section-title" x-text="$app.t('publication.section.images')"></h3>
 
         <div class="card-form-row">
           <label class="card-form-label" x-text="$app.t('publication.cover')"></label>
@@ -53,7 +53,7 @@
       </section>
 
       <section class="book-settings-section">
-        <h3 class="book-settings-section-title" x-text="$app.t('publication.section.metadata')"></h3>
+        <h3 class="card-section-title" x-text="$app.t('publication.section.metadata')"></h3>
 
         <div class="card-form-row">
           <label class="card-form-label" for="pub-author-name" x-text="$app.t('publication.authorName')"></label>
@@ -114,12 +114,12 @@
       </section>
 
       <section class="book-settings-section">
-        <h3 class="book-settings-section-title" x-text="$app.t('publication.section.matter')"></h3>
+        <h3 class="card-section-title" x-text="$app.t('publication.section.matter')"></h3>
         <p class="card-form-hint" x-text="$app.t('publication.matterHint')"></p>
         <div class="pub-repeater">
           <template x-for="(s, i) in (bookPublication.extra_sections || [])" :key="i">
             <div class="pub-matter-card">
-              <div class="pub-matter-head">
+              <div class="card-section-head">
                 <div class="seg-toggle">
                   <button type="button" :class="{ 'seg-toggle--active': (s.placement || 'back') === 'front' }"
                           @click="s.placement = 'front'" x-text="$app.t('publication.matter.front')"></button>
@@ -145,7 +145,7 @@
       </section>
 
       <section class="book-settings-section">
-        <h3 class="book-settings-section-title" x-text="$app.t('publication.section.trade')"></h3>
+        <h3 class="card-section-title" x-text="$app.t('publication.section.trade')"></h3>
         <p class="card-form-hint" x-text="$app.t('publication.tradeHint')"></p>
         <div class="card-form-row">
           <label class="card-form-label" for="pub-description" x-text="$app.t('publication.description')"></label>
@@ -172,7 +172,7 @@
       </section>
 
       <section class="book-settings-section">
-        <h3 class="book-settings-section-title" x-text="$app.t('publication.section.export')"></h3>
+        <h3 class="card-section-title" x-text="$app.t('publication.section.export')"></h3>
         <p class="card-form-hint" x-text="$app.t('publication.exportToolsHint')"></p>
         <div class="card-actions">
           <button type="button" class="primary" data-label-ok :disabled="!$store.nav.selectedBookId"

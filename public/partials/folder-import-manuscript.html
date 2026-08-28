@@ -51,7 +51,7 @@
       <span x-text="$app.t('folderImport.manuscript.keepHeadings')"></span>
     </label>
 
-    <div class="folder-import-hint" x-text="$app.t('folderImport.manuscript.mappingHint')"></div>
+    <div class="card-hint" x-text="$app.t('folderImport.manuscript.mappingHint')"></div>
   </div>
 </div>
 
@@ -65,7 +65,7 @@
       <span class="folder-import-preview-summary" x-show="preview"
             x-text="$app.t('folderImport.manuscript.previewSummary', { chapters: preview?.chapterCount || 0, pages: preview?.pageCount || 0 })"></span>
     </div>
-    <div class="folder-import-hint" x-show="!preview" x-text="$app.t('folderImport.manuscript.previewEmpty')"></div>
+    <div class="card-hint" x-show="!preview" x-text="$app.t('folderImport.manuscript.previewEmpty')"></div>
     <div class="folder-import-heading-counts" x-show="preview && headingCountList.length">
       <span x-text="$app.t('folderImport.manuscript.headingCounts') + ':'"></span>
       <template x-for="hc in headingCountList" :key="hc.level">
@@ -82,7 +82,7 @@
         </li>
       </template>
     </ul>
-    <div class="folder-import-hint" x-show="preview?.outlineTruncated"
+    <div class="card-hint" x-show="preview?.outlineTruncated"
          x-text="$app.t('folderImport.manuscript.previewTruncated')"></div>
   </div>
 </div>

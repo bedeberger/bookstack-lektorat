@@ -7,7 +7,7 @@
 .page-content-skeleton {
   margin: var(--space-md) auto;
   max-width: calc(64ch + 2 * clamp(18px, 4vw, 40px));
-  padding: var(--space-md) clamp(18px, 4vw, 40px);
+  padding: var(--space-md) clamp(var(--space-18), 4vw, 40px);
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);

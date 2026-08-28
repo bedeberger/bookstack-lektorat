@@ -18,7 +18,7 @@
   grid-template-columns: subgrid;
   grid-column: 1 / -1;
   align-items: center;
-  padding: var(--space-6) 8px;
+  padding: var(--space-6) var(--space-sm);
   border-radius: var(--radius-sm);
   cursor: pointer;
   min-width: 0;

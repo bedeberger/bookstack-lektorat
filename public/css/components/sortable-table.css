@@ -10,7 +10,7 @@
 .sortable-th {
   cursor: pointer;
   position: relative;
-  padding-right: calc(var(--space-md) + 14px); /* Platz fuer Chevron */
+  padding-right: calc(var(--space-md) + var(--space-14)); /* Platz fuer Chevron */
   user-select: none;
   white-space: nowrap;
 }
@@ -42,7 +42,7 @@
 .sortable-th::after {
   /* Pfeil runter (desc) */
   top: 50%;
-  margin-top: 2px;
+  margin-top: var(--space-2xs);
   border-top: 5px solid currentColor;
 }
 

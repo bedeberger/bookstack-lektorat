@@ -114,11 +114,11 @@
 }
 .table-grid-aligns {
   display: flex;
-  gap: 2px;
+  gap: var(--space-2xs);
 }
 .table-align-btn {
   min-width: 1.6rem;
-  padding: 2px 4px;
+  padding: var(--space-2xs) var(--space-xs);
   border: 0.5px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-surface);
@@ -145,7 +145,7 @@
   border-radius: 0;
   background: transparent;
   color: inherit;
-  padding: var(--space-6) 10px;
+  padding: var(--space-6) var(--space-10);
   font: inherit;
   font-variant-numeric: lining-nums tabular-nums;
 }
@@ -168,11 +168,6 @@
   flex-wrap: wrap;
   gap: var(--space-sm);
 }
-.table-dialog-hint {
-  font-size: var(--font-size-xs);
-  color: var(--color-muted);
-}
-
 
 /* Tabelle im Edit-Modus: sie ist atomar (contenteditable="false"), also muss
    sichtbar sein, dass ein Klick etwas tut — sonst wirkt sie wie eingefroren.

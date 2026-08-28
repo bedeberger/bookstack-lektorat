@@ -5,7 +5,7 @@
 */
 
 .card--organizer .organizer-hint {
-  margin: var(--space-xs) 0 12px;
+  margin: var(--space-xs) 0 var(--space-md);
 }
 
 .organizer-list {
@@ -49,7 +49,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  padding: var(--space-sm) 10px;
+  padding: var(--space-sm) var(--space-10);
   background: var(--color-hover-light);
   border-bottom: 1px solid var(--color-border);
   border-top-left-radius: calc(var(--radius-sm) - 1px);
@@ -100,7 +100,7 @@
   border: 1px solid transparent;
   background: transparent;
   border-radius: var(--radius-sm);
-  padding: var(--space-xs) 6px;
+  padding: var(--space-xs) var(--space-6);
   font: inherit;
   color: var(--color-text);
 }
@@ -120,7 +120,7 @@
 .organizer-pages {
   list-style: none;
   margin: 0;
-  padding: var(--space-xs) 6px 6px;
+  padding: var(--space-xs) var(--space-6) var(--space-6);
   min-height: 28px;
   display: flex;
   flex-direction: column;
@@ -131,7 +131,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-6);
-  padding: var(--space-xs) 6px;
+  padding: var(--space-xs) var(--space-6);
   border-radius: var(--radius-sm);
   background: transparent;
   transition: background-color 0.12s;
@@ -148,7 +148,7 @@
   cursor: pointer;
   font-size: var(--font-size-reading);
   line-height: 1;
-  padding: var(--space-2xs) 6px;
+  padding: var(--space-2xs) var(--space-6);
   border-radius: var(--radius-sm);
   flex-shrink: 0;
 }
@@ -163,24 +163,26 @@
 .organizer-delete-btn--chapter { margin-left: var(--space-xs); }
 
 .organizer-empty {
-  padding: var(--space-6) 8px;
+  padding: var(--space-6) var(--space-sm);
   font-size: var(--font-size-mini);
   color: var(--color-subtle);
   font-style: italic;
 }
 
+/* `nowrap` ist die Abweichung (Suchfeld + Aktionen bleiben eine Zeile), der
+   vertikale Abstand ist der Karten-Rhythmus — siehe `.card-toolbar`. */
 .organizer-toolbar {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
   flex-wrap: nowrap;
-  margin: var(--space-sm) 0 var(--space-md);
+  margin: 0 0 var(--card-gap-section);
 }
 .organizer-toolbar .page-search {
   flex: 1 1 0;
   min-width: 120px;
   height: 34px;
-  padding: 0 10px;
+  padding: 0 var(--space-10);
   box-sizing: border-box;
 }
 .organizer-jump {
@@ -244,7 +246,7 @@
   height: 28px;
   line-height: 1.2;
   font-size: var(--size-compact-font-size);
-  padding: var(--space-xs) 8px;
+  padding: var(--space-xs) var(--space-sm);
 }
 
 /* SortableJS-Drag-Zustände (eigene Klassen via baseOpts in dnd.js) —
@@ -446,7 +448,7 @@
   height: 28px;
   line-height: 1.2;
   font-size: var(--size-compact-font-size);
-  padding: var(--space-xs) 8px;
+  padding: var(--space-xs) var(--space-sm);
 }
 .organizer-redaktion-badge { flex: none; }
 .badge--redaktion-roh {

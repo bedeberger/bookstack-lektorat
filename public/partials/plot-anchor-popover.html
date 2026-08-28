@@ -34,7 +34,7 @@
         <!-- Promotion: geplanter Beat mit starkem Textbeleg → Vorschlag, ihn auf
              „im Buch" zu setzen (der Autor prüft die Fundstellen darüber selbst). -->
         <div class="plot-occ-promote" x-show="beatAnchorState(beatOccPopoverBeat()) === 'promote'">
-          <p class="plot-occ-promote-hint" x-text="$app.t('plot.anchor.promote.hint')"></p>
+          <p class="card-hint card-hint--sm" x-text="$app.t('plot.anchor.promote.hint')"></p>
           <button type="button" class="btn-compact plot-occ-promote-btn" :disabled="busy"
                   @click.stop="promoteBeat(beatOccPopoverBeat())"
                   x-text="$app.t('plot.anchor.promote.action')"></button>

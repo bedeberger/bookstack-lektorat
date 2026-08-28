@@ -54,7 +54,7 @@
   width: 1px;
   height: 10px;
   background: var(--color-border);
-  margin: 0 2px;
+  margin: 0 var(--space-2xs);
 }
 
 .figur-edge-line {
@@ -73,7 +73,7 @@
 /* === Figuren: Soziogramm-Hint + Actions === */
 .soziogramm-placeholder {
   display: block;
-  padding: var(--space-2xl) 20px;
+  padding: var(--space-2xl) var(--space-20);
   text-align: center;
   line-height: 1.6;
 }
@@ -81,7 +81,7 @@
 .figur-soziogramm-hint {
   font-size: var(--font-size-xs);
   color: var(--color-muted);
-  margin: var(--space-xs) 0 8px;
+  margin: var(--space-xs) 0 var(--space-sm);
 }
 .figur-soziogramm-actions {
   display: flex;
@@ -256,7 +256,7 @@
 }
 .figur-bz-beleg {
   font-size: var(--font-size-xs);
-  padding: var(--space-1) 6px;
+  padding: var(--space-1) var(--space-6);
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--color-border) 20%, var(--color-surface));
   color: var(--color-muted);
@@ -326,17 +326,6 @@
   color: var(--color-surface);
 }
 
-/* === Card-Status (einheitlich fuer alle Feature-Karten) === */
-.card-status {
-  font-size: var(--font-size-sm);
-  color: var(--color-muted);
-  margin-top: var(--space-sm);
-  margin-bottom: var(--space-sm);
-  display: flex;
-  align-items: center;
-  gap: var(--space-6);
-}
-
 .figur-beschreibung {
   font-size: var(--font-size-base);
   line-height: 1.65;
@@ -396,18 +385,8 @@
   text-decoration: underline;
 }
 
-.figur-bz-hint {
-  font-size: var(--font-size-mini);
-  color: var(--color-muted);
-}
-
 /* === Figuren-Präsenz (Heatmap-Tab + Pro-Figur-Streifen) === */
 .figur-presence { margin-top: var(--space-10); }
-.figur-presence-intro {
-  font-size: var(--font-size-sm);
-  color: var(--color-muted);
-  margin-bottom: var(--space-sm);
-}
 .figur-presence-note {
   font-size: var(--font-size-sm);
   color: var(--color-text);
@@ -520,7 +499,7 @@
 .figur-presence-strip-cells {
   display: flex;
   flex-wrap: wrap;
-  gap: 2px;
+  gap: var(--space-2xs);
   margin-top: var(--space-2xs);
 }
 .figur-presence-strip-cell {

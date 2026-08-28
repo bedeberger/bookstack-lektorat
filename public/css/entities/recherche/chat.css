@@ -45,12 +45,6 @@
   border-radius: var(--radius-md);
   background: var(--color-bg);
 }
-.research-chat-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-sm);
-}
 .research-chat-title { font-weight: var(--fw-semibold); }
 .research-chat-head-actions { display: flex; gap: var(--space-2xs); }
 /* Mitwachsende, aber gedeckelte Chat-Höhe — das Board bleibt darunter sichtbar. */
@@ -89,7 +83,7 @@
 .research-chat-proposal-body {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-2xs);
   flex: 1;
   min-width: 0;
 }
@@ -124,7 +118,7 @@
 .chat-cite a {
   color: var(--card-accent);
   text-decoration: none;
-  padding: 0 1px;
+  padding: 0 var(--space-1);
 }
 .chat-cite a:hover { text-decoration: underline; }
 .chat-cite--dim { color: var(--color-muted); }

@@ -11,7 +11,7 @@
 @layer components {
   .danger-zone {
     margin-top: var(--space-xl);
-    padding: var(--space-md) 14px;
+    padding: var(--space-md) var(--space-14);
     border: 1px solid var(--color-err-border);
     border-radius: var(--radius-sm);
     background: var(--color-err-bg);
@@ -61,7 +61,7 @@
   }
 
   .danger-zone-btn {
-    padding: var(--space-6) 12px;
+    padding: var(--space-6) var(--space-md);
     font-size: var(--font-size-mini);
     font-weight: var(--fw-medium);
     white-space: nowrap;

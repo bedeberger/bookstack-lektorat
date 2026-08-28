@@ -36,10 +36,10 @@
 .gz-subtyp-badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-xs);
   font-size: var(--font-size-micro);
   font-weight: var(--fw-regular);
-  padding: var(--space-1) 6px;
+  padding: var(--space-1) var(--space-6);
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--gz-subtyp-color, var(--color-accent)) 18%, var(--color-surface));
   color:      color-mix(in srgb, var(--gz-subtyp-color, var(--color-accent)) 75%, var(--color-text));
@@ -64,7 +64,7 @@
 .gz-manual-badge {
   font-size: var(--font-size-micro);
   font-weight: var(--fw-regular);
-  padding: var(--space-1) 6px;
+  padding: var(--space-1) var(--space-6);
   border-radius: var(--radius-sm);
   background: var(--color-tag-bg);
   color: var(--color-muted);

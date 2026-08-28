@@ -1,0 +1,261 @@
+@layer components {
+/* === Karten-Innenraum: das geteilte Vokabular des Kartenkoerpers =============
+   `card-shell.css` regelt die Karte selbst (Rahmen, Akzent, Kopfzeile). Was
+   DARIN liegt, hat bis hierher jede Karte selbst erfunden — 62 Hinweis-Klassen,
+   53 Abschnitts-Titel, 25 identische Kopfzeilen, jede mit eigenem Abstand.
+   Tokens allein verhindern das nicht: sie garantieren nur, dass ein
+   willkuerlicher Abstand aus einer Liste von 16 gewaehlt wird.
+
+   Darum leben die Bausteine, die JEDE Karte braucht, hier — und nicht in der
+   Feature-Datei, die sie zufaellig zuerst brauchte. Dieselbe Begruendung wie in
+   `status-msg.css`: ein Klassenname, den 43 Partials benutzen, braucht einen
+   eindeutigen Besitzer, sonst haengt die Darstellung an der Ladereihenfolge
+   zweier unbeteiligter Dateien.
+
+   Ladeposition: direkt nach `card-shell.css`, vor allem Feature-CSS. Gleicher
+   `@layer components` — eine Karte kann eine Abweichung also weiterhin per
+   Quell-Reihenfolge ueberschreiben, muss aber nur noch die Abweichung
+   deklarieren, nicht das ganze Muster.
+
+   Markup-Muster + Migrations-Regel: DESIGN.md „Karten-Innenraum". */
+
+/* === 1. Vertikalrhythmus ====================================================
+   Der Abstand zwischen zwei Bloecken gehoert dem FLUSS, nicht den Bloecken.
+   Solange jeder Block seinen eigenen `margin-bottom` mitbringt, ist der
+   sichtbare Abstand die Summe zufaellig kollidierender Eigenmargins — und
+   aendert sich, sobald ein Block dazwischenrutscht.
+
+   Nachbar-Selektor (`+`) statt `margin-bottom` + `:last-child`-Reset: die
+   Bloecke im Kartenkoerper haengen fast alle an `x-show`. Ein `display:none`-
+   Element zaehlt fuer `:last-child` mit — der sichtbare Block davor behielte
+   also seinen Abstand und die Karte bekaeme einen Leerraum am Fuss. Beim
+   Nachbar-Selektor traegt immer der FOLGENDE sichtbare Block den Abstand;
+   ein ausgeblendeter Nachbar erzeugt keinen. */
+.card-section + .card-section { margin-top: var(--card-gap-section); }
+/* Enger Anschluss: der Block gehoert noch zum vorigen (Unterzeile, Zusatz-
+   Filter, Fussnote der Tabelle darueber). Modifier sagt „der Abstand VOR mir
+   ist eng" — steht darum am folgenden Block. Nach der Basisregel notiert,
+   gleiche Spezifitaet, Quell-Reihenfolge entscheidet. */
+.card-section + .card-section--tight { margin-top: var(--card-gap-tight); }
+
+/* === 2. Abschnitts-Kopfzeile ================================================
+   Titel links, Aktionen/Zaehler rechts. War 25x in Feature-Dateien mit fuenf
+   verschiedenen Gaps und sechs verschiedenen Bottom-Margins nachgebaut.
+   Default `center` (wie `.card-header`) — die Variante mit reinem Text auf
+   beiden Seiten nimmt `--baseline`. */
+.card-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-bottom: var(--card-gap-tight);
+}
+.card-section-head--baseline { align-items: baseline; }
+/* Kopfzeile ohne eigenen Abstand — der Inhalt darunter bringt ihn mit
+   (Grid/Flex mit eigenem `gap`), oder der Block ist ein Popover mit Padding. */
+.card-section-head--flush { margin-bottom: 0; }
+
+/* === 3. Abschnitts-Titel ====================================================
+   Die gesperrte Caps-Zeile ueber einem Abschnitt — kleine Schwester des
+   `.card-eyebrow` aus der Kopfzeile. Sieben Feature-Varianten trugen dieselbe
+   Idee mit fuenf Schriftgroessen, drei Gewichten und fuenf Sperrungen. */
+.card-section-title {
+  margin: 0 0 var(--card-gap-tight);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-xs);
+  font-weight: var(--fw-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  line-height: var(--lh-tight);
+  color: var(--color-muted);
+}
+/* In einer `.card-section-head` traegt die Kopfzeile den Abstand — das gilt
+   fuer JEDE Ueberschrift darin, nicht nur die Caps-Zeile. Ohne diese Regel
+   brauchte jede Karte, die eine `.section-heading` (Serif-Zwischentitel) in
+   die Kopfzeile setzt, ihren eigenen `margin: 0`-Nachtrag. */
+.card-section-head > :is(h1, h2, h3, h4, h5, h6, p),
+.card-section-head .card-section-title { margin-block: 0; }
+
+/* === 4. Hinweistext =========================================================
+   Der graue Erklaersatz unter einer Ueberschrift oder neben einem Feld. Zwei
+   Groessen, ein Muster.
+
+   `margin: 0` ist Absicht und der Kern der Sache: der Abstand kommt aus dem
+   Fluss (Abschnitt 1), nicht aus dem Hinweis. Genau daran driftete es — 62
+   Klassen mit demselben Aussehen und 20 verschiedenen Margins.
+
+   Die beiden Form-Grid-Namen hier mitgefuehrt statt dupliziert: sie sind
+   dieselbe Erscheinung an einer festen Position (Wertspalte des Form-Rasters)
+   und haben zusammen ~90 Fundstellen. Ein dritter Name daneben waere die
+   Drift, die dieses Kapitel abstellt. */
+.card-hint,
+.card-form-hint,
+.card-form-field-note,
+.card-empty-hint {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  line-height: var(--lh-base);
+  color: var(--color-muted);
+}
+.card-hint--sm,
+.card-form-hint,
+.card-form-field-note,
+.card-empty-hint { font-size: var(--font-size-mini); }
+/* Rechtsbuendig unter dem Eingabefeld (Zeichenzaehler, Einheit). */
+.card-hint--right,
+.card-form-hint { text-align: right; }
+/* Warnender Hinweis — Bedeutung, nicht Karten-Akzent (wie `status-msg.css`). */
+.card-hint--warn { color: var(--color-warn-text); }
+/* Lesebreite fuer Einleitungsabsaetze, die ueber die ganze Karte laufen. */
+.card-hint--lead {
+  font-size: var(--font-size-base);
+  max-width: 60ch;
+}
+
+/* === 5. Karten-Status =======================================================
+   Lade-/Leer-/Fehlerzeile. 43 Partials, bisher definiert in `figuren.css`. */
+.card-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  margin-top: var(--card-gap-tight);
+  margin-bottom: var(--card-gap-tight);
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+}
+.card-status--error { color: var(--color-err-text); }
+
+/* === 6. Gedaempfte Meldung ==================================================
+   Inline-Text ohne eigene Flaeche. 63 Partials, bisher in `page-list.css`.
+   Abgrenzung zu `.card-hint`: der Hinweis ERKLAERT (steht dauerhaft unter
+   seinem Element), die Meldung BERICHTET einen Zustand („keine Eintraege",
+   „zuletzt geprueft am …") und erscheint an der Stelle des fehlenden Inhalts. */
+.muted-msg {
+  color: var(--color-subtle);
+  font-size: var(--font-size-base);
+}
+.muted-msg--sm {
+  font-size: var(--font-size-sm);
+  padding: var(--card-gap-tight) 0;
+}
+.muted-msg--block {
+  display: block;
+  padding: var(--space-20);
+  text-align: center;
+}
+.muted-msg--spaced { margin-top: var(--space-14); }
+
+/* === 7. Fortschrittsbalken ==================================================
+   Bisher in `tree-history.css` — eine Tree-Datei als Besitzer eines Balkens,
+   den jede Job-Karte zeigt. Breite kommt aus `--progress` (harte Regel
+   „Progress-Bars"), nie aus einer gebundenen `width`. */
+.progress-bar-wrap {
+  height: 4px;
+  margin-top: var(--card-gap-tight);
+  margin-bottom: var(--card-gap-tight);
+  background: var(--color-tag-bg);
+  border-radius: 0;
+  overflow: hidden;
+}
+.progress-bar {
+  height: 100%;
+  width: var(--progress, 0%);
+  background: var(--color-text);
+  border-radius: 0;
+  transition: width var(--transition-emphasized);
+}
+/* Balken + Statuszeile sind EIN Block: der Abstand steht am Fuss des Paars,
+   nicht zwischen seinen Haelften. */
+.progress-bar-wrap + .card-status { margin-top: 0; margin-bottom: var(--card-gap-section); }
+
+/* === 8. Filter-Leiste =======================================================
+   15 Partials, bisher in `entity-list.css` — eine Listen-Datei als Besitzer
+   einer Leiste, die auch Karten ohne Entity-Liste benutzen. */
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-10);
+  padding-bottom: var(--space-10);
+  border-bottom: 1px solid var(--color-border);
+}
+.filter-count { font-size: var(--font-size-xs); color: var(--color-muted); margin-left: auto; }
+
+/* Eingebettete Variante: die Leiste steht nicht als eigener Abschnitt ueber der
+   Liste, sondern als Glied in einer `.card-toolbar` neben den Aktions-Buttons.
+   Das Standalone-Chrome (Unterrand + padding-/margin-bottom) muss dann weg — es
+   zaehlt bei `align-items: center` der Toolbar zur Box-Hoehe und kippt alle
+   Controls gegenueber der Button-Mittellinie nach oben, plus eine Trennlinie
+   unter nur einem Teil der Zeile. Konsumenten: Quellen, Recherche. */
+.filter-bar--inline {
+  flex: 1;
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+/* Breites Suchfeld statt der 120px-Default-Spalte — fuer Leisten, in denen das
+   Suchfeld das Hauptfilter ist (Freitext ueber Titel/Autor/Body) und den freien
+   Platz der Zeile aufnehmen soll. */
+.filter-search-input--wide { min-width: 12rem; flex: 1; }
+
+/* Checkbox-Schalter in der Filterleiste („Archivierte anzeigen"). Traegt dieselbe
+   Compact-Typografie wie Suchfeld und Combobox daneben — siehe Hoehen-Invariante
+   in DESIGN.md. */
+.filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--font-size-mini);
+  line-height: 1.4;
+  color: var(--color-muted);
+  white-space: nowrap;
+  cursor: pointer;
+}
+/* Scope auf .filter-bar noetig: die generische `input[type=text]`-Regel
+   (card-form/form-elements.css) hat hoehere Spezifitaet (0,1,1) als eine nackte
+   Klasse (0,1,0) und wuerde sonst font-size/padding/width ueberschreiben — das
+   Suchfeld kaeme dann in Default-Groesse (14px/8px) und waere hoeher als die
+   Compact-Combobox. */
+.filter-bar .filter-search-input {
+  font-size: var(--font-size-mini);
+  line-height: 1.4;
+  padding: var(--space-xs) var(--space-sm);
+  border: var(--border-thin) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+  width: 120px;
+  box-sizing: border-box;
+}
+.filter-bar .filter-search-input:focus { outline: none; border-color: var(--color-border-focus); }
+/* Wrapper fuer Suchfeld + Clear-X (reusable .search-clear--icon aus search.css). */
+.filter-search-wrap { position: relative; display: inline-flex; align-items: center; }
+.filter-search-wrap .filter-search-input { padding-right: 26px; /* Breite des Clear-X, keine Rasterstufe */ }
+
+/* Alle Filter-Bar-Controls auf identische Hoehe bringen, ausgerichtet am
+   Suchfeld (.filter-search-input). Sie teilen bereits font-size (12px),
+   vertikales Padding (--space-xs) und 0.5px-Border; die einzige Abweichung war
+   die line-height (Suchfeld 1.4 vs. combobox/tabs geerbtes `normal` ~1.2). Tabs
+   bekommen zusaetzlich radius-md + 12px-Font + space-xs-Padding (die generische
+   .tabs-Komponente ist sonst hoeher/eckiger). Scope auf .filter-bar laesst
+   eigenstaendige View-Toggle-Tabs (.tabs.entity-view-toggle) und combobox--compact
+   ausserhalb von Filter-Bars unberuehrt. */
+.filter-bar .tabs { border-radius: var(--radius-md); }
+.filter-bar .tabs-btn {
+  font-size: var(--font-size-mini);
+  padding: var(--space-xs) var(--space-md);
+  line-height: 1.4;
+}
+.filter-bar .combobox-wrap--compact .combobox-trigger { line-height: 1.4; }
+
+@media (max-width: 600px) {
+  .filter-bar .filter-search-input { width: 100%; }
+  .filter-search-wrap { flex: 1 1 100%; }
+  .filter-bar > .combobox-wrap--compact { flex: 1 1 45%; min-width: 0; }
+  .filter-count { width: 100%; text-align: right; }
+}
+
+}

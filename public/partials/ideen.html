@@ -53,7 +53,7 @@
     <!-- Offene Ideen -->
     <template x-if="!loading && offeneIdeen().length > 0">
       <div class="ideen-section">
-        <div class="ideen-section-title" x-text="$app.t('ideen.sectionOpen')"></div>
+        <div class="card-section-title" x-text="$app.t('ideen.sectionOpen')"></div>
         <template x-for="idee in offeneIdeen()" :key="idee.id">
           <div class="idee-item" :class="{'idee-item--moving': movingId === idee.id}" :data-idee-id="idee.id">
             <div class="idee-status-badge" x-text="$app.t('ideen.statusOpen')"></div>
@@ -144,7 +144,7 @@
     <!-- Erledigte Ideen -->
     <template x-if="!loading && erledigteIdeen().length > 0">
       <div class="ideen-section">
-        <div class="ideen-section-title" x-text="$app.t('ideen.sectionDone')"></div>
+        <div class="card-section-title" x-text="$app.t('ideen.sectionDone')"></div>
         <template x-for="idee in erledigteIdeen()" :key="idee.id">
           <div class="idee-item idee-item--erledigt">
             <div class="idee-status-badge idee-status-badge--erledigt" x-text="$app.t('ideen.statusDone')"></div>

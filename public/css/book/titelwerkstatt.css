@@ -34,7 +34,7 @@
   padding: var(--space-xs) var(--space-sm);
   border-bottom: 0.5px solid var(--color-border);
 }
-.tw-table .sortable-th { padding-right: calc(var(--space-md) + 14px); }
+.tw-table .sortable-th { padding-right: calc(var(--space-md) + var(--space-14)); }
 /* Die Überschrift steht über dem Namen, nicht über dem Chevron davor. */
 .tw-col-beitrag {
   width: var(--tw-w-beitrag);
@@ -94,7 +94,7 @@
 .tw-row-titel--empty { color: var(--color-muted); font-style: italic; }
 /* Die Plakette steht unter der Überschrift, nicht unter deren Sortierpfeil —
    darum derselbe rechte Abstand, den `.sortable-th` für den Pfeil freihält. */
-.tw-row-count { justify-self: end; margin-inline-end: calc(var(--space-md) + 14px); }
+.tw-row-count { justify-self: end; margin-inline-end: calc(var(--space-md) + var(--space-14)); }
 .tw-row-count--0 { background: var(--color-tag-bg); color: var(--color-muted); }
 .tw-row-count--1,
 .tw-row-count--2,

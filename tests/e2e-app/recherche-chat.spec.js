@@ -51,7 +51,9 @@ test('recherche-chat: Toggle schaltet das Panel, Eingabefeld + Close arbeiten na
   await expect(textarea).toHaveValue('Recherche-Testeingabe');
 
   // Close-Icon im Panel-Head legt researchChatOpen=false → Panel zu.
-  await page.locator('#recherche-card .research-chat-head .icon-btn[aria-label]').last().click();
+  // Anker ist die generische `.card-section-head` (card-blocks.css) INNERHALB
+  // des Panels — die feature-eigene `.research-chat-head` gibt es nicht mehr.
+  await page.locator('#recherche-card .research-chat .card-section-head .icon-btn[aria-label]').last().click();
   await expect(page.locator('#recherche-card .research-chat')).toBeHidden();
 
   expect(errors, `Konsolenfehler:\n${errors.join('\n')}`).toEqual([]);

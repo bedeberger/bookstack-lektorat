@@ -12,14 +12,6 @@
 
 .figur-alter { margin-top: var(--space-10); }
 
-.figur-alter-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-sm);
-  margin-bottom: var(--space-sm);
-}
 .figur-alter-intro {
   font-size: var(--font-size-sm);
   color: var(--color-muted);
@@ -36,12 +28,6 @@
    das Panel breiter als sein Trigger und x-anchor zentriert es darunter — es haengt
    dann sichtbar schief unter dem Pfeil. Gleiche Breite = buendige Kante. */
 .figur-alter .filter-bar .combobox-wrap { min-width: 180px; }
-
-.figur-alter-hint {
-  font-size: var(--font-size-mini);
-  color: var(--color-muted);
-  margin: 0 0 var(--space-sm);
-}
 
 /* ── Tabelle ──────────────────────────────────────────────────────────────── */
 
@@ -70,7 +56,7 @@
 /* Chevron-Platzreservierung aus `.sortable-th` (0,1,0) muss die th-Default-Regel
    darueber (0,1,1) schlagen, sonst laeuft der Sortier-Chevron in kurze
    Header-Labels („Typ") hinein. Specificity 0,2,1 gewinnt. */
-.figur-alter-table th.sortable-th { padding-right: calc(var(--space-md) + 14px); }
+.figur-alter-table th.sortable-th { padding-right: calc(var(--space-md) + var(--space-14)); }
 /* Ausrichtung an der Textgrundlinie, nicht mittig: die Zeile mischt blossen
    Text (Name, Jahreszahlen) mit Plaketten und dem Figurenpunkt, die eigene
    Innenabstaende haben. `middle` zentrierte jedes davon in seiner eigenen Hoehe

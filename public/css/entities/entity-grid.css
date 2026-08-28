@@ -34,7 +34,7 @@
    schlagen (sonst kollidiert rechtsbuendiger Numerik-Header-Text mit dem
    Sortier-Chevron). Specificity 0,2,1 > 0,1,1 der th-Default-Regel. */
 .entity-grid-table th.sortable-th {
-  padding-right: calc(var(--space-md) + 14px);
+  padding-right: calc(var(--space-md) + var(--space-14));
 }
 
 .entity-grid-cell-title {

@@ -8,9 +8,9 @@
             x-text="$app.t('onboarding.dismiss')"></button>
   </div>
 
-  <p class="onboarding-intro" x-text="$app.t('onboarding.intro')"></p>
+  <p class="card-hint card-hint--lead card-section" x-text="$app.t('onboarding.intro')"></p>
 
-  <div class="onboarding-progress">
+  <div class="onboarding-progress card-section">
     <div class="progress-bar-wrap">
       <div class="progress-bar" :class="{ 'progress-bar--reached': allDone() }"
            :style="{ '--progress': progressPct() + '%' }"></div>
@@ -26,7 +26,7 @@
         <span class="onboarding-step-num" aria-hidden="true" x-text="steps[key] ? '' : (i + 1)"></span>
         <div class="onboarding-step-body">
           <span class="onboarding-step-title" x-text="stepTitle(key)"></span>
-          <span class="onboarding-step-desc" x-text="stepDesc(key)"></span>
+          <span class="card-hint" x-text="stepDesc(key)"></span>
         </div>
         <span class="onboarding-step-state" x-show="steps[key]" x-text="$app.t('onboarding.stepDone')"></span>
         <button type="button" class="secondary onboarding-step-cta" x-show="!steps[key]"
@@ -35,10 +35,10 @@
     </template>
   </ul>
 
-  <div class="onboarding-demo">
+  <div class="onboarding-demo card-section">
     <div class="onboarding-demo-text">
       <span class="onboarding-demo-title" x-text="$app.t('onboarding.demo.title')"></span>
-      <span class="onboarding-demo-desc" x-text="$app.t('onboarding.demo.desc')"></span>
+      <span class="card-hint" x-text="$app.t('onboarding.demo.desc')"></span>
     </div>
     <button type="button" class="primary" @click="importDemo()" :disabled="demoBusy"
             x-text="demoBusy ? $app.t('onboarding.demo.busy') : $app.t('onboarding.demo.cta')"></button>
@@ -46,5 +46,5 @@
 
   <p class="onboarding-error" x-show="error" x-cloak x-text="error"></p>
 
-  <p class="onboarding-palette-hint" x-text="$app.t('onboarding.paletteHint')"></p>
+  <p class="card-hint card-hint--sm card-section" x-text="$app.t('onboarding.paletteHint')"></p>
 </div>

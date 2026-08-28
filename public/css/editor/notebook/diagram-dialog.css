@@ -62,11 +62,6 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   overflow-wrap: anywhere;
 }
-.diagram-dialog-hint {
-  margin: 0;
-  font-size: var(--font-size-xs);
-  color: var(--color-muted);
-}
 
 .diagram-dialog-preview {
   display: flex;
@@ -97,7 +92,6 @@
   max-width: 100%;
   height: auto;
 }
-
 
 /* Diagramm-Block im Edit-Modus: er ist atomar (contenteditable="false"), also
    muss sichtbar sein, dass ein Klick etwas tut — sonst wirkt er wie ein

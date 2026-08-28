@@ -106,7 +106,7 @@
 .gz-extern-badge {
   font-size: var(--font-size-micro);
   font-weight: var(--fw-regular);
-  padding: var(--space-1) 6px;
+  padding: var(--space-1) var(--space-6);
   background: var(--color-err-bg);
   color: var(--color-err-text);
 }
@@ -187,7 +187,7 @@
   --fig-hue: var(--palette-gray);
   font-size: var(--font-size-xs);
   font-weight: var(--fw-regular);
-  padding: var(--space-2xs) 6px;
+  padding: var(--space-2xs) var(--space-6);
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--fig-hue) var(--figpal-bg-mix), var(--color-surface));
   color:      color-mix(in srgb, var(--fig-hue) var(--figpal-text-mix), var(--color-text));

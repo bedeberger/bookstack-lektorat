@@ -236,8 +236,8 @@
       </button>
     </div>
     <div x-ref="orteMapEl" class="ort-map" role="application" :aria-label="$app.t('orte.map.tab')"></div>
-    <p class="ort-map-hint" x-text="$app.t(geoLocked ? 'orte.map.lockedHint' : 'orte.map.dragHint')"></p>
-    <div class="ort-map-locate-head">
+    <p class="card-hint card-hint--sm" x-text="$app.t(geoLocked ? 'orte.map.lockedHint' : 'orte.map.dragHint')"></p>
+    <div class="card-section-head">
       <span class="ort-map-locate-count"
             x-text="$app.t('orte.map.unlocatedCount', { n: unlocatedOrte().length, total: orteFiltered.length })"></span>
       <button type="button" class="btn-compact"

@@ -8,12 +8,6 @@
   --card-accent: var(--card-accent-recherche);
 }
 
-.reference-scope-note {
-  margin: 0 0 var(--space-sm);
-  font-size: var(--font-size-xs);
-  color: var(--color-muted);
-}
-
 .reference-tab-count {
   display: inline-flex;
   align-items: center;

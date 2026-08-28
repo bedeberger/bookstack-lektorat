@@ -29,7 +29,7 @@ input[type=datetime-local],
 select,
 .card-form-input {
   width: 100%;
-  padding: var(--size-default-padding-y) 10px;
+  padding: var(--size-default-padding-y) var(--space-10);
   border: 1px solid var(--color-border-input);
   border-radius: var(--radius-md);
   font-size: var(--font-size-base);
@@ -80,7 +80,7 @@ textarea:disabled,
    DESIGN.md "Form-Patterns". */
 
 .card-form-grid {
-  padding: var(--space-xs) 0 8px;
+  padding: var(--space-xs) 0 var(--space-sm);
 }
 .card-form-row {
   display: grid;
@@ -122,17 +122,11 @@ textarea:disabled,
   gap: var(--space-6);
   min-width: 0;
 }
-.card-form-field-note {
-  font-size: var(--font-size-mini);
-  color: var(--color-muted);
-  margin: 0;
-  line-height: 1.4;
-}
 .card-form-section-divider {
   font-size: var(--font-size-mini);
   color: var(--color-muted);
   line-height: 1.4;
-  margin: 22px 0 14px;
+  margin: 22px 0 var(--space-14);
   padding-top: var(--space-14);
   border-top: var(--border-thin) solid var(--color-border);
 }
@@ -228,13 +222,9 @@ textarea:disabled,
   color: var(--color-text);
   font-weight: var(--fw-medium);
 }
-.card-empty-hint {
-  margin: 0;
-  font-size: var(--font-size-mini);
-  color: var(--color-muted);
-  max-width: 32em;
-  line-height: var(--lh-base);
-}
+/* Erscheinung aus `.card-hint--sm` (card-blocks.css); hier nur die Lesebreite,
+   die der zentrierte Empty-State braucht. */
+.card-empty-hint { max-width: 32em; }
 /* CTA-Button im Empty-State: inline-flex, damit Lucide-Icon + Label bündig
    zentriert sitzen. Basis bleibt .primary. */
 .card-empty-cta {
@@ -249,7 +239,7 @@ textarea:disabled,
   width: 100%;
   font-size: var(--font-size-sm);
   font-family: inherit;
-  padding: var(--space-6) 8px;
+  padding: var(--space-6) var(--space-sm);
   border: 1px solid var(--color-border-input);
   border-radius: var(--radius-md);
   background: var(--color-surface);
@@ -273,19 +263,13 @@ select[aria-invalid="true"],
   border-color: var(--color-err-border);
   outline-color: var(--color-err-border);
 }
-.card-form-hint {
-  font-size: var(--font-size-xs);
-  color: var(--color-muted);
-  text-align: right;
-  margin: 0;
-}
 .card-form-row > .card-form-hint {
   grid-column: 2;
   text-align: left;
 }
 
 .form-lead {
-  margin: var(--space-xs) 0 14px;
+  margin: var(--space-xs) 0 var(--space-14);
   font-size: var(--font-size-sm);
   color: var(--color-muted);
   line-height: 1.5;
@@ -423,7 +407,7 @@ select[aria-invalid="true"],
   .card-form-label { padding-top: 0; }
   .card-form-field { gap: var(--space-sm); }
   .card-form-row > .card-form-hint { grid-column: 1; }
-  .form-inline { gap: var(--space-10) 16px; }
+  .form-inline { gap: var(--space-10) var(--space-lg); }
   .form-inline-field {
     flex: 1 1 calc(50% - 16px);
     min-width: 0;

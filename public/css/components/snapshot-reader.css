@@ -60,7 +60,7 @@ body.snapshot-reader-open { overflow: hidden; overscroll-behavior: contain; }
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 
-.snapshot-reader__titles { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.snapshot-reader__titles { display: flex; flex-direction: column; gap: var(--space-2xs); min-width: 0; }
 .snapshot-reader__title { font-weight: var(--fw-semibold); }
 .snapshot-reader__date { color: var(--color-muted); font-size: 0.85em; }
 
@@ -109,7 +109,7 @@ body.snapshot-reader-open { overflow: hidden; overscroll-behavior: contain; }
 /* Status-Badge pro Seite — eckig (Projektregel). */
 .snapshot-reader__badge {
   flex: none;
-  padding: 1px 6px;
+  padding: var(--space-1) var(--space-6);
   border-radius: var(--radius-sm);
   font-size: var(--font-size-xs);
   font-weight: var(--fw-semibold);
@@ -131,14 +131,14 @@ body.snapshot-reader-open { overflow: hidden; overscroll-behavior: contain; }
   background: var(--color-ok-bg);
   color: var(--color-ok-text);
   border-radius: var(--radius-sm);
-  padding: 0 2px;
+  padding: 0 var(--space-2xs);
 }
 .snapshot-reader__diff del.diff-del {
   text-decoration: line-through;
   background: var(--color-err-bg);
   color: var(--color-err-text);
   border-radius: var(--radius-sm);
-  padding: 0 2px;
+  padding: 0 var(--space-2xs);
 }
 
 .snapshot-reader__added-since {

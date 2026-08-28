@@ -11,7 +11,7 @@
   justify-content: space-between;
   width: 100%;
   flex: 1 1 auto;
-  padding: var(--size-default-padding-y) 10px;
+  padding: var(--size-default-padding-y) var(--space-10);
   border: 1px solid var(--color-border-input);
   border-radius: var(--radius-md);
   background: var(--color-surface);
@@ -96,7 +96,7 @@
   text-overflow: ellipsis;
 }
 .combobox-option__sub {
-  margin-top: 1px;
+  margin-top: var(--space-1);
   font-size: var(--size-compact-font-size);
   color: var(--color-muted);
 }
@@ -157,9 +157,9 @@
   border-color: var(--color-border);
   background: var(--color-bg);
 }
-.combobox-wrap--compact .combobox-search { font-size: var(--size-compact-font-size); padding: var(--space-5) 8px; }
-.combobox-wrap--compact .combobox-option { font-size: var(--size-compact-font-size); padding: var(--space-5) 8px; }
-.combobox-wrap--compact .combobox-empty { font-size: var(--size-compact-font-size); padding: var(--space-5) 8px; }
+.combobox-wrap--compact .combobox-search { font-size: var(--size-compact-font-size); padding: var(--space-5) var(--space-sm); }
+.combobox-wrap--compact .combobox-option { font-size: var(--size-compact-font-size); padding: var(--space-5) var(--space-sm); }
+.combobox-wrap--compact .combobox-empty { font-size: var(--size-compact-font-size); padding: var(--space-5) var(--space-sm); }
 
 /* Optionaler Footer-Button (cfg.footer.{label,action}). Sitzt unterhalb der
    Liste, durch border-top abgesetzt. Keine Tastatur-Nav (bewusst aussen vor —
@@ -179,14 +179,14 @@
 }
 .combobox-footer-btn:hover,
 .combobox-footer-btn:focus-visible { background: var(--color-hover); outline: none; }
-.combobox-wrap--compact .combobox-footer-btn { font-size: var(--size-compact-font-size); padding: var(--space-5) 8px; }
+.combobox-wrap--compact .combobox-footer-btn { font-size: var(--size-compact-font-size); padding: var(--space-5) var(--space-sm); }
 
 /* In Standard-Formularzeilen matchen Comboboxen die Feldgrösse von Input/Select
    (volle Höhe, Surface-Hintergrund) — kompakte Defaults wirken sonst kleiner
    als die übrigen Felder derselben Form. Breite ist via width:100% ohnehin
    identisch. */
 .card-form-row .combobox-wrap--compact .combobox-trigger {
-  padding: var(--size-default-padding-y) 10px;
+  padding: var(--size-default-padding-y) var(--space-10);
   font-size: var(--font-size-base);
   background: var(--color-surface);
   border-width: 1px;

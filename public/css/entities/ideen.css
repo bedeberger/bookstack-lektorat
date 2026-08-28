@@ -3,18 +3,15 @@
    Notizen pro Seite. Offene Ideen werden als Chat-Kontext mitgegeben.
    Layout: Header + Subtitle, Eingabezeile, dann zwei Sections (offen/erledigt).
    Eckige Status-Badges via var(--radius-sm). */
-.card-status--error {
-  color: var(--color-err-text);
-}
 .ideen-input-row {
   display: flex;
   gap: var(--space-6);
   align-items: flex-end;
-  margin: var(--space-sm) 0 12px;
+  margin: var(--space-sm) 0 var(--space-md);
 }
 .ideen-input {
   flex: 1;
-  padding: var(--space-sm) 10px;
+  padding: var(--space-sm) var(--space-10);
   border: 0.5px solid var(--color-border-input);
   border-radius: var(--radius-md);
   font-size: var(--font-size-base);
@@ -39,19 +36,11 @@
   padding: var(--space-lg) 0;
 }
 .ideen-section { margin-top: var(--space-md); }
-.ideen-section-title {
-  font-size: var(--font-size-xs);
-  font-weight: var(--fw-regular);
-  color: var(--color-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: var(--space-6);
-}
 .idee-item {
   position: relative;
   border: 0.5px solid var(--color-border);
   background: var(--color-bg);
-  padding: var(--space-10) 38px 10px 12px;
+  padding: var(--space-10) 38px var(--space-10) var(--space-md);
   margin-bottom: var(--space-6);
   border-radius: var(--radius-sm);
 }
@@ -65,7 +54,7 @@
   background: var(--color-surface);
   border: 0.5px solid var(--color-border);
   color: var(--color-muted);
-  padding: var(--space-1) 6px;
+  padding: var(--space-1) var(--space-6);
   border-radius: var(--radius-sm);
   margin-bottom: var(--space-6);
 }
@@ -80,7 +69,7 @@
 .idee-edit-actions { display: flex; gap: var(--space-6); justify-content: flex-end; }
 .idee-edit-actions button {
   font-size: var(--font-size-xs);
-  padding: var(--space-3) 8px;
+  padding: var(--space-3) var(--space-sm);
 }
 /* Trigger-Position in der Ideen-Karte; das Meatball-Menü selbst nutzt das
    geteilte .context-menu-Vokabular (nach <body> teleportiert, JS-positioniert). */
@@ -98,7 +87,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-6);
-  padding: var(--space-6) 8px;
+  padding: var(--space-6) var(--space-sm);
   margin: var(--space-6) 0;
   border: 0.5px solid var(--color-border);
   border-radius: var(--radius-sm);

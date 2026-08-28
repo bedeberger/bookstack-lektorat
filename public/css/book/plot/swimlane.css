@@ -164,7 +164,7 @@
      über alle anderen Zeilen. */
   .plot-swim-lane:has(.plot-swim-lane-edit) { z-index: var(--z-popover); }
   .plot-swim-lane-view { display: flex; flex-wrap: nowrap; align-items: flex-start; gap: var(--space-2xs); width: 100%; }
-  .plot-swim-lane-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; overflow-wrap: break-word; }
+  .plot-swim-lane-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: var(--space-2xs); overflow-wrap: break-word; }
   .plot-swim-lane-view > .color-picker,
   .plot-swim-lane-view > .plot-icon-btn { flex: 0 0 auto; align-self: flex-start; }
   .plot-swim-lane-name { font-weight: var(--fw-semibold); font-size: var(--font-size-sm); color: var(--color-text); cursor: text; }

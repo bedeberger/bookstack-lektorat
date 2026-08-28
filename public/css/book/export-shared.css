@@ -66,8 +66,8 @@
 /* === Tabs ===
    .tabs rendert nur die Button-Reihe (kein Panel-Container) — die Panels
    brauchen darum eigenes Padding. */
-.export-tabs { margin: 0.6rem 0 1rem; }
-.export-tab-panel { padding: 1rem 0.875rem 0.75rem; }
+.export-tabs { margin: var(--space-10) 0 var(--space-lg); }
+.export-tab-panel { padding: var(--space-lg) var(--space-14) var(--space-md); }
 
 /* Checkbox-Zeilen haben keine Label-Spalte: über beide Grid-Spalten spannen,
    damit die volle Kartenbreite genutzt wird (statt nur die Label-Spalte). */

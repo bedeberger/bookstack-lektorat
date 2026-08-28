@@ -5,28 +5,17 @@
    (Mapping in card-accents.css). Score-Badges sind eckig (var(--radius-sm)=0).
 */
 
-.redundanz-intro {
-  margin: 0 0 0.75rem;
-  font-size: var(--font-size-sm);
-  color: var(--color-muted);
-  line-height: 1.5;
-}
-
 .redundanz-result {
-  padding: 0.25rem 0 1rem;
+  padding: var(--space-xs) 0 var(--space-lg);
 }
 
 .redundanz-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.25rem 1rem;
-  margin-bottom: 0.75rem;
+  gap: var(--space-xs) var(--space-lg);
+  margin-bottom: var(--space-md);
   font-size: var(--font-size-sm);
   color: var(--color-muted);
-}
-
-.redundanz-meta-note {
-  color: var(--color-warn-text);
 }
 
 .redundanz-list {
@@ -35,14 +24,14 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--space-md);
 }
 
 .redundanz-pair {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 0.75rem;
-  padding: 0.75rem;
+  gap: var(--space-md);
+  padding: var(--space-md);
   border: 1px solid var(--color-border);
   background: var(--color-bg);
 }
@@ -51,7 +40,7 @@
   align-self: start;
   min-width: 3rem;
   text-align: center;
-  padding: 0.25rem 0.4rem;
+  padding: var(--space-xs) var(--space-6);
   border-radius: var(--radius-sm);
   font-size: var(--font-size-sm);
   font-weight: var(--fw-semibold);
@@ -76,7 +65,7 @@
 .redundanz-pair-sides {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.75rem 1rem;
+  gap: var(--space-md) var(--space-lg);
   min-width: 0;
 }
 
@@ -84,7 +73,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: var(--space-6);
 }
 
 .redundanz-snippet {
@@ -104,23 +93,16 @@
    Figuren). Teilt Liste + Score-Badge mit den Seiten-Paaren; statt zwei Snippet-
    Spalten eine kompakte Namens-Zeile mit Art-Badge. */
 .redundanz-figs {
-  margin-top: 1.5rem;
-  padding-top: 1rem;
+  margin-top: var(--space-xl);
+  padding-top: var(--space-lg);
   border-top: 1px solid var(--color-border);
 }
 
 .redundanz-figs-title {
-  margin: 0 0 0.25rem;
+  margin: 0 0 var(--space-xs);
   font-size: var(--font-size-md);
   font-weight: var(--fw-semibold);
   color: var(--color-text);
-}
-
-.redundanz-figs-hint {
-  margin: 0 0 0.75rem;
-  font-size: var(--font-size-sm);
-  color: var(--color-muted);
-  line-height: 1.5;
 }
 
 .redundanz-fig-pair {
@@ -128,7 +110,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.35rem 0.5rem;
+  gap: var(--space-6) var(--space-sm);
   min-width: 0;
 }
 
@@ -137,7 +119,7 @@
 }
 
 .redundanz-dupe-kind {
-  margin-left: 0.25rem;
+  margin-left: var(--space-xs);
   font-size: var(--font-size-xs);
 }
 

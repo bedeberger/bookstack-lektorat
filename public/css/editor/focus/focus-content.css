@@ -64,7 +64,6 @@
   white-space: pre-wrap;
 }
 
-
 /* Bold/Italic im Fokus-Modus sichtbar lassen — Ctrl+B/Ctrl+I sind als
    Shortcut explizit dokumentiert. <u> bleibt geplättet, weil Underline mit
    Link-Styling kollidiert und Ctrl+U-Eingabe ohnehin geblockt ist. */

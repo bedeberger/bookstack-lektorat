@@ -26,19 +26,11 @@
 .admin-backup-section {
   margin-top: var(--space-lg);
 }
-.admin-backup-section-title {
-  font-size: var(--font-size-mini);
-  font-weight: var(--fw-semibold);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--color-muted);
-  margin: 0 0 var(--space-sm);
-}
 
 /* Restore-Bereich als abgesetzte Danger-Zone (Muster wie .book-settings-danger-zone). */
 .admin-backup-danger {
   margin-top: var(--space-xl);
-  padding: var(--space-md) 14px;
+  padding: var(--space-md) var(--space-14);
   border: 1px solid var(--color-err-border);
   border-radius: var(--radius-sm);
   background: var(--color-err-bg);

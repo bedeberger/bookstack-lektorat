@@ -10,7 +10,7 @@
             { key: 'imprint',    roles: ['imprint'] }
           ]" :key="group.key">
           <div class="pdfx-font-group">
-            <h4 class="pdfx-font-group-title" x-text="$app.t('pdfExport.font.group.' + group.key)"></h4>
+            <h4 class="card-section-title" x-text="$app.t('pdfExport.font.group.' + group.key)"></h4>
 
             <template x-for="role in group.roles" :key="role">
               <div class="pdfx-font-role collapsible-wrap" x-data="collapsible(role === 'body')">

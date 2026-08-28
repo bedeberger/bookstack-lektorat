@@ -4,7 +4,7 @@
   display: grid;
   grid-template-columns: 1fr;
   gap: 0;
-  margin-top: 1rem;
+  margin-top: var(--space-lg);
 }
 
 @media (min-width: 1100px) {
@@ -16,7 +16,7 @@
   .lektorat-split {
     display: flex;
     grid-template-columns: none;
-    gap: 1rem;
+    gap: var(--space-lg);
     max-height: 75vh;
   }
   .lektorat-split-preview,
@@ -60,7 +60,7 @@
     max-height: none;
     overflow: visible;
   }
-  .lektorat-split-preview { margin-top: 1rem; }
+  .lektorat-split-preview { margin-top: var(--space-lg); }
 }
 
 /* Inline-Fehlermarkierung. Scroll-Margin für Hover-Sync im Split-Modus,
@@ -101,7 +101,7 @@
   font-weight: var(--fw-bold);
   background: var(--color-mark-ins-bg);
   border-radius: var(--radius-sm);
-  padding: 0 2px;
+  padding: 0 var(--space-2xs);
   margin-left: var(--space-2xs);
 }
 
@@ -125,7 +125,7 @@
   font-weight: var(--fw-bold);
   background: var(--color-mark-ins-bg);
   border-radius: var(--radius-sm);
-  padding: 0 2px;
+  padding: 0 var(--space-2xs);
   margin-left: var(--space-2xs);
 }
 
@@ -137,7 +137,7 @@
   min-width: 180px;
   max-width: 340px;
   width: max-content;
-  padding: var(--space-sm) 10px;
+  padding: var(--space-sm) var(--space-10);
   background: var(--color-tooltip-bg);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);

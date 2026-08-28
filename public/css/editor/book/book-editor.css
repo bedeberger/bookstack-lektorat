@@ -292,7 +292,7 @@
   .book-editor-stream {
     display: flex;
     flex-direction: column;
-    padding: var(--space-lg) clamp(18px, 4vw, 40px);
+    padding: var(--space-lg) clamp(var(--space-18), 4vw, 40px);
     max-width: 72ch;
     margin-inline: auto;
     background: var(--color-book-editor-bg);

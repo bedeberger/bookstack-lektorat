@@ -28,7 +28,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-6);
-  padding: var(--space-3) 8px 3px 3px;
+  padding: var(--space-3) var(--space-sm) var(--space-3) var(--space-3);
   border-radius: var(--radius-sm);
   background: var(--color-surface);
   border: 0.5px solid var(--color-border);
@@ -64,7 +64,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-6);
-  padding: var(--space-3) 8px;
+  padding: var(--space-3) var(--space-sm);
   border-radius: var(--radius-sm);
   background: var(--color-surface);
   border: 0.5px solid var(--color-border);

@@ -117,7 +117,7 @@
       <!-- Detail-Panel: aufklappbar bei Klick auf Zelle -->
       <template x-if="fehlerHeatmapActiveDetail()">
         <div class="heatmap-detail">
-          <div class="heatmap-detail-header">
+          <div class="card-section-head card-section-head--baseline">
             <span class="heatmap-detail-title"
                   x-text="$app.t('fehlerHeatmap.detail.title', {
                     typ: $app.t('fehlerHeatmap.typ.' + fehlerHeatmapActiveDetail().typ),

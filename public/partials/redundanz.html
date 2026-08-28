@@ -36,7 +36,7 @@
     </div>
   </div>
 
-  <p class="redundanz-intro" x-show="redundanzAvailable && redundanzHasIndex" x-text="$app.t('redundanz.intro')"></p>
+  <p class="card-hint" x-show="redundanzAvailable && redundanzHasIndex" x-text="$app.t('redundanz.intro')"></p>
 
   <!-- Gating: Backend aus / kein Index -->
   <div x-show="!redundanzAvailable" class="muted-msg muted-msg--spaced" x-text="$app.t('redundanz.needBackend')"></div>
@@ -52,8 +52,8 @@
     <div class="redundanz-result">
       <div class="redundanz-meta">
         <span x-text="$app.t('redundanz.meta.summary', { found: redundanzResult.totalFound, chunks: redundanzResult.comparedChunks })"></span>
-        <span x-show="redundanzResult.truncated" class="redundanz-meta-note" x-text="$app.t('redundanz.meta.truncated', { shown: redundanzResult.pairs.length })"></span>
-        <span x-show="redundanzResult.truncatedChunks > 0" class="redundanz-meta-note" x-text="$app.t('redundanz.meta.cappedChunks', { n: redundanzResult.truncatedChunks })"></span>
+        <span x-show="redundanzResult.truncated" class="card-hint--warn" x-text="$app.t('redundanz.meta.truncated', { shown: redundanzResult.pairs.length })"></span>
+        <span x-show="redundanzResult.truncatedChunks > 0" class="card-hint--warn" x-text="$app.t('redundanz.meta.cappedChunks', { n: redundanzResult.truncatedChunks })"></span>
       </div>
 
       <div x-show="!redundanzResult.pairs.length" class="muted-msg muted-msg--spaced" x-text="$app.t('redundanz.empty')"></div>
@@ -81,7 +81,7 @@
       <template x-if="redundanzResult.figures && redundanzResult.figures.figuresCompared >= 2">
         <div class="redundanz-figs">
           <h3 class="redundanz-figs-title" x-text="$app.t('redundanz.fig.title')"></h3>
-          <p class="redundanz-figs-hint" x-text="$app.t('redundanz.fig.hint')"></p>
+          <p class="card-hint" x-text="$app.t('redundanz.fig.hint')"></p>
           <div x-show="!redundanzResult.figures.pairs.length" class="muted-msg muted-msg--spaced" x-text="$app.t('redundanz.fig.empty')"></div>
           <ul class="redundanz-list" x-show="redundanzResult.figures.pairs.length">
             <template x-for="(pair, i) in redundanzResult.figures.pairs" :key="'f' + i">

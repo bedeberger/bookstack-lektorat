@@ -16,7 +16,7 @@
   text-align: left;
   background: transparent;
   border: none;
-  padding: var(--space-sm) 12px;
+  padding: var(--space-sm) var(--space-md);
   border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: var(--font-size-base);
@@ -53,7 +53,7 @@
   border-left: 1px solid var(--color-border);
 }
 .synonym-picker-subheader {
-  padding: var(--space-5) 12px;
+  padding: var(--space-5) var(--space-md);
   font-size: var(--font-size-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -67,7 +67,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-sm) 12px;
+  padding: var(--space-sm) var(--space-md);
   border-bottom: 1px solid var(--color-border);
   font-size: var(--font-size-sm);
   color: var(--color-muted);
@@ -96,7 +96,7 @@
   gap: var(--space-sm);
   background: transparent;
   border: none;
-  padding: var(--space-3) 10px;
+  padding: var(--space-3) var(--space-10);
   border-radius: var(--radius-sm);
   cursor: pointer;
   text-align: left;

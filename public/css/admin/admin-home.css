@@ -12,12 +12,6 @@
   line-height: 1.2;
 }
 
-.overview-tile-desc {
-  font-size: var(--font-size-sm);
-  color: var(--color-muted);
-  line-height: 1.4;
-}
-
 /* Tile als Button: Default-Button-Reset, damit das Tile wie ein klickbares
    Panel wirkt (Hover/Focus liegen auf .overview-tile.internal-link in base). */
 button.overview-tile {

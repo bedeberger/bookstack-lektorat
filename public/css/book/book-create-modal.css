@@ -10,13 +10,13 @@
   box-shadow: var(--shadow-lg);
   max-width: 480px;
   width: calc(100% - 2rem);
-  padding: 1.25rem 1.25rem 1rem;
+  padding: var(--space-20) var(--space-20) var(--space-lg);
   margin: auto;
 }
 .book-create-dialog[open] {
   display: flex;
   flex-direction: column;
-  gap: 0.9rem;
+  gap: var(--space-14);
 }
 .book-create-dialog::backdrop {
   background: var(--color-overlay);
@@ -28,7 +28,7 @@
 .book-create-input {
   width: 100%;
   box-sizing: border-box;
-  padding: 0.5rem 0.65rem;
+  padding: var(--space-sm) var(--space-10);
   font: inherit;
   background: var(--color-surface);
   color: var(--color-text);
@@ -46,7 +46,7 @@
 .book-create-field {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: var(--space-5);
 }
 .book-create-label {
   font-size: var(--font-size-sm);
@@ -60,10 +60,10 @@
 .book-create-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 0.5rem;
+  gap: var(--space-sm);
 }
 .book-create-btn {
-  padding: 0.45rem 1rem;
+  padding: var(--space-sm) var(--space-lg);
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
   background: var(--color-surface);
@@ -82,7 +82,7 @@
 .book-create-btn--primary:hover:not(:disabled) { background: var(--color-primary-hover); }
 
 @media (max-width: 480px) {
-  .book-create-dialog { padding: 1rem; }
+  .book-create-dialog { padding: var(--space-lg); }
   .book-create-actions { flex-direction: column-reverse; }
   .book-create-btn { width: 100%; }
 }

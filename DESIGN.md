@@ -19,6 +19,7 @@ Token-Referenz (Farben, Radien, Spacing, Schriftgrössen): [public/css/tokens.cs
 
 **Komponenten**
 - [Karten](#karten-card) — `.card` + Akzentfarben
+- [Karten-Innenraum](#karten-innenraum) — Rhythmus + geteilte Bloecke IM Kartenkoerper
 - [Buttons](#buttons) — Hierarchie, Counter
 - [Action-Icon-Library](#action-icon-library-verbindlich) — **verbindlich**: Vokabular für alle Aktions-Buttons (icon-only vs. Label), Guard-Test
 - [Icon-System](#icon-system-lucide-sprite) — `<svg class="icon"><use href="/icons.svg#name"/></svg>` (Lucide-Sprite)
@@ -254,6 +255,66 @@ Eine eigenständige, per-Boolean klappbare Sektion nutzt **`Alpine.data('collaps
 - **Mobile (`≤700px`):** Header mit `.card-header-titlebar` bleibt eine **Zeile** — die Aktionen (`.card-actions` / `.card-header-aside`) bleiben oben rechts verankert, die Titelspalte schrumpft und der Titel bricht bei Bedarf um (nicht die Icons in eine eigene Zeile drücken). Geregelt zentral über `.card-header:has(.card-header-titlebar)` in [card-form.css](public/css/components/card-form/card-shell.css) — pro Karte nichts deklarieren. Reine Text-Button-Leisten **ohne** Titelspalte (`.card-header > .card-actions`, z.B. Export/Admin) sind ausgenommen und behalten den Full-Width-Stack.
 
 Referenz-Cluster: [public/partials/recherche.html](public/partials/recherche.html) (Chat / Vollbild / Schliessen als Ghost-Trio).
+
+---
+
+## Karten-Innenraum
+
+**Use:** alles, was INNERHALB einer `.card` liegt. `.card` selbst regelt Rahmen, Akzent und Kopfzeile ([Karten](#karten-card)) — hier steht, wie der Inhalt darunter organisiert ist. CSS: [components/card-form/card-blocks.css](public/css/components/card-form/card-blocks.css).
+
+**Warum das ein Pattern ist und keine Geschmacksfrage:** Tokens allein erzeugen keine gleiche Organisation. Sie garantieren nur, dass ein *willkürlicher* Abstand aus einer Liste von 16 gewählt wird. Solange jeder Block seinen Abstand selbst mitbringt, ist der sichtbare Abstand zwischen zwei Blöcken die Summe zufällig kollidierender Eigenmargins — und er ändert sich, sobald ein Block dazwischenrutscht. Genau daran driftete es: 62 Hinweis-Klassen mit demselben Aussehen, 25 identische Kopfzeilen mit fünf verschiedenen Gaps, vier Toolbars mit vier verschiedenen Höhen unter demselben Header.
+
+### Rhythmus: zwei Stufen, mehr nicht
+
+| Token | Wert | Wofür |
+|---|---|---|
+| `--card-gap-section` | 16px (`--space-lg`) | zwischen zwei eigenständigen Blöcken |
+| `--card-gap-tight` | 8px (`--space-sm`) | innerhalb eines Blocks (Titel → Inhalt, Balken → Statuszeile) |
+
+Blöcke im Kartenkörper bekommen `.card-section`; den Abstand setzt der **Nachbar-Selektor**, nicht der Block:
+
+```html
+<div class="card card--motiv" x-data="motivCard">
+  <div class="card-header">…</div>
+
+  <div class="card-section">
+    <div class="card-section-head">
+      <h3 class="card-section-title">Motive</h3>
+      <button class="btn-compact">Neu</button>
+    </div>
+    <p class="card-hint">Was hier steht und warum.</p>
+  </div>
+
+  <div class="card-section">…</div>
+</div>
+```
+
+**Nachbar-Selektor (`+`), nicht `margin-bottom` + `:last-child`.** Die Blöcke hängen fast alle an `x-show`. Ein `display:none`-Element zählt für `:last-child` mit — der sichtbare Block davor behielte also seinen Abstand und die Karte bekäme einen Leerraum am Fuss. Beim Nachbar-Selektor trägt immer der **folgende sichtbare** Block den Abstand; ein ausgeblendeter Nachbar erzeugt keinen.
+
+### Die Bausteine
+
+| Klasse | Rolle | Modifier |
+|---|---|---|
+| `.card-section` | Block im Kartenkörper | `--tight` (enger Anschluss an den Block davor) |
+| `.card-section-head` | Titel links, Aktionen/Zähler rechts | `--baseline` (Text gegen Text), `--flush` (kein Eigenabstand) |
+| `.card-section-title` | gesperrte Caps-Zeile über dem Abschnitt | — |
+| `.card-hint` | grauer Erklärsatz | `--sm` (12px), `--right`, `--warn`, `--lead` (Einleitung, 60ch) |
+| `.card-status` | Lade-/Leer-/Fehlerzeile | `--error` |
+| `.muted-msg` | gedämpfte Zustandsmeldung | `--sm`, `--block`, `--spaced` |
+| `.progress-bar-wrap` + `.progress-bar` | Job-Fortschritt | — |
+| `.filter-bar` | Listenfilter (siehe [Filter-Bar](#filter-bar-listenfilter)) | `--inline` |
+
+**`.card-hint` vs. `.muted-msg`:** der Hinweis **erklärt** und steht dauerhaft unter seinem Element; die Meldung **berichtet einen Zustand** („keine Einträge", „zuletzt geprüft am …") und erscheint an der Stelle des fehlenden Inhalts.
+
+**`.card-section-title` vs. `.section-heading`:** die Caps-Zeile ordnet ein (Rubrik, gesperrt, `--font-size-xs`), `.section-heading` ([analysis/analysis.css](public/css/analysis/analysis.css)) ist ein Serif-Zwischentitel im Fliesstext. Zwei Dinge, beide legitim — nicht zusammenlegen.
+
+### Regeln
+
+1. **Ein Hinweistext bringt keinen Abstand mit** (`margin: 0`). Der Abstand kommt aus dem Fluss. Wer einen `margin-bottom` an einen Hinweis schreibt, baut die Drift neu.
+2. **Kein feature-eigener Nachbau.** `.motiv-hint`, `.xyz-section-head`, `.abc-intro` sind der Anti-Pattern-Name. Braucht die Karte eine Abweichung, trägt die Feature-Klasse **nur die Abweichung** neben der generischen — Muster: `.book-settings-section > .card-section-title { margin-bottom: var(--card-gap-section); }`, `.card-empty-hint { max-width: 32em; }`.
+3. **Toolbars: eigene horizontale Geometrie ja, eigener vertikaler Abstand nein.** `.card-toolbar` ist der Regelfall; `.organizer-toolbar` (nowrap) und `.motiv-toolbar` (Gruppen) weichen horizontal ab, tragen aber dieselbe `--card-gap-section` nach unten und **keinen** Abstand nach oben — den liefert die Kopfzeile.
+4. **Abstände kommen aus der Token-Skala**, nie als roher `rem`-/`px`-Wert. Gegated durch [tests/unit/spacing-scale.test.mjs](tests/unit/spacing-scale.test.mjs) (Ratsche mit Allowlist, Muster von `loc-limits`). `em` ist ausgenommen — es ist schriftgrössen-relativ und damit eine andere, bewusste Aussage.
+5. **Ein globaler Klassenname hat einen eindeutigen Besitzer.** `.card-status`, `.muted-msg`, `.progress-bar*` und `.filter-bar*` leben in `card-blocks.css` — nicht in der Feature-Datei, die sie zufällig zuerst brauchte. Sonst hängt die Darstellung an der Ladereihenfolge zweier unbeteiligter Dateien (gleiche Begründung wie [status-msg.css](public/css/components/status-msg.css)).
 
 ---
 
@@ -1643,7 +1704,7 @@ Kein Skeleton ohne Shimmer-Animation. CSS-File-Referenzen: [entity-list.css](pub
 </div>
 ```
 
-`.card-toolbar` ([card-form/card-shell.css](public/css/components/card-form/card-shell.css)) setzt Flex + `flex-wrap` + `gap: --space-sm` + `align-items: center` + `margin-bottom: --space-md` und richtet enthaltene `.btn-compact` inkl. `1em`-Icon aus. **Kein Nachbau pro Karte** — die Zeile mischt Buttons mit Compact-Controls, deren gemeinsame Mittellinie an genau diesen Werten hängt.
+`.card-toolbar` ([card-form/card-shell.css](public/css/components/card-form/card-shell.css)) setzt Flex + `flex-wrap` + `gap: --space-sm` + `align-items: center` + `margin-bottom: --card-gap-section` und richtet enthaltene `.btn-compact` inkl. `1em`-Icon aus. **Kein Nachbau pro Karte** — die Zeile mischt Buttons mit Compact-Controls, deren gemeinsame Mittellinie an genau diesen Werten hängt.
 
 **Nicht darauf umstellen:** Toolbars mit bewusst eigener Geometrie — `.organizer-toolbar` (`nowrap`), `.figuren-graph-toolbar` (`space-between`), `.motiv-toolbar` (`padding` statt `margin`), `.page-editor-toolbar`/`.edit-bubble-toolbar` (Editor-Chrome).
 
@@ -2756,16 +2817,17 @@ Struktur: 8 thematische Subfolder unter [public/css/](public/css/) + Root-Solit�
 ### components/ (geteilt)
 | File | Inhalt |
 |------|--------|
-| [components/card-form/card-shell.css](public/css/components/card-form/card-shell.css) | `.card`, `.card-header*`, `.card-title*`, `.card-eyebrow`, `.card-subline*`, `cardFadeIn`. |
-| [components/card-form/form-elements.css](public/css/components/card-form/form-elements.css) | Form-Felder (`input`/`select`/`textarea`), `.card-form-*` Grid + Wertspalten-Bausteine (`.form-stack`/`-inline`/`-check`/`-radio-group`), `.card-empty*`. |
+| [components/card-form/card-shell.css](public/css/components/card-form/card-shell.css) | `.card`, `.card-header*`, `.card-title*`, `.card-eyebrow`, `.card-subline*`, `.card-toolbar`, `cardFadeIn`. Die Karte selbst — was DARIN liegt, steht in `card-blocks.css`. |
+| [components/card-form/card-blocks.css](public/css/components/card-form/card-blocks.css) | **Geteiltes Vokabular des Kartenkörpers** (siehe „Karten-Innenraum“): Vertikalrhythmus (`.card-section` + `--tight`), `.card-section-head` (+ `--baseline`/`--flush`), `.card-section-title`, `.card-hint` (+ `--sm`/`--right`/`--warn`/`--lead`), `.card-status` (+ `--error`), `.muted-msg*`, `.progress-bar*`, `.filter-bar*`/`.filter-count`/`.filter-toggle`/`.filter-search-*`. Besitzer-Datei für Klassen, die quer durch alle Karten laufen — vorher lagen sie in `figuren.css`, `page-list.css`, `tree-history.css` und `entity-list.css`. |
+| [components/card-form/form-elements.css](public/css/components/card-form/form-elements.css) | Form-Felder (`input`/`select`/`textarea`), `.card-form-*` Grid + Wertspalten-Bausteine (`.form-stack`/`-inline`/`-check`/`-radio-group`), `.card-empty*`. Die **Erscheinung** von `.card-form-hint`/`.card-form-field-note`/`.card-empty-hint` kommt aus `card-blocks.css` (`.card-hint`-Gruppe); hier steht nur noch deren Position im Raster. |
 | [components/card-form/card-actions.css](public/css/components/card-form/card-actions.css) | `.card-actions*`, `.action-group`/`.action-sep`, `.btn-card-close`. |
 | [components/combobox.css](public/css/components/combobox.css) | `.combobox-*` — Searchable-Select-Komponente (Trigger, Dropdown, Optionen, Gruppen-Header, Compact-Variante, Footer-Button). |
 | [components/buttons-badges.css](public/css/components/buttons-badges.css) | `<button>` Hierarchie, `.badge-*`, `.avatar-*`, `.btn-group`, `.btn-compact`. |
 | [components/icon-btn.css](public/css/components/icon-btn.css) | `.icon-btn` (outlined) + `.icon-btn--ghost` — SSoT für alle Icon-only Buttons (Graph/Map/Mindmap-Toolbars, Header-Cluster, Plot-Board, Action-Groups). Feature-Marker setzen nur Deltas darauf. |
 | [components/tabs.css](public/css/components/tabs.css) | `.tabs` / `.tabs-btn` + `--active`/`--scrollable`/`--fullwidth`. Basis scrollt horizontal (Scrollbalken versteckt, Rand-Schatten als Signal). |
 | [components/device-tokens.css](public/css/components/device-tokens.css) | `.device-tokens-*` — Token-Verwaltung in User-Settings (Reveal-Block für Klartext-Token einmalig nach Create, Row-List statt Table). |
-| [components/my-stats.css](public/css/components/my-stats.css) | „Meine Statistik"-Karte (aggregierte Schreib-Werte über alle eigenen Bücher). Teilt **das Tile-Grid + die Tile-Atome der Buch-Übersicht** (`.overview-grid` + `.overview-tile`/`--hero`/`--medium`/`--wide`, `.overview-hero-*`, `.overview-substat*`, `.overview-streak-*`, `.overview-weekday-*`, `.overview-consistency-*` — siehe „Book-Overview-Tiles" + `book-overview/`); Akzent = globaler `var(--color-accent)`, nicht die Karten-Hue. Tiles: Umfang-Hero (Zeichen gross + inline Sub-Stats), Schreibrhythmus (Kennzahlen-Grid + Streak-Heatmap), Wochentags-Muster (Balken), Meilensteine, Entwicklung (Chart). Eigene Reste: `.mystats-allbooks-note` (Hinweis „über alle Bücher"); `.mystats-controls` / `.mystats-chart-wrap` (240px) für den Entwicklungs-Chart (Chart.js lazy; Modus-`.btn-group` Gesamt/Pro Buch + Metrik-Combobox + Zeitraum-`.btn-group`, mirror von `.book-stats-chart-wrap`); `.mystats-badges` / `.mystats-badge` (eckig, `var(--color-accent)`) + `.mystats-milestone-next(-head)` für die Meilensteine. Pro-Buch-Modus: eine Linie je Buch aus fester JS-Farbpalette, Legende unten. Eckig, Tabular-Nums. |
-| [components/my-books.css](public/css/components/my-books.css) | „Meine Bücher"-Karte (Bücherregal: Anheften/Archivieren/Fertig + Kennzahlen je Buch). Fast alles kommt aus bestehenden Patterns — `.card-toolbar`, `.tabs`/`.tabs-btn` (Reiter In Arbeit/Fertig/Archiviert/Alle), `.filter-bar filter-bar--inline`, `.table-scroll`, `.sortable-th` (`sortableTable`), `.icon-btn icon-btn--ghost` (Pin/Archiv/Fertig/Öffnen), `.badge-ok`/`.badge-warn`/`.badge-neutral`, und die Summenzeile nutzt die Kennzahl-Atome der Buch-Übersicht (`.overview-substats`/`.overview-substat*`). Eigen sind nur: `.mybooks-summary` (Rahmen der Summenzeile, Akzentkante links), `.mybooks-note`, `.mybooks-tab-count`, die Tabellen-Typografie (`.mybooks-table` mit **schmalem `--space-sm`-Zellenpadding**, damit zehn Spalten ohne Horizontal-Scroll lesbar bleiben — `.sortable-th` braucht deshalb seine Chevron-Reserve explizit zurück; `.mybooks-num` rechts + Tabular-Nums, `.mybooks-sub` als Zweitzeile in der Zelle, `.mybooks-book*`, `.mybooks-chip`), die **sticky Aktions-Spalte** (`th:last-child` + `.mybooks-actions`, `position: sticky; right: 0` mit `--color-card-bg` — die Schalter sind der Grund, das Regal zu öffnen, und dürfen beim Scrollen nicht als erstes verschwinden) und die zwei Zeilen-Zustände `.mybooks-row--archived` (gedämpfter Text, **ohne** `opacity` auf der Zeile — das dimmte auch die Knöpfe, mit denen man sie zurückholt) und `.mybooks-row--pinned` (Akzent-Kante via `inset box-shadow` an der ersten Zelle). Es gibt **keine Status-Spalte**: fertig/archiviert stehen als Badges neben dem Buchnamen (`.mybooks-book-meta`), wo auch Kategorie und Fremd-Rolle sitzen. Akzent = `--card-accent-mybooks`. |
+| [components/my-stats.css](public/css/components/my-stats.css) | „Meine Statistik"-Karte (aggregierte Schreib-Werte über alle eigenen Bücher). Teilt **das Tile-Grid + die Tile-Atome der Buch-Übersicht** (`.overview-grid` + `.overview-tile`/`--hero`/`--medium`/`--wide`, `.overview-hero-*`, `.overview-substat*`, `.overview-streak-*`, `.overview-weekday-*`, `.overview-consistency-*` — siehe „Book-Overview-Tiles" + `book-overview/`); Akzent = globaler `var(--color-accent)`, nicht die Karten-Hue. Tiles: Umfang-Hero (Zeichen gross + inline Sub-Stats), Schreibrhythmus (Kennzahlen-Grid + Streak-Heatmap), Wochentags-Muster (Balken), Meilensteine, Entwicklung (Chart). Eigene Reste: `.mystats-controls` / `.mystats-chart-wrap` (240px) für den Entwicklungs-Chart (Chart.js lazy; Modus-`.btn-group` Gesamt/Pro Buch + Metrik-Combobox + Zeitraum-`.btn-group`, mirror von `.book-stats-chart-wrap`); `.mystats-badges` / `.mystats-badge` (eckig, `var(--color-accent)`) + `.mystats-milestone-next(-head)` für die Meilensteine. Pro-Buch-Modus: eine Linie je Buch aus fester JS-Farbpalette, Legende unten. Eckig, Tabular-Nums. |
+| [components/my-books.css](public/css/components/my-books.css) | „Meine Bücher"-Karte (Bücherregal: Anheften/Archivieren/Fertig + Kennzahlen je Buch). Fast alles kommt aus bestehenden Patterns — `.card-toolbar`, `.tabs`/`.tabs-btn` (Reiter In Arbeit/Fertig/Archiviert/Alle), `.filter-bar filter-bar--inline`, `.table-scroll`, `.sortable-th` (`sortableTable`), `.icon-btn icon-btn--ghost` (Pin/Archiv/Fertig/Öffnen), `.badge-ok`/`.badge-warn`/`.badge-neutral`, und die Summenzeile nutzt die Kennzahl-Atome der Buch-Übersicht (`.overview-substats`/`.overview-substat*`). Eigen sind nur: `.mybooks-summary` (Rahmen der Summenzeile, Akzentkante links), `.mybooks-tab-count`, die Tabellen-Typografie (`.mybooks-table` mit **schmalem `--space-sm`-Zellenpadding**, damit zehn Spalten ohne Horizontal-Scroll lesbar bleiben — `.sortable-th` braucht deshalb seine Chevron-Reserve explizit zurück; `.mybooks-num` rechts + Tabular-Nums, `.mybooks-sub` als Zweitzeile in der Zelle, `.mybooks-book*`, `.mybooks-chip`), die **sticky Aktions-Spalte** (`th:last-child` + `.mybooks-actions`, `position: sticky; right: 0` mit `--color-card-bg` — die Schalter sind der Grund, das Regal zu öffnen, und dürfen beim Scrollen nicht als erstes verschwinden) und die zwei Zeilen-Zustände `.mybooks-row--archived` (gedämpfter Text, **ohne** `opacity` auf der Zeile — das dimmte auch die Knöpfe, mit denen man sie zurückholt) und `.mybooks-row--pinned` (Akzent-Kante via `inset box-shadow` an der ersten Zelle). Es gibt **keine Status-Spalte**: fertig/archiviert stehen als Badges neben dem Buchnamen (`.mybooks-book-meta`), wo auch Kategorie und Fremd-Rolle sitzen. Akzent = `--card-accent-mybooks`. |
 | [components/help.css](public/css/components/help.css) | „Hilfe & Funktionen"-Karte (`.card--help`) — statischer Funktionsüberblick für den Einstieg, buch-unabhängig. `.help-intro` (Lede), `.help-features` (2-Spalten-Grid, mobil 1-spaltig) mit `.help-feature`/`-title`/`-desc` (Accent-Border-Left = globaler `var(--color-accent)`), `.help-palette-hint` (muted Fusszeile). Inhalt = Landing-Feature-Texte (`landing.featNTitle/Desc`, SSoT). Dazu der globale Header-`?`-Button (`.header-help-btn[aria-pressed=true]`) und der Welcome-Empty-State: Textlink (`.welcome-help-link`) plus 3-Schritt-Ablauf (`.welcome-steps`/`.welcome-step`/`.welcome-step-num` eckig/`.welcome-step-body`/`-title`/`-desc`, Schreiben→Analysieren→Überarbeiten) und Philosophie-Zeile (`.welcome-philosophy`, muted) — vermittelt früh die rückwärtsgewandte KI. |
 | [components/onboarding.css](public/css/components/onboarding.css) | „Erste Schritte"-Karte (`.card--onboarding`, Accent `--card-accent-onboarding`) — Fortschritts-Checkliste für den Einstieg, buch-unabhängig. `.onboarding-intro` (Lede), `.onboarding-progress` (Zeile: globaler `.progress-bar` + `.onboarding-progress-count`), `.onboarding-steps`/`.onboarding-step` (Accent-Border-Left; `.is-done` = gedimmt + gefüllter `.onboarding-step-num` eckig; `.onboarding-step-state` „Erledigt"-Badge eckig vs. `.onboarding-step-cta` Button), `.onboarding-demo` (gestrichelte Beispielbuch-Box), `.onboarding-alldone`/`-error`/`-palette-hint`. Dazu der First-Login-`.onboarding-welcome-banner` (schlanke, wegklickbare Leiste in index.html, `-text`/`-actions`). Mobil (≤640px): Steps umbrechen, Demo-Box + Banner stapeln. |
 | [components/confirm-dialog.css](public/css/components/confirm-dialog.css) | `.confirm-overlay` / `-dialog`, Shortcuts-Overlay. |

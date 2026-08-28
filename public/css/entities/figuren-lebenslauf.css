@@ -6,14 +6,6 @@
 
 .figur-cv { margin-top: var(--space-10); }
 
-.figur-cv-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-sm);
-  margin-bottom: var(--space-sm);
-}
 .figur-cv-intro {
   font-size: var(--font-size-sm);
   color: var(--color-muted);
@@ -31,12 +23,6 @@
    Margin mit der `margin-bottom` der `.filter-bar` (normaler Fluss) — die Trennlinie
    der Leiste behaelt also ihren Abstand, statt ihn zu addieren. */
 .figur-cv-pick { margin: var(--space-md) 0 var(--space-lg); }
-
-.figur-cv-hint {
-  font-size: var(--font-size-mini);
-  color: var(--color-muted);
-  margin: 0 0 var(--space-sm);
-}
 
 .figur-cv-chips {
   display: flex;
@@ -82,12 +68,12 @@
   text-align: left;
   color: var(--color-muted);
   font-weight: var(--fw-regular);
-  padding: var(--space-2xs) 12px 5px 0;
+  padding: var(--space-2xs) var(--space-md) var(--space-5) 0;
   border-bottom: 0.5px solid var(--color-border);
   vertical-align: bottom;
 }
 .figur-cv-table td {
-  padding: var(--space-xs) 12px var(--space-xs) 0;
+  padding: var(--space-xs) var(--space-md) var(--space-xs) 0;
   border-bottom: 0.5px solid var(--color-border);
   vertical-align: top;
 }
@@ -129,7 +115,7 @@
 
 .figur-cv-events { list-style: none; margin: 0; padding: 0; }
 .figur-cv-event {
-  padding: 2px 0;
+  padding: var(--space-2xs) 0;
   border-radius: var(--radius-sm);
 }
 .figur-cv-event--clickable { cursor: pointer; }

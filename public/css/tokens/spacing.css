@@ -21,6 +21,16 @@
   --space-xl:  24px;
   --space-2xl: 32px;
 
+  /* === Karten-Rhythmus — der Abstand IM Kartenkoerper ===
+     Zwei Stufen, mehr braucht der Innenraum nicht: `section` trennt zwei
+     eigenstaendige Bloecke, `tight` bindet einen Block an den vorigen
+     (Titel -> Inhalt, Balken -> Statuszeile, Kopfzeile -> Tabelle).
+     Benannt statt direkt `--space-lg`/`--space-sm` verwendet, weil sie EINE
+     Entscheidung sind: wer den Karten-Rhythmus aendern will, aendert hier zwei
+     Zeilen statt 200 Fundstellen. Konsumenten: card-blocks.css. */
+  --card-gap-section: var(--space-lg);  /* 16px — zwischen zwei Abschnitten */
+  --card-gap-tight:   var(--space-sm);  /*  8px — innerhalb eines Abschnitts */
+
   /* === Padding-Tokens — wiederkehrende Zellgrössen === */
   --pad-btn-compact: 7px 10px;       /* compact button */
   --pad-badge:       4px 8px;        /* Badge/Tag/kleiner Pill */

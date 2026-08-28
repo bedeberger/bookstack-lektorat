@@ -16,8 +16,8 @@
 }
 
 .kapitel-pages-section {
-  margin: var(--space-sm) 0 16px;
-  padding: var(--space-md) 14px;
+  margin: var(--space-sm) 0 var(--space-lg);
+  padding: var(--space-md) var(--space-14);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-hover-light);
@@ -48,7 +48,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-10);
-  padding: var(--space-5) 8px;
+  padding: var(--space-5) var(--space-sm);
   border-radius: var(--radius-sm);
   cursor: pointer;
   color: var(--color-text);

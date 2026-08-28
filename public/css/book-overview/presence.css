@@ -12,7 +12,7 @@
   overflow-y: auto;
   max-height: min(360px, 50vh);
   margin: 0 -4px;
-  padding: 0 4px 10px;
+  padding: 0 var(--space-xs) var(--space-10);
   scrollbar-width: thin;
   scrollbar-color: var(--color-muted) transparent;
 }
@@ -48,7 +48,7 @@
   color: var(--color-muted);
   font-size: var(--font-size-micro);
   text-align: center;
-  padding: 0 2px;
+  padding: 0 var(--space-2xs);
   /* Lange Kapitelnamen rotieren — schmale Spalten. */
   writing-mode: vertical-rl;
   transform: rotate(180deg);
@@ -63,7 +63,7 @@
   font-weight: var(--fw-medium);
   color: var(--color-text);
   text-align: left;
-  padding: 0 8px 0 4px;
+  padding: 0 var(--space-sm) 0 var(--space-xs);
   white-space: nowrap;
   max-width: 140px;
   overflow: hidden;
@@ -130,6 +130,6 @@
   .overview-presence-wrap { max-height: min(280px, 45vh); }
   .overview-presence-cell { width: 18px; height: 18px; }
   .overview-presence-num { font-size: var(--font-size-micro); }
-  .overview-presence-row-head { max-width: 100px; padding: 0 6px 0 2px; }
+  .overview-presence-row-head { max-width: 100px; padding: 0 var(--space-6) 0 var(--space-2xs); }
 }
 }

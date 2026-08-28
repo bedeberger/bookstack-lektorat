@@ -260,7 +260,7 @@
   font-variant-numeric: tabular-nums;
 }
 .admin-pool-table th.sortable-th {
-  padding-right: calc(var(--space-md) + 14px);
+  padding-right: calc(var(--space-md) + var(--space-14));
 }
 @media (max-width: 600px) {
   .admin-pool-create { flex-direction: column; align-items: stretch; }

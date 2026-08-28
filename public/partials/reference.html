@@ -20,13 +20,13 @@
     <button type="button" class="btn-card-close" @click="$app.toggleReferenceCard()" :data-tip="$app.t('common.close')" :aria-label="$app.t('common.close')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#x"/></svg></button>
   </div>
 
-  <div class="reference-scope-note" x-text="referenceScope === 'page'
+  <div class="card-hint card-hint--sm card-section" x-text="referenceScope === 'page'
         ? (referenceHasContext() ? $app.t('reference.scope.contextNote', { page: $app.currentPage?.name || '' }) : $app.t('reference.scope.noContext'))
         : $app.t('reference.scope.bookNote')"></div>
 
   <!-- Tabs (DESIGN.md .tabs / Alpine.data('tabs')). Nur der Tablist im tabs-
        Scope; die Panels lesen referenceTab direkt aus der Karte. -->
-  <div x-data="tabs(['figuren','orte','szenen','ereignisse','recherche','quellen','verwandt'])"
+  <div class="card-section" x-data="tabs(['figuren','orte','szenen','ereignisse','recherche','quellen','verwandt'])"
        x-modelable="value" x-model="referenceTab">
     <div class="tabs tabs--scrollable" x-bind="tablist">
       <button class="tabs-btn" x-bind="tabBtn('figuren')">
@@ -204,7 +204,7 @@
               <svg x-show="!verwandtLoading" class="icon" aria-hidden="true"><use href="/icons.svg?v=693#search"/></svg>
             </button>
           </div>
-          <div class="reference-scope-note" x-show="verwandtBasis === 'absatz'" x-text="$app.t('reference.verwandt.absatzHint')"></div>
+          <div class="card-hint card-hint--sm" x-show="verwandtBasis === 'absatz'" x-text="$app.t('reference.verwandt.absatzHint')"></div>
 
           <div class="verwandt-loading" x-show="verwandtLoading" aria-live="polite">
             <span class="spinner" aria-hidden="true"></span>
@@ -213,7 +213,7 @@
 
           <div class="search-status search-status--error" x-show="verwandtError && !verwandtLoading" x-text="verwandtError"></div>
           <div class="reference-empty" x-show="verwandtNotIndexed && !verwandtLoading" x-text="$app.t('reference.verwandt.notIndexed')"></div>
-          <div class="reference-scope-note" x-show="verwandtStale() && !verwandtLoading" x-text="$app.t('reference.verwandt.stale')"></div>
+          <div class="card-hint card-hint--sm" x-show="verwandtStale() && !verwandtLoading" x-text="$app.t('reference.verwandt.stale')"></div>
 
           <template x-if="!verwandtSearched && !verwandtLoading">
             <div class="reference-empty" x-text="$app.t('reference.verwandt.prompt')"></div>

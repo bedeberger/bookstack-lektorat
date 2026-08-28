@@ -34,7 +34,7 @@
   position: relative;
   margin-bottom: var(--space-lg);
   padding: var(--space-sm) var(--space-md);
-  padding-inline-end: calc(var(--space-md) + 1.75rem);
+  padding-inline-end: calc(var(--space-md) + var(--space-xl));
   border-inline-start: 3px solid var(--color-border);
   background: var(--color-bg);
   border-radius: var(--radius-sm);

@@ -22,10 +22,10 @@
     </div>
   </div>
 
-  <p class="struktur-intro" x-text="$app.t('struktur.intro')"></p>
+  <p class="card-hint card-section" x-text="$app.t('struktur.intro')"></p>
 
   <!-- Buch-Default: gilt für jeden Beitrag ohne eigene Angabe -->
-  <div class="card-form-row struktur-default-row">
+  <div class="card-form-row struktur-default-row card-section">
     <label class="card-form-label" x-text="$app.t('struktur.bookDefault')"></label>
     <div class="card-form-field">
       <div x-data="combobox($app.t('struktur.bookDefault'), $app.t('struktur.noTextsorte'))"

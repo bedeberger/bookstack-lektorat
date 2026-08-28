@@ -1,7 +1,7 @@
     <div class="card-form-grid" x-bind="panel('stats')" x-cloak>
 
     <section class="book-settings-section">
-      <h3 class="book-settings-section-title" x-text="$app.t('jobStats.title')"></h3>
+      <h3 class="card-section-title" x-text="$app.t('jobStats.title')"></h3>
       <div x-show="bookJobStatsLoading && !bookJobStats" class="job-stats-loading" x-text="$app.t('jobStats.loading')"></div>
       <div x-show="bookJobStats && bookJobStats.length === 0" class="job-stats-empty" x-text="$app.t('jobStats.empty')"></div>
       <div x-show="bookJobStats && bookJobStats.length > 0" class="job-stats-scroll">

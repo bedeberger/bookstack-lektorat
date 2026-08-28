@@ -15,8 +15,8 @@
 /* === Layout === */
 .dev-banner {
   display: inline-block;
-  margin-bottom: 0.5rem;
-  padding: 0.2rem 0.7rem;
+  margin-bottom: var(--space-sm);
+  padding: var(--space-3) var(--space-md);
   background: var(--color-dev-banner-bg);
   color: var(--color-dev-banner-text);
   font-size: var(--font-size-sm);
@@ -34,8 +34,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
-  padding: 0.6rem 1rem;
+  gap: var(--space-lg);
+  padding: var(--space-10) var(--space-lg);
   background: var(--color-err-bg);
   color: var(--color-err-text);
   border-bottom: 2px solid var(--color-err-border);
@@ -46,7 +46,7 @@
 .session-banner-text { flex: 0 1 auto; }
 .session-banner-btn {
   flex: 0 0 auto;
-  padding: 0.3rem 0.9rem;
+  padding: var(--space-5) var(--space-14);
   background: var(--color-err-text);
   color: var(--color-surface);
   border: none;
@@ -64,7 +64,7 @@
   border-bottom: 2px solid var(--color-warn-text);
 }
 :root:has(.focus-editor.is-active) .session-banner--offline {
-  padding: 0.15rem 0.6rem;
+  padding: var(--space-2xs) var(--space-10);
   font-size: var(--font-size-xs);
   font-weight: var(--fw-regular);
   background: transparent;
@@ -80,15 +80,15 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: var(--space-lg);
   flex-wrap: wrap;
-  margin-bottom: 1rem;
+  margin-bottom: var(--space-lg);
   min-height: 2.5rem;
 }
 .site-header-center {
   display: flex;
   align-items: center;
-  gap: 0.9rem;
+  gap: var(--space-14);
   flex-wrap: wrap;
   min-width: 0;
 }

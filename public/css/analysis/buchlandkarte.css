@@ -20,7 +20,6 @@
   color: var(--color-muted);
   margin-bottom: var(--space-sm);
 }
-.buchlandkarte-meta-note { color: var(--color-warn-text); }
 
 /* Quadratisch, weil beide Achsen mit demselben Faktor skaliert sind: ein
    gestreckter Rahmen verzerrte die Abstände und damit die einzige Aussage, die

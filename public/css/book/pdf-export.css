@@ -17,7 +17,7 @@
 .pdfx-text-input,
 .pdfx-num-input {
   width: 100%;
-  padding: var(--space-6) 8px;
+  padding: var(--space-6) var(--space-sm);
   border: 0.5px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-surface);
@@ -32,7 +32,7 @@
 
 .pdfx-inline-pair {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--space-sm);
   flex-wrap: wrap;
 }
 
@@ -42,15 +42,15 @@
    (sehr kurze Werte). */
 .pdfx-num-grid {
   display: grid;
-  gap: 0.4rem 0.6rem;
-  margin: 0.5rem 0 0.6rem;
+  gap: var(--space-6) var(--space-10);
+  margin: var(--space-sm) 0 var(--space-10);
 }
 .pdfx-num-grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .pdfx-num-grid--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .pdfx-num-field {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: var(--space-3);
   font-size: var(--font-size-xs);
   color: var(--color-muted);
 }
@@ -60,32 +60,32 @@
    Zwei Zonen (Kopfzeile/Fusszeile), jede ein Raster: eine Label-Spalte für die
    Buchseite (recto/verso) + 3 Positions-Spalten (links/mitte/rechts). Macht die
    Verso/Recto-Logik visuell greifbar statt als flache 12er-Feldliste. */
-.pdfx-hf-zone { margin: 0.7rem 0 0.9rem; }
+.pdfx-hf-zone { margin: var(--space-md) 0 var(--space-14); }
 .pdfx-hf-zone-title {
   display: block;
   font-size: var(--font-size-sm);
   font-weight: var(--fw-semibold);
   color: var(--color-text);
-  margin-bottom: 0.4rem;
+  margin-bottom: var(--space-6);
 }
 .pdfx-hf-grid {
   display: grid;
   grid-template-columns: max-content repeat(3, minmax(0, 1fr));
-  gap: 0.4rem 0.55rem;
+  gap: var(--space-6) var(--space-sm);
   align-items: start;
 }
 /* Zelle = Textfeld + Auszeichnungs-Toggles (bold/italic/upper) darunter. */
 .pdfx-hf-cell {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--space-xs);
   min-width: 0;
 }
-.pdfx-hf-sbtns { display: flex; gap: 0.2rem; }
+.pdfx-hf-sbtns { display: flex; gap: var(--space-3); }
 .pdfx-hf-sbtn {
   flex: 1 1 0;
   min-width: 0;
-  padding: 2px 0;
+  padding: var(--space-2xs) 0;
   font-size: var(--font-size-xs);
   line-height: 1.2;
   border: 0.5px solid var(--color-border);
@@ -111,7 +111,7 @@
 .pdfx-hf-rowhead {
   display: flex;
   flex-direction: column;
-  gap: 0.05rem;
+  gap: var(--space-1);
   font-size: var(--font-size-xs);
   color: var(--color-text);
   line-height: 1.2;
@@ -124,45 +124,37 @@
 .pdfx-check {
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
+  gap: var(--space-sm);
   font-size: var(--font-size-sm);
   color: var(--color-text);
   cursor: pointer;
-  margin-right: 1rem;
+  margin-right: var(--space-lg);
 }
-.pdfx-check + .pdfx-check { margin-top: 0.3rem; }
+.pdfx-check + .pdfx-check { margin-top: var(--space-5); }
 .pdfx-check--leading {
   display: flex;
-  margin-bottom: 0.6rem;
+  margin-bottom: var(--space-10);
 }
 
 /* === Schrift-Tab: Gruppe + Rolle-Akkordeon ===
    Jede Rolle ist via .collapsible-toggle aufklappbar (Pattern aus DESIGN.md).
    Body default offen; alle anderen Rollen zu, damit die Liste kurz bleibt. */
 .pdfx-font-group {
-  padding-top: 0.4rem;
+  padding-top: var(--space-6);
 }
 .pdfx-font-group + .pdfx-font-group {
-  margin-top: 1rem;
+  margin-top: var(--space-lg);
   border-top: 0.5px solid var(--color-border);
-  padding-top: 0.8rem;
-}
-.pdfx-font-group-title {
-  font-size: var(--font-size-xs);
-  font-weight: var(--fw-bold);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--color-muted);
-  margin: 0 0 0.4rem;
+  padding-top: var(--space-md);
 }
 .pdfx-font-role { /* override collapsible-wrap-Spacing nicht; nur kompaktere Reihen */
-  padding: 0.15rem 0;
+  padding: var(--space-2xs) 0;
 }
 .pdfx-font-role-toggle {
-  gap: 0.5rem;
+  gap: var(--space-sm);
 }
 .pdfx-font-role-summary {
-  margin-left: 0.4rem;
+  margin-left: var(--space-6);
   color: var(--color-muted);
   text-transform: none;
   letter-spacing: 0;
@@ -179,8 +171,8 @@
    im Dark-Mode nicht auf dunklem Grund verschwindet und die Vorschau dem echten
    PDF-Output entspricht. */
 .pdfx-font-preview {
-  margin-top: 0.6rem;
-  padding: 0.5rem 0.7rem;
+  margin-top: var(--space-10);
+  padding: var(--space-sm) var(--space-md);
   border: 0.5px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: #ffffff;
@@ -195,7 +187,7 @@
 .card-form-field.pdfx-color-field {
   flex-direction: row;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-sm);
 }
 .pdfx-color-picker {
   width: 36px;
@@ -222,7 +214,7 @@
   font-weight: var(--fw-regular);
   text-transform: none;
   letter-spacing: 0;
-  margin-top: 0.15rem;
+  margin-top: var(--space-2xs);
 }
 
 /* === Cover-Preview (Bilderkasten) === */
@@ -237,7 +229,7 @@
   background: var(--color-bg);
   color: var(--color-muted);
   font-size: var(--font-size-sm);
-  margin: 0.4rem 0;
+  margin: var(--space-6) 0;
   overflow: hidden;
 }
 .pdfx-cover-preview img {
@@ -249,17 +241,17 @@
 .pdfx-lowres-warn { color: var(--color-warn-text); }
 /* KDP-Vorgaben-Block (Druck-Tab): 1-Klick-Preset + Bundsteg-Prüfung. */
 .pdfx-kdp-preset {
-  margin: 0.4rem 0 0.9rem;
-  padding-bottom: 0.9rem;
+  margin: var(--space-6) 0 var(--space-14);
+  padding-bottom: var(--space-14);
   border-bottom: 1px solid var(--color-border);
 }
 .pdfx-kdp-check {
   list-style: none;
-  margin: 0.4rem 0 0;
+  margin: var(--space-6) 0 0;
   padding: 0;
   font-size: 0.85rem;
 }
-.pdfx-kdp-check li { margin-top: 0.2rem; }
+.pdfx-kdp-check li { margin-top: var(--space-3); }
 .pdfx-kdp-check .is-warn { color: var(--color-warn-text); }
 .pdfx-kdp-check .is-ok   { color: var(--color-ok-text); }
 .pdfx-kdp-check .is-info { color: var(--color-muted); }
@@ -269,14 +261,14 @@
   font-variant-numeric: tabular-nums;
 }
 .pdfx-cover-spine-actions {
-  margin-top: 0.6rem;
+  margin-top: var(--space-10);
   display: flex;
   justify-content: flex-end;
 }
 .pdfx-cover-actions {
   display: flex;
-  gap: 0.5rem;
-  margin: 0.4rem 0 0.6rem;
+  gap: var(--space-sm);
+  margin: var(--space-6) 0 var(--space-10);
   flex-wrap: wrap;
 }
 /* File-Picker-Label im Look eines Standard-Buttons. */
@@ -310,8 +302,8 @@
     grid-column: 1 / -1;
     flex-direction: row;
     align-items: baseline;
-    gap: 0.4rem;
-    margin-top: 0.25rem;
+    gap: var(--space-6);
+    margin-top: var(--space-xs);
     font-weight: var(--fw-semibold);
   }
 }

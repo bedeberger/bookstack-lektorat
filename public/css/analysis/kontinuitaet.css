@@ -7,12 +7,12 @@
 /* Schwere-Tag als Anker links: shared .severity-tag aus entity-list.css. */
 
 @media (max-width: 600px) {
-  .kontinuitaet-result { padding: 0.25rem 0 0.75rem; }
-  .kontinuitaet-row-stellen { font-size: var(--font-size-xs); gap: 0.2rem; }
+  .kontinuitaet-result { padding: var(--space-xs) 0 var(--space-md); }
+  .kontinuitaet-row-stellen { font-size: var(--font-size-xs); gap: var(--space-3); }
 }
 
 .kontinuitaet-result {
-  padding: 0.25rem 0 1rem;
+  padding: var(--space-xs) 0 var(--space-lg);
 }
 
 /* Wrap + visuelle Hierarchie leben in `.collapsible-wrap` / `.collapsible-section`
@@ -39,7 +39,7 @@
   color: var(--color-muted);
   display: flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: var(--space-5);
   flex-wrap: wrap;
 }
 /* Stellen-Texte können lange Szenen-/Datums-Titel sein — umbrechen statt
@@ -57,7 +57,7 @@
 /* Empfehlung — hervorgehoben mit Akzentlinie + Tint, damit der
    handlungsrelevante Hinweis direkt ins Auge springt. */
 .kontinuitaet-empfehlung {
-  margin-top: 0.6rem;
+  margin-top: var(--space-10);
   padding: var(--pad-detail);
   background: var(--color-warn-bg);
   border-left: 3px solid var(--card-accent-kontinuitaet);
@@ -93,12 +93,12 @@
   white-space: nowrap;
 }
 .kontinuitaet-detail-actions {
-  margin-top: 0.6rem;
+  margin-top: var(--space-10);
   display: flex;
   gap: var(--space-sm);
 }
 .kontinuitaet-resolve-btn {
-  padding: var(--space-6) 12px;
+  padding: var(--space-6) var(--space-md);
   font-size: var(--font-size-mini);
   font-weight: var(--fw-medium);
   border: 1px solid var(--color-ok-border);
@@ -153,7 +153,7 @@
 }
 .book-settings-danger-zone {
   margin-top: var(--space-xl);
-  padding: var(--space-md) 14px;
+  padding: var(--space-md) var(--space-14);
   border: 1px solid var(--color-err-border);
   border-radius: var(--radius-sm);
   background: var(--color-err-bg);
@@ -189,7 +189,7 @@
   min-width: 240px;
 }
 .book-settings-btn-danger {
-  padding: var(--space-6) 12px;
+  padding: var(--space-6) var(--space-md);
   font-size: var(--font-size-mini);
   border: 1px solid var(--color-err-text);
   background: var(--color-surface);
@@ -240,11 +240,6 @@
 }
 
 /* Namens-/Konsistenz-Waechter (Sektion in der Kontinuitaets-Karte) */
-.nameguard-intro {
-  color: var(--color-muted);
-  font-size: var(--font-size-sm);
-  margin: 0 0 var(--space-sm);
-}
 .nameguard-actions {
   margin-bottom: var(--space-md);
 }

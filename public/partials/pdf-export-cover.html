@@ -90,7 +90,7 @@
               </div>
             </div>
 
-            <h4 class="pdfx-font-group-title" x-text="$app.t('pdfExport.cover.spineImage')"></h4>
+            <h4 class="card-section-title" x-text="$app.t('pdfExport.cover.spineImage')"></h4>
             <p class="card-form-field-note" x-text="$app.t('pdfExport.cover.spineImageHint')"></p>
             <div class="pdfx-cover-preview">
               <template x-if="activeProfile.has_spine">
@@ -113,7 +113,7 @@
             </div>
             <p class="card-form-error" x-show="spineImageError" x-text="spineImageError"></p>
 
-            <h4 class="pdfx-font-group-title" x-text="$app.t('pdfExport.cover.backImage')"></h4>
+            <h4 class="card-section-title" x-text="$app.t('pdfExport.cover.backImage')"></h4>
             <div class="pdfx-cover-preview">
               <template x-if="activeProfile.has_back_cover">
                 <img :src="backCoverUrl()" alt="">

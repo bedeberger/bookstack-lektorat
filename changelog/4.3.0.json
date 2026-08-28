@@ -1,0 +1,21 @@
+{
+  "version": "4.3.0",
+  "date": "2026-08-28",
+  "entries": [
+    {
+      "kind": "verbessert",
+      "de": "Die Abstände im Inneren aller Karten folgen jetzt demselben Rhythmus: zwischen zwei Abschnitten immer gleich viel Luft, zwischen Titel und Inhalt immer gleich wenig. Vorher brachte fast jede Karte ihre eigenen Abstände mit, sodass zwei nebeneinanderliegende Ansichten unterschiedlich dicht wirkten.",
+      "en": "The spacing inside every card now follows the same rhythm: always the same air between two sections, always the same small gap between a title and its content. Previously almost every card brought its own spacing, so two views side by side felt differently dense."
+    },
+    {
+      "kind": "verbessert",
+      "de": "Hinweis- und Statustexte sehen überall gleich aus — gleiche Grösse, gleiche Farbe, gleiche Position unter dem, worauf sie sich beziehen. Warnungen und Fehlermeldungen heben sich dabei einheitlich ab, statt je nach Karte anders.",
+      "en": "Hints and status lines look the same everywhere — same size, same colour, same position beneath whatever they refer to. Warnings and error messages stand out consistently instead of differing from card to card."
+    },
+    {
+      "kind": "verbessert",
+      "de": "Filterleisten, Suchfelder und Fortschrittsbalken sind in allen Ansichten gleich gebaut: gleiche Höhe, gleicher Abstand zur Liste darunter, gleiches Verhalten der Trefferzahl. Was man in einer Karte gelernt hat, sitzt in der nächsten an derselben Stelle.",
+      "en": "Filter bars, search fields and progress bars are built the same way in every view: same height, same distance to the list below, same behaviour of the result count. What you learn in one card sits in the same place in the next."
+    }
+  ]
+}

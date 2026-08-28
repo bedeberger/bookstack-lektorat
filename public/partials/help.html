@@ -22,23 +22,23 @@
 
     <!-- Reiter „Funktionen" -->
     <div class="help-tab-panel" x-bind="panel('features')">
-      <p class="help-intro" x-text="$app.t('help.intro')"></p>
+      <p class="card-hint card-hint--lead card-section" x-text="$app.t('help.intro')"></p>
 
-      <ul class="help-features">
+      <ul class="help-features card-section">
         <template x-for="f in helpFeatures" :key="f.titleKey">
           <li class="help-feature">
             <h3 class="help-feature-title" x-text="$app.t(f.titleKey)"></h3>
-            <p class="help-feature-desc" x-text="$app.t(f.descKey)"></p>
+            <p class="card-hint" x-text="$app.t(f.descKey)"></p>
           </li>
         </template>
       </ul>
 
-      <p class="help-palette-hint" x-text="$app.t('help.paletteHint')"></p>
+      <p class="card-hint card-hint--sm card-section" x-text="$app.t('help.paletteHint')"></p>
     </div>
 
     <!-- Reiter „Neuigkeiten" -->
     <div class="help-tab-panel" x-bind="panel('changelog')">
-      <p class="help-intro">
+      <p class="card-hint card-hint--lead">
         <span x-text="$app.t('changelog.intro')"></span>
         <span class="changelog-current" x-show="$store.shell.appVersion" x-cloak
               x-text="$app.t('changelog.current', { version: $store.shell.appVersion })"></span>

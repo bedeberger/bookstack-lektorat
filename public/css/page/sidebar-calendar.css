@@ -51,7 +51,7 @@
 .sidebar-calendar-weekdays {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: var(--space-2xs, 2px);
+  gap: var(--space-2xs, var(--space-2xs));
   font-size: var(--font-em-75);
   font-weight: var(--fw-semibold);
   color: var(--color-muted);
@@ -67,7 +67,7 @@
 .sidebar-calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: var(--space-2xs, 2px);
+  gap: var(--space-2xs, var(--space-2xs));
 }
 
 .sidebar-calendar-day {

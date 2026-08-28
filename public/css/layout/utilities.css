@@ -47,7 +47,6 @@
 .stilbox--review-summary { margin-bottom: var(--space-14); }
 .fazit--review { margin-top: var(--space-lg); }
 .review-stars { font-size: var(--font-size-xs); }
-.muted-msg--spaced { margin-top: var(--space-14); }
 .chat-skeleton-line--wide { width: 72%; }
 .chat-skeleton-line--narrow { width: 48%; }
 
@@ -62,8 +61,8 @@
   background: var(--color-queue-bar-bg);
   border-top: 1px solid var(--color-queue-border-subtle);
   border-radius: 0;
-  padding: var(--space-3) 16px;
-  padding-bottom: calc(3px + env(safe-area-inset-bottom));
+  padding: var(--space-3) var(--space-lg);
+  padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom));
   display: flex;
   align-items: center;
   gap: var(--space-sm);
@@ -87,7 +86,7 @@
   background: var(--color-queue-pill-bg);
   border: 1px solid var(--color-queue-pill-border);
   border-radius: 0;
-  padding: var(--space-1) 8px;
+  padding: var(--space-1) var(--space-sm);
   white-space: nowrap;
   cursor: pointer;
   max-width: 100%;
@@ -137,7 +136,7 @@
   cursor: pointer;
   font-size: var(--font-size-xs);
   line-height: 1;
-  padding: 0 0 0 4px;
+  padding: 0 0 0 var(--space-xs);
   opacity: var(--opacity-muted);
   transition: opacity var(--transition-slow), color var(--transition-slow);
 }
@@ -154,7 +153,7 @@
   font-size: var(--font-size-micro);
   font-weight: var(--fw-bold);
   line-height: 1;
-  padding: var(--space-2xs) 6px;
+  padding: var(--space-2xs) var(--space-6);
   white-space: nowrap;
 }
 .job-queue-toggle-btn:hover {
@@ -164,8 +163,8 @@
 
 @media (max-width: 600px) {
   .job-queue-bar {
-    padding: var(--space-6) 10px;
-    padding-bottom: calc(6px + env(safe-area-inset-bottom));
+    padding: var(--space-6) var(--space-10);
+    padding-bottom: calc(var(--space-6) + env(safe-area-inset-bottom));
     gap: var(--space-6);
     max-height: 50vh;
   }
@@ -175,7 +174,7 @@
   }
   .job-queue-pill {
     width: 100%;
-    padding: var(--space-sm) 10px;
+    padding: var(--space-sm) var(--space-10);
     min-height: 44px;
     box-sizing: border-box;
   }
@@ -183,7 +182,7 @@
     flex: 1 1 auto;
   }
   .job-queue-cancel-btn {
-    padding: var(--space-10) 8px;
+    padding: var(--space-10) var(--space-sm);
     margin: -10px -8px -10px 0;
     font-size: var(--font-size-sm);
     min-width: 44px;

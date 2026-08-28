@@ -8,9 +8,9 @@
     <span class="card-title" x-text="$app.t('book.export.title')"></span>
   </div>
 
-  <p class="book-export-hint" x-text="$app.t('book.export.hint')"></p>
+  <p class="card-hint card-section" x-text="$app.t('book.export.hint')"></p>
 
-  <div class="book-export-scope">
+  <div class="book-export-scope card-section">
     <label class="book-export-scope-label" x-text="$app.t('export.scope.label')"></label>
     <div x-data="combobox({ placeholder: $app.t('export.scope.label'), compact: false })"
          x-modelable="value" x-model="exportScope"
@@ -55,9 +55,9 @@
 
   <div class="book-export-migration">
     <label class="book-export-scope-label" x-text="$app.t('book.export.migrationTitle')"></label>
-    <p class="book-export-hint" x-text="$app.t('book.export.migrationHint')"></p>
+    <p class="card-hint card-section" x-text="$app.t('book.export.migrationHint')"></p>
 
-    <div class="form-stack book-export-migration-options">
+    <div class="form-stack book-export-migration-options card-section">
       <label class="form-check">
         <input type="checkbox" id="migrate-analysis" name="migrate-analysis" x-model="migrateAnalysis">
         <span>

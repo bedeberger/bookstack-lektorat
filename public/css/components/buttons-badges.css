@@ -1,7 +1,7 @@
 @layer components {
 /* === Buttons === */
 button {
-  padding: var(--size-default-padding-y) 16px;
+  padding: var(--size-default-padding-y) var(--space-lg);
   border: var(--border-thin) solid var(--color-border-input);
   border-radius: var(--radius-md);
   background: transparent;
@@ -39,7 +39,7 @@ button.danger:hover { background: var(--color-err-bg); }
 .btn-count {
   display: inline-block;
   margin-left: var(--space-6);
-  padding: 0 6px;
+  padding: 0 var(--space-6);
   font-size: var(--font-size-xs);
   font-weight: var(--fw-semibold);
   line-height: 1.4;
@@ -57,7 +57,7 @@ button.primary .btn-count {
 .badge {
   display: inline-block;
   font-size: var(--font-size-mini);
-  padding: var(--space-3) 10px;
+  padding: var(--space-3) var(--space-10);
   border-radius: 0;
   font-weight: var(--fw-regular);
 }

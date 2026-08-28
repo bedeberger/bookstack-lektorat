@@ -12,7 +12,7 @@
      x-for (mehrere tbody sind gueltiges HTML, ein tbody im tbody nicht), Zeile
      klappt ihre Belege auf. -->
 <div x-show="figurenGraphModus === 'alter'" class="figur-alter" x-cloak>
-  <div class="figur-alter-head">
+  <div class="card-section-head card-section-head--baseline">
     <p class="figur-alter-intro" x-text="$app.t('figuren.alter.intro')"></p>
     <div class="figur-alter-actions">
       <span class="muted-msg muted-msg--sm" x-show="figurenAlterScanLabel() && !figurenAlterLoading"
@@ -48,9 +48,9 @@
           x-text="figurenAlterSummary().mitAlter + ' / ' + figurenAlterSummary().total"></span>
   </div>
 
-  <p class="figur-alter-hint" x-show="figurenAlterSummary().widerspruch > 0"
+  <p class="card-hint card-hint--sm card-section" x-show="figurenAlterSummary().widerspruch > 0"
      x-text="$app.t('figuren.alter.widerspruchCount', { n: figurenAlterSummary().widerspruch })"></p>
-  <p class="figur-alter-hint" x-show="!figurenAlterData || !figurenAlterData.scan"
+  <p class="card-hint card-hint--sm card-section" x-show="!figurenAlterData || !figurenAlterData.scan"
      x-text="$app.t('figuren.alter.noScanHint')"></p>
 
   <div x-show="!figurenAlterRows().length" class="muted-msg muted-msg--spaced"

@@ -2,10 +2,10 @@
      Nested-Partial der Figuren-Karte (Placeholder `partial-figuren-presence` in
      figuren.html), läuft im figurenCard-Scope. Logik: js/book/figuren-presence.js -->
 <div x-show="figurenGraphModus === 'praesenz'" class="figur-presence" x-cloak>
-  <p class="figur-presence-intro" x-text="$app.t('figuren.presence.intro')"></p>
+  <p class="card-hint card-section" x-text="$app.t('figuren.presence.intro')"></p>
 
   <template x-if="figurenPresenceData().episodic">
-    <p class="figur-presence-note" x-text="$app.t('figuren.presence.episodicNote')"></p>
+    <p class="figur-presence-note card-section" x-text="$app.t('figuren.presence.episodicNote')"></p>
   </template>
 
   <template x-if="figurenPresenceData().findings.length">

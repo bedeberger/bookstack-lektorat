@@ -41,7 +41,7 @@
       <div class="buchlandkarte-meta">
         <span x-text="$app.t('buchlandkarte.meta.summary', {
           pages: bookMapResult.pages.length, chapters: bookMapResult.chapters.length })"></span>
-        <span x-show="bookMapResult.truncatedPages > 0" class="buchlandkarte-meta-note"
+        <span x-show="bookMapResult.truncatedPages > 0" class="card-hint--warn"
               x-text="$app.t('buchlandkarte.meta.capped', { n: bookMapResult.truncatedPages })"></span>
       </div>
 

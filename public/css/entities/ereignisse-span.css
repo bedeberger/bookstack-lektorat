@@ -6,7 +6,7 @@
 .gz-item--span {
   /* Reserviert Platz unterhalb, damit der nächste Event-Marker nicht in
      den Spannen-Balken hineinläuft. */
-  padding-bottom: calc(var(--space-18) + var(--gz-span-extra, 0px));
+  padding-bottom: calc(var(--space-18) + var(--gz-span-extra, 0));
   --gz-span-extra: clamp(8px, calc(var(--span-years, 0) * 6px), 240px);
 }
 

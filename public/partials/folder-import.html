@@ -39,7 +39,7 @@
                { value: 'year',       label: $app.t('folderImport.grouping.year') },
                { value: 'flat',       label: $app.t('folderImport.grouping.flat') }
              ]"></div>
-        <div class="folder-import-hint" x-text="$app.t('folderImport.grouping.hint.' + grouping)"></div>
+        <div class="card-hint" x-text="$app.t('folderImport.grouping.hint.' + grouping)"></div>
       </div>
     </div>
 
@@ -108,7 +108,7 @@
       <li x-show="result?.extras?.chats"
           x-text="$app.t('folderImport.result.chats', { sessions: result?.extras?.chats?.sessions || 0, messages: result?.extras?.chats?.messages || 0 })"></li>
     </ul>
-    <div class="folder-import-hint" x-show="result?.headingMap"
+    <div class="card-hint" x-show="result?.headingMap"
          x-text="$app.t('folderImport.result.headingMap', { map: result?.headingMap || '' })"></div>
     <div x-data="collapsible()" x-show="(result?.outline?.length || 0) > 0" class="folder-import-outline-block">
       <button type="button" class="collapsible-toggle" x-bind="trigger">

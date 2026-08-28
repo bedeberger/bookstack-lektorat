@@ -305,7 +305,7 @@
                     <span class="figur-bz-typ" :class="'figur-bz-' + bz.typ" x-text="bz.typ"></span>
                     <span class="figur-bz-name internal-link" @click.stop="$app.openFigurById(bz.figur_id)" x-text="$app.figurenById.get(bz.figur_id)?.name || bz.figur_id"></span>
                     <span x-show="bz.machtverhaltnis && bz.machtverhaltnis !== 0" class="figur-bz-macht" :class="bz.machtverhaltnis > 0 ? 'figur-bz-macht--positiv' : 'figur-bz-macht--negativ'" x-text="bz.machtverhaltnis > 0 ? '↑'.repeat(Math.abs(bz.machtverhaltnis)) : '↓'.repeat(Math.abs(bz.machtverhaltnis))"></span>
-                    <span x-show="bz.beschreibung" class="figur-bz-hint" x-text="'– ' + bz.beschreibung"></span>
+                    <span x-show="bz.beschreibung" class="card-hint card-hint--sm" x-text="'– ' + bz.beschreibung"></span>
                     <template x-if="bz.belege?.length">
                       <span class="figur-bz-belege">
                         <template x-for="(bg, bi) in (bz.belege || [])" :key="bi">

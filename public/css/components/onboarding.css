@@ -4,13 +4,6 @@
    (SSoT card-accents.css). Markup: public/partials/onboarding.html; Banner in
    public/index.html. Fortschritt kommt serverseitig (GET /me/onboarding). */
 
-.onboarding-intro {
-  margin: 0 0 var(--space-lg);
-  color: var(--color-muted);
-  line-height: var(--lh-base);
-  max-width: 60ch;
-}
-
 .onboarding-dismiss {
   margin-left: auto;
   font-size: var(--font-size-mini);
@@ -95,11 +88,6 @@
   font-weight: var(--fw-semibold);
   color: var(--color-text);
 }
-.onboarding-step-desc {
-  font-size: var(--font-size-sm);
-  color: var(--color-muted);
-  line-height: var(--lh-base);
-}
 .onboarding-step-state {
   flex: 0 0 auto;
   padding: var(--space-2xs) var(--space-sm);
@@ -136,22 +124,11 @@
   font-weight: var(--fw-semibold);
   color: var(--color-text);
 }
-.onboarding-demo-desc {
-  font-size: var(--font-size-sm);
-  color: var(--color-muted);
-  line-height: var(--lh-base);
-}
 
 .onboarding-error {
   margin: var(--space-md) 0 0;
   font-size: var(--font-size-sm);
   color: var(--color-err-text);
-}
-.onboarding-palette-hint {
-  margin: var(--space-lg) 0 0;
-  font-size: var(--font-size-mini);
-  color: var(--color-muted);
-  line-height: var(--lh-base);
 }
 
 /* First-Login-Willkommens-Banner: schlanke, wegklickbare Leiste, die einmalig

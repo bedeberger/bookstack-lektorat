@@ -17,7 +17,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-sm);
-  padding: var(--space-sm) 12px;
+  padding: var(--space-sm) var(--space-md);
   border-bottom: 1px solid var(--color-border);
 }
 .figur-lookup-name {
@@ -28,7 +28,7 @@
 /* Kern aus components/btn-close.css; hier nur die abweichende Groesse. */
 .figur-lookup-close { --close-size: 1.1rem; --close-pad: 0 4px; }
 .figur-lookup-body {
-  padding: var(--space-sm) 12px;
+  padding: var(--space-sm) var(--space-md);
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
@@ -71,7 +71,7 @@
   background: transparent;
   border: none;
   border-radius: 0 0 var(--radius-md) var(--radius-md);
-  padding: var(--space-sm) 12px;
+  padding: var(--space-sm) var(--space-md);
   cursor: pointer;
   color: var(--color-muted);
   font-size: var(--font-size-sm);

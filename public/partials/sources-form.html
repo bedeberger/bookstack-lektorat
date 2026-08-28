@@ -4,7 +4,7 @@
      Welche Felder erscheinen, entscheidet der Quellentyp:
      public/js/sources/fields.js#fieldsForType. -->
 <div class="sources-form" x-show="srcEditingId !== null" x-cloak>
-  <div class="sources-form-head">
+  <div class="card-section-head">
     <span class="sources-form-title"
           x-text="srcEditingId === 'new' ? $app.t('sources.form.newTitle') : $app.t('sources.form.editTitle')"></span>
     <button type="button" class="icon-btn icon-btn--ghost" @click="cancelSourceEdit()"

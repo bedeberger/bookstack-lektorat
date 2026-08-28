@@ -159,8 +159,8 @@
       <span x-text="$app.t('kontinuitaet.faktencheck.start')"></span>
     </button>
     <div x-bind="panel" class="collapsible-section" x-cloak>
-      <p class="nameguard-intro" x-text="$app.t('kontinuitaet.faktencheck.hint')"></p>
-      <div class="nameguard-actions">
+      <p class="card-hint card-section" x-text="$app.t('kontinuitaet.faktencheck.hint')"></p>
+      <div class="nameguard-actions card-section">
         <button type="button" class="secondary"
                 @click="faktencheckRun()"
                 :disabled="kontinuitaetLoading || !$store.nav.selectedBookId">
@@ -180,8 +180,8 @@
       <span x-text="$app.t('nameGuard.title')"></span>
     </button>
     <div x-bind="panel" class="collapsible-section" x-cloak>
-      <p class="nameguard-intro" x-text="$app.t('nameGuard.intro')"></p>
-      <div class="nameguard-actions">
+      <p class="card-hint card-section" x-text="$app.t('nameGuard.intro')"></p>
+      <div class="nameguard-actions card-section">
         <button type="button" class="secondary"
                 @click="nameGuardRun()"
                 :disabled="nameGuardLoading || !$store.nav.selectedBookId">

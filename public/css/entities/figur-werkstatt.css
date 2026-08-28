@@ -157,18 +157,6 @@
   flex-direction: column;
   gap: var(--space-sm);
 }
-/* Mindmap-Section-Head: schlanke Heading-Zeile mit Save-Indikator.
-   Save-Button lebt im Detail-Header (Toolbar), nicht hier. */
-.werkstatt-mindmap-section-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-sm);
-}
-.werkstatt-mindmap-section-head .section-heading {
-  margin: 0;
-}
 /* Wrapper hält Mindmap-Canvas + Overlay-Toolbar; relative für Absolute-Positioning. */
 .werkstatt-mindmap-canvas {
   position: relative;
@@ -228,7 +216,7 @@
   border-radius: var(--radius-sm);
   font-family: var(--font-sans);
   font-size: var(--font-size-base);
-  padding: var(--space-6) 10px;
+  padding: var(--space-6) var(--space-10);
   box-shadow: var(--shadow-sm);
 }
 .werkstatt-mindmap jmnode.root {

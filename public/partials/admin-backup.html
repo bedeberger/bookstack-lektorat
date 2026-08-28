@@ -35,7 +35,7 @@
 
   <!-- Download -->
   <section class="admin-backup-section" x-show="!backupLoading">
-    <h3 class="admin-backup-section-title" x-text="$app.t('admin.backup.downloadTitle')"></h3>
+    <h3 class="card-section-title" x-text="$app.t('admin.backup.downloadTitle')"></h3>
     <p class="muted-msg muted-msg--sm" x-text="$app.t('admin.backup.downloadDesc')"></p>
     <button type="button" class="btn-compact primary" @click="backupDownload()" :disabled="backupDownloading"
             x-text="backupDownloading ? $app.t('admin.backup.downloading') : $app.t('admin.backup.downloadBtn')"></button>

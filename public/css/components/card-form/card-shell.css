@@ -127,7 +127,7 @@
   outline: none;
   border-color: var(--color-border-focus);
   background: var(--color-surface);
-  padding: 2px 6px;
+  padding: var(--space-2xs) var(--space-6);
   margin: -3px -7px;
 }
 .card-title.card-title--input:disabled {
@@ -186,15 +186,19 @@
    entity-list.css). Bewusst hier und nicht pro Karte: die Zeile mischt Buttons
    mit Compact-Controls, und deren gemeinsame Mittellinie hängt an genau diesen
    Werten — eine Karten-Kopie driftet davon ab.
-   Abgrenzung: `.card-actions` ist die Icon-Leiste IM Header; Toolbars mit
-   eigener Geometrie (`.organizer-toolbar` nowrap, `.figuren-graph-toolbar`
-   space-between, `.motiv-toolbar` padding statt margin) bleiben eigenständig. */
+   Abgrenzung: `.card-actions` ist die Icon-Leiste IM Header. Toolbars mit
+   eigener HORIZONTALER Geometrie (`.organizer-toolbar` nowrap,
+   `.motiv-toolbar` eigene Gruppen) bleiben eigenständig — ihr VERTIKALER
+   Abstand ist aber derselbe: `--card-gap-section`, wie jeder andere Block im
+   Kartenkörper (card-blocks.css). Eine Toolbar, die sich ihren eigenen
+   Aussenabstand aussucht, ist der Grund, warum dieselbe Zeile auf vier Karten
+   vier verschiedene Höhen unter dem Header stand. */
 .card-toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-sm);
-  margin-bottom: var(--space-md);
+  margin-bottom: var(--card-gap-section);
 }
 .card-toolbar .btn-compact {
   display: inline-flex;

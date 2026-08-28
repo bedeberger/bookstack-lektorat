@@ -47,7 +47,7 @@
   flex: 1 1 auto;
   min-width: 0;
   height: 34px;
-  padding: 0 10px;
+  padding: 0 var(--space-10);
   box-sizing: border-box;
 }
 
@@ -143,7 +143,7 @@
 }
 .search-q {
   flex: 1;
-  padding: var(--space-sm) 32px 8px 10px;
+  padding: var(--space-sm) var(--space-2xl) var(--space-sm) var(--space-10);
   border: 0.5px solid var(--color-border-input);
   border-radius: var(--radius-md);
   font-size: var(--font-size-md);
@@ -160,7 +160,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0 6px;
+  padding: 0 var(--space-6);
   background: transparent;
   border: none;
   color: var(--color-muted);
@@ -229,7 +229,7 @@
   gap: var(--space-6);
 }
 .search-hit {
-  padding: var(--space-sm) 10px;
+  padding: var(--space-sm) var(--space-10);
   border: 0.5px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-card-bg);
@@ -243,7 +243,7 @@
   margin-bottom: var(--space-3);
 }
 .search-hit-kind {
-  padding: var(--space-1) 6px;
+  padding: var(--space-1) var(--space-6);
   border: 0.5px solid var(--color-border);
   border-radius: var(--radius-sm);
   font-size: var(--font-size-xs);
@@ -272,7 +272,7 @@
 .search-hit-snippet mark {
   background: var(--color-accent-soft);
   color: var(--color-accent);
-  padding: 0 1px;
+  padding: 0 var(--space-1);
 }
 
 @container (max-width: 480px) {

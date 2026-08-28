@@ -15,7 +15,7 @@
 .header-action-cluster {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--space-xs);
   height: 28px;
   padding: var(--space-2xs);
   background: var(--color-hover);
@@ -38,9 +38,9 @@
 .update-all-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: var(--space-6);
   height: 22px;
-  padding: 0 12px 0 10px;
+  padding: 0 var(--space-md) 0 var(--space-10);
   background: var(--color-surface);
   border: 0.5px solid var(--color-border);
   color: var(--color-text);
@@ -155,7 +155,7 @@
   background: var(--color-surface);
   border: 0.5px solid var(--color-border);
   border-radius: var(--radius-lg);
-  padding: 0.5rem;
+  padding: var(--space-sm);
   min-width: 260px;
   z-index: var(--z-header);
   box-shadow: var(--shadow-lg);
@@ -168,9 +168,9 @@
 .avatar-menu-header {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.35rem 0.5rem 0.6rem;
-  margin-bottom: 0.2rem;
+  gap: var(--space-10);
+  padding: var(--space-6) var(--space-sm) var(--space-10);
+  margin-bottom: var(--space-3);
   border-bottom: 0.5px solid var(--color-border);
 }
 .avatar-menu-header-avatar {
@@ -218,7 +218,7 @@
 }
 
 .avatar-menu-section {
-  padding: 0.4rem 0.5rem 0.25rem;
+  padding: var(--space-6) var(--space-sm) var(--space-xs);
 }
 .avatar-menu-label {
   font-size: var(--font-size-micro);
@@ -226,7 +226,7 @@
   color: var(--color-subtle);
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  margin-bottom: 0.4rem;
+  margin-bottom: var(--space-6);
 }
 
 .theme-segmented {
@@ -260,15 +260,15 @@
 .avatar-menu-divider {
   height: 0;
   border-top: 0.5px solid var(--color-border);
-  margin: 0.3rem 0;
+  margin: var(--space-5) 0;
 }
 
 .avatar-menu-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
-  padding: 0.45rem 0.6rem;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-10);
   background: transparent;
   border: none;
   border-radius: var(--radius-sm);
@@ -290,7 +290,7 @@
   font-family: var(--font-mono, ui-monospace, monospace);
   border: 0.5px solid var(--color-border);
   border-radius: 4px;
-  padding: 0 6px;
+  padding: 0 var(--space-6);
   line-height: 16px;
   min-width: 18px;
   text-align: center;
@@ -302,8 +302,8 @@
 .avatar-menu-provider {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
-  padding: 0.3rem 0.6rem 0.5rem;
+  gap: var(--space-sm);
+  padding: var(--space-5) var(--space-10) var(--space-sm);
   font-size: var(--font-size-xs);
   color: var(--color-subtle);
 }
@@ -500,10 +500,10 @@
    damit die 22px-Controls in der 28px-Höhe bleiben. */
 @media (pointer: coarse) {
   .header-actions {
-    gap: 1rem;
+    gap: var(--space-lg);
   }
   .header-action-cluster {
-    gap: 0.5rem;
+    gap: var(--space-sm);
     padding: var(--space-3) var(--space-sm);
   }
 }

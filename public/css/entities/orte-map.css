@@ -31,19 +31,6 @@
   gap: var(--space-2xs);
 }
 
-.ort-map-hint {
-  font-size: var(--font-size-xs);
-  color: var(--color-muted);
-  margin: 0;
-}
-
-.ort-map-locate-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-sm);
-}
-
 .ort-map-locate-count {
   font-size: var(--font-size-xs);
   color: var(--color-muted);
@@ -118,7 +105,7 @@
 .ort-popup {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: var(--space-3);
 }
 
 .ort-popup__name {
@@ -153,7 +140,7 @@
 .ort-popup__page {
   font: inherit;
   font-size: var(--font-size-xs);
-  padding: 2px var(--space-2xs);
+  padding: var(--space-2xs) var(--space-2xs);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-surface);

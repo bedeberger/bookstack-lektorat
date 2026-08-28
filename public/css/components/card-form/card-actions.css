@@ -27,7 +27,7 @@
   width: 1px;
   align-self: stretch;
   background: var(--color-border);
-  margin: var(--space-xs) 2px;
+  margin: var(--space-xs) var(--space-2xs);
 }
 
 @media (max-width: 700px) {
@@ -45,7 +45,7 @@
      Karten (oft nur 1 CTA) behalten den Full-Width-Stretch. */
   .card-actions--grouped button {
     flex: 0 1 auto;
-    padding: var(--size-default-padding-y) 10px;
+    padding: var(--size-default-padding-y) var(--space-10);
     font-size: var(--font-size-sm);
   }
   .card-actions--grouped .action-sep { display: none; }
@@ -80,7 +80,7 @@
   color: var(--color-muted);
   font-size: var(--font-size-lg);
   line-height: 1;
-  padding: var(--space-2xs) 6px;
+  padding: var(--space-2xs) var(--space-6);
   cursor: pointer;
   border-radius: 0;
   margin-left: var(--space-xs);

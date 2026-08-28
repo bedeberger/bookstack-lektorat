@@ -98,7 +98,7 @@
   right: -3px;
   min-width: 15px;
   height: 15px;
-  padding: 0 4px;
+  padding: 0 var(--space-xs);
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;

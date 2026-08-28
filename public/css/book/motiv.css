@@ -4,12 +4,14 @@
    Layout: Graph links, Seitenpanel rechts; unter 960px gestapelt. */
 
 /* ── Anlege-/Layer-Leiste ─────────────────────────────────────────────── */
+/* Eigene horizontale Geometrie (Gruppen statt einer Reihe), vertikal aber der
+   Karten-Rhythmus — siehe `.card-toolbar` in card-form/card-shell.css. */
 .motiv-toolbar {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-sm);
   align-items: center;
-  padding: var(--space-sm) 0;
+  margin-bottom: var(--card-gap-section);
 }
 .motiv-toolbar-group {
   display: flex;
@@ -51,7 +53,6 @@
 
 /* ── KI-Vorschläge (Brainstorm) ───────────────────────────────────────── */
 .motiv-suggestions { padding: var(--space-xs) 0; }
-.motiv-suggestions-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); }
 .motiv-suggestion-list { display: flex; flex-direction: column; gap: var(--space-2xs); }
 .motiv-suggestion {
   display: flex;
@@ -64,9 +65,8 @@
   border-radius: var(--radius-sm);
   background: var(--color-card-bg);
 }
-.motiv-sugg-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.motiv-sugg-body { display: flex; flex-direction: column; gap: var(--space-2xs); min-width: 0; }
 .motiv-sugg-name { font-size: var(--font-size-sm); font-weight: var(--fw-semibold); color: var(--color-text); }
-.motiv-sugg-desc { font-size: var(--font-size-xs); color: var(--color-muted); }
 .motiv-sugg-triggers { font-size: var(--font-size-micro); color: var(--color-muted); font-style: italic; }
 .motiv-sugg-actions { display: flex; align-items: center; gap: var(--space-2xs); flex-shrink: 0; }
 
@@ -213,7 +213,7 @@
 .motiv-occ-row {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-2xs);
   padding: var(--space-2xs) var(--space-xs);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
@@ -239,13 +239,13 @@
 .motiv-occ-conf { background: var(--color-tag-bg); color: var(--card-accent); font-weight: var(--fw-semibold); }
 
 /* ── Soll-Verknüpfungen + Beziehungen ─────────────────────────────────── */
-.motiv-link-group { display: flex; flex-direction: column; gap: 2px; margin-bottom: var(--space-2xs); }
+.motiv-link-group { display: flex; flex-direction: column; gap: var(--space-2xs); margin-bottom: var(--space-2xs); }
 .motiv-chip-row { display: flex; flex-wrap: wrap; gap: var(--space-2xs); }
 .motiv-chip {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2xs);
-  padding: 2px var(--space-xs);
+  padding: var(--space-2xs) var(--space-xs);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-tag-bg);

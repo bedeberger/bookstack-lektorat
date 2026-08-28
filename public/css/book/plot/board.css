@@ -281,7 +281,6 @@
     background: color-mix(in oklch, var(--color-mittel) 14%, transparent);
   }
 
-
   /* Anchor-Fundstellen-Popover: nutzt die .context-menu-Hülle (Teleport, Shadow,
      Fade). Die Zeilen sind reicher als ein Aktions-Menüeintrag (Seitenname +
      Score + Snippet zweizeilig), darum eigene Item-Klasse. */
@@ -350,11 +349,6 @@
     gap: var(--space-2xs);
     padding: var(--space-xs) var(--space-md) var(--space-sm);
     border-top: 1px solid var(--color-border);
-  }
-  .plot-occ-promote-hint {
-    margin: 0;
-    font-size: var(--font-size-xs);
-    color: var(--color-muted);
   }
   .plot-occ-promote-btn {
     align-self: flex-start;

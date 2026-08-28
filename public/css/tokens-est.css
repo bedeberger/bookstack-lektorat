@@ -2,7 +2,7 @@
 /* === Token-Schätzung === */
 .tok-badge {
   font-size: var(--font-size-micro);
-  padding: var(--space-2xs) 6px;
+  padding: var(--space-2xs) var(--space-6);
   border-radius: var(--radius-sm);
   font-weight: var(--fw-regular);
   flex-shrink: 0;
@@ -21,7 +21,7 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-md);
-  padding: var(--space-6) 8px;
+  padding: var(--space-6) var(--space-sm);
   font-size: var(--font-size-xs);
   color: var(--color-muted);
   white-space: nowrap;
@@ -138,7 +138,7 @@
 .figur-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-sm) 14px;
+  gap: var(--space-sm) var(--space-14);
   font-size: var(--font-size-xs);
   color: var(--color-muted);
   align-items: center;
@@ -161,7 +161,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  padding: var(--space-sm) 10px;
+  padding: var(--space-sm) var(--space-10);
   border: 0.5px solid var(--color-border);
   border-radius: var(--radius-md);
   margin-bottom: var(--space-2xs);
@@ -200,7 +200,6 @@
   flex: 1;
 }
 
-
 .figur-rel-tag {
   font-size: var(--font-size-xs);
 }
@@ -232,7 +231,7 @@
 }
 
 .kapitel-badge--more {
-  padding: var(--space-2xs) 6px;
+  padding: var(--space-2xs) var(--space-6);
   background: var(--color-tag-bg);
   color: var(--color-muted);
   font-weight: var(--fw-bold);

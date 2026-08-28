@@ -4,7 +4,7 @@
   position: relative;
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--space-xs);
 }
 .komplett-last-run {
   font-size: var(--font-size-micro);
@@ -14,7 +14,7 @@
 .komplett-status-laststamp {
   font-size: var(--font-size-micro);
   color: var(--color-muted);
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--space-sm);
 }
 .komplett-status-panel {
   position: absolute;
@@ -23,7 +23,7 @@
   background: var(--color-surface);
   border: 0.5px solid var(--color-border);
   border-radius: var(--radius-lg);
-  padding: 0.75rem 1rem;
+  padding: var(--space-md) var(--space-lg);
   min-width: 260px;
   z-index: var(--z-header);
   box-shadow: var(--shadow-md);
@@ -35,21 +35,21 @@
   color: var(--color-muted);
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--space-sm);
 }
 .komplett-progress-bar-wrap {
   margin-top: 0;
-  margin-bottom: 0.4rem;
+  margin-bottom: var(--space-6);
   border-radius: var(--radius-sm);
 }
 .komplett-progress-label {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  gap: 0.5rem;
+  gap: var(--space-sm);
   font-size: var(--font-size-mini);
   color: var(--color-muted);
-  margin-bottom: 0.65rem;
+  margin-bottom: var(--space-10);
 }
 .komplett-tokens {
   font-size: var(--font-size-xs);
@@ -57,19 +57,19 @@
   white-space: nowrap;
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-2xs);
 }
 .komplett-phase-list {
   list-style: none;
   margin: 0;
   padding: 0;
   border-top: 0.5px solid var(--color-border);
-  padding-top: 0.5rem;
+  padding-top: var(--space-sm);
 }
 .komplett-phase-item {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
+  gap: var(--space-sm);
   font-size: var(--font-size-mini);
   padding: var(--space-2xs) 0;
   color: var(--color-subtle);
@@ -99,8 +99,8 @@
 
 .komplett-warnings {
   list-style: none;
-  margin: 0.5rem 0 0;
-  padding: 0.5rem 0 0;
+  margin: var(--space-sm) 0 0;
+  padding: var(--space-sm) 0 0;
   border-top: 0.5px solid var(--color-border);
 }
 .komplett-warning-item {
@@ -108,7 +108,7 @@
   color: var(--color-warn-text);
   background: var(--color-warn-bg);
   border-radius: var(--radius-sm);
-  padding: var(--space-2xs) 8px;
+  padding: var(--space-2xs) var(--space-sm);
   margin-top: var(--space-2xs);
 }
 
@@ -116,7 +116,7 @@
 .komplett-coverage {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: var(--space-6);
   font-size: var(--font-size-mini);
   color: var(--color-ok-text);
   margin-top: var(--space-2xs);
@@ -149,7 +149,7 @@
   display: flex;
   justify-content: space-between;
   gap: var(--space-xs);
-  padding-left: 0.75rem;
+  padding-left: var(--space-md);
 }
 .komplett-cost-usd {
   font-variant-numeric: tabular-nums;
@@ -158,8 +158,8 @@
 /* Teil-Lauf-Schalter (Kontinuität/Erzählprofil abwählen). Wie die Aktionen darunter
    bewusst de-prominent: der vollständige Lauf bleibt der Default. */
 .komplett-status-phases {
-  margin-top: 0.5rem;
-  padding-top: 0.5rem;
+  margin-top: var(--space-sm);
+  padding-top: var(--space-sm);
   border-top: 0.5px solid var(--color-border);
   display: flex;
   flex-direction: column;
@@ -173,16 +173,16 @@
 /* Aktionen am Panel-Fuss (z.B. Delta-Cache leeren) — bewusst de-prominent,
    nur über das ⋯-Menü erreichbar statt als nackter Header-Button. */
 .komplett-status-actions {
-  margin-top: 0.5rem;
-  padding-top: 0.5rem;
+  margin-top: var(--space-sm);
+  padding-top: var(--space-sm);
   border-top: 0.5px solid var(--color-border);
 }
 .komplett-status-action-btn {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
+  gap: var(--space-sm);
   width: 100%;
-  padding: 0.4rem 0.5rem;
+  padding: var(--space-6) var(--space-sm);
   background: transparent;
   border: none;
   border-radius: var(--radius-sm);

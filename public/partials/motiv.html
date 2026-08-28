@@ -198,7 +198,7 @@
        überdecken. Frischer Lauf wie wieder-geöffneter Lauf füllen dasselbe Panel;
        übernehmen legt Thema/Motiv an, nie im Text. -->
   <div class="motiv-suggestions" x-show="suggestions.length" x-cloak>
-    <div class="motiv-suggestions-head">
+    <div class="card-section-head">
       <h4 class="motiv-panel-heading" x-text="$app.t('motiv.brainstorm.title')"></h4>
       <button type="button" class="icon-btn icon-btn--ghost" @click="_clearSuggestionPanel()"
               :data-tip="$app.t('motiv.brainstorm.closePanel')" :aria-label="$app.t('motiv.brainstorm.closePanel')">
@@ -211,7 +211,7 @@
           <div class="motiv-sugg-body">
             <span class="badge-source" x-text="$app.t('motiv.brainstorm.typ.' + s.typ)"></span>
             <span class="motiv-sugg-name" x-text="s.name"></span>
-            <span class="motiv-sugg-desc" x-text="s.beschreibung" x-show="s.beschreibung"></span>
+            <span class="card-hint card-hint--sm" x-text="s.beschreibung" x-show="s.beschreibung"></span>
             <span class="motiv-sugg-triggers" x-show="s.trigger_terms && s.trigger_terms.length"
                   x-text="(s.trigger_terms || []).join(', ')"></span>
           </div>

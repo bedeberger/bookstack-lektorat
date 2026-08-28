@@ -8,7 +8,7 @@
   align-items: center;
   gap: var(--space-10);
   width: 100%;
-  padding: var(--space-10) 14px;
+  padding: var(--space-10) var(--space-14);
   border: 1px solid var(--color-border-input);
   border-radius: var(--radius-md);
   background: var(--color-bg);
@@ -41,7 +41,7 @@
 .palette-hero-kbd {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: var(--font-size-xs);
-  padding: var(--space-2xs) 6px;
+  padding: var(--space-2xs) var(--space-6);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   color: var(--color-muted);
@@ -57,7 +57,7 @@
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: 12vh 16px 16px;
+  padding: 12vh var(--space-lg) var(--space-lg);
 }
 .palette-panel {
   width: 100%;
@@ -72,7 +72,7 @@
 }
 .palette-input {
   width: 100%;
-  padding: var(--space-14) 16px;
+  padding: var(--space-14) var(--space-lg);
   font-size: var(--font-size-reading);
   border: none;
   border-bottom: 1px solid var(--color-border);
@@ -94,7 +94,7 @@
 }
 .palette-section { padding: var(--space-xs) 0; }
 .palette-section-label {
-  padding: var(--space-6) 16px 4px;
+  padding: var(--space-6) var(--space-lg) var(--space-xs);
   font-size: var(--font-size-micro);
   font-weight: var(--fw-semibold);
   text-transform: uppercase;
@@ -106,7 +106,7 @@
   flex-direction: column;
   align-items: flex-start;
   width: 100%;
-  padding: var(--space-sm) 16px;
+  padding: var(--space-sm) var(--space-lg);
   background: transparent;
   border: none;
   cursor: pointer;
@@ -128,7 +128,7 @@
 .palette-item-badge {
   font-size: var(--font-size-mini);
   font-weight: var(--fw-medium);
-  padding: 1px var(--space-2xs);
+  padding: var(--space-1) var(--space-2xs);
   border-radius: var(--radius-sm);
   background: var(--color-accent-soft);
   color: var(--color-accent);
@@ -151,7 +151,7 @@
 .palette-item-preview mark {
   background: var(--color-accent-soft);
   color: var(--color-accent);
-  padding: 0 1px;
+  padding: 0 var(--space-1);
 }
 .palette-item--active {
   background: var(--color-hover);
@@ -167,7 +167,7 @@
 /* Active-Selection-Highlight (border-left + bg) übernimmt Fokus-Rolle. */
 .palette-item:focus-visible { outline: none; }
 .palette-empty {
-  padding: var(--space-18) 16px;
+  padding: var(--space-18) var(--space-lg);
   font-size: var(--font-size-sm);
   color: var(--color-muted);
   text-align: center;
@@ -179,14 +179,14 @@
   padding: 0;
 }
 .palette-toast {
-  padding: var(--space-sm) 14px;
+  padding: var(--space-sm) var(--space-14);
   border-top: 1px solid var(--color-border);
   font-size: var(--font-size-mini);
   color: var(--color-muted);
   background: var(--color-bg);
 }
 .palette-mode {
-  padding: var(--space-6) 14px;
+  padding: var(--space-6) var(--space-14);
   border-bottom: 1px solid var(--color-border);
   background: var(--color-bg);
 }
@@ -200,20 +200,20 @@
 .palette-mode-pill kbd {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: var(--font-size-micro);
-  padding: var(--space-1) 5px;
+  padding: var(--space-1) var(--space-5);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-surface);
 }
 .palette-legend {
-  padding: var(--space-6) 14px;
+  padding: var(--space-6) var(--space-14);
   border-top: 1px solid var(--color-border);
   background: var(--color-bg);
 }
 .palette-legend-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-xs) 10px;
+  gap: var(--space-xs) var(--space-10);
 }
 .palette-legend-row {
   display: inline-flex;
@@ -225,7 +225,7 @@
 .palette-legend-row kbd {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: var(--font-size-micro);
-  padding: 0 4px;
+  padding: 0 var(--space-xs);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-surface);
@@ -237,17 +237,17 @@
   /* Hero: kbd-Hint weg (Mobile hat keine physische Tastatur), Padding etwas
      grösser für Tap-Komfort. */
   .palette-hero-kbd { display: none; }
-  .palette-hero { padding: var(--space-md) 14px; }
+  .palette-hero { padding: var(--space-md) var(--space-14); }
   /* Palette-Modal: Soft-Keyboard verdeckt sonst Panel. Wenig Padding-Top,
      volle vertikale Reichweite. Safe-Area für Notch/Home-Indicator. */
   .palette-overlay {
-    padding: 4vh 8px max(8px, env(safe-area-inset-bottom));
+    padding: 4vh var(--space-sm) max(var(--space-sm), env(safe-area-inset-bottom));
   }
   .palette-panel {
     max-height: calc(100vh - 6vh - env(safe-area-inset-bottom, 0px));
   }
   .palette-item {
-    padding: var(--space-md) 16px;
+    padding: var(--space-md) var(--space-lg);
     min-width: 0;
   }
   .palette-item-label,

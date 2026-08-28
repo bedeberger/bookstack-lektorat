@@ -20,7 +20,7 @@
   display: grid;
   grid-template-columns: 1fr;
   gap: 0;
-  margin-top: 1rem;
+  margin-top: var(--space-lg);
 }
 /* Karten stapeln normal (Spalten-Layout in beiden Breiten gleich). */
 .comment-rail__layer { display: flex; flex-direction: column; gap: var(--space-sm); }
@@ -32,7 +32,7 @@
     grid-template-columns: minmax(0, max-content) clamp(280px, 22vw, 340px);
     justify-content: center;
     align-items: start;
-    gap: 1rem;
+    gap: var(--space-lg);
   }
   .comments-split .editor-preview-wrap { min-width: 0; }
 

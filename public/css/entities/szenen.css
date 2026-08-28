@@ -7,7 +7,7 @@
    Übersichts-Badges (.severity-dot--*) bleiben unverändert als runde Dots. */
 
 @media (max-width: 600px) {
-  .szenen-uebersicht-grid { gap: var(--space-sm); padding: var(--space-6) 0 8px; }
+  .szenen-uebersicht-grid { gap: var(--space-sm); padding: var(--space-6) 0 var(--space-sm); }
 }
 
 /* Stelle (Kapitel + Seite) ist primäre Info — bleibt auch <480px sichtbar
@@ -25,14 +25,14 @@
 
 /* === Szenen-Karte: Übersichts-Grid (Figur / Kapitel / Seite, klappbar) === */
 .szenen-uebersicht {
-  padding: var(--space-xs) 0 12px;
+  padding: var(--space-xs) 0 var(--space-md);
   margin-bottom: var(--space-sm);
 }
 .szenen-uebersicht-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: var(--space-md);
-  padding: var(--space-md) 0 14px;
+  padding: var(--space-md) 0 var(--space-14);
   border-bottom: 1px solid var(--color-border);
   margin-top: var(--space-sm);
 }
@@ -53,7 +53,7 @@
   align-items: center;
   gap: var(--space-xs);
   font-size: var(--font-size-xs);
-  padding: var(--space-3) 7px 3px 7px;
+  padding: var(--space-3) 7px var(--space-3) 7px;
   border-radius: 0;
   background: var(--color-tag-bg);
   color: var(--color-text);

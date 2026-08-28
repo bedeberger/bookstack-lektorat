@@ -9,7 +9,6 @@
   line-height: 1.7;
 }
 
-
 /* Warn-Hinweis über einem Analyse-Ergebnis — gleiches Pattern wie
    `.overview-notice` (Warn-Tokens + linker 3 px-Border), zweiter Fundort.
    Verhindert, dass ein unvollständiges Ergebnis als vollständig gelesen wird
@@ -122,7 +121,7 @@
 /* === Listen === */
 .bullet-list { list-style: none; padding: 0 0 0 var(--space-md); margin: 0; }
 .bullet-list li {
-  padding: var(--space-xs) 0 4px 16px;
+  padding: var(--space-xs) 0 var(--space-xs) var(--space-lg);
   font-size: var(--font-size-base);
   position: relative;
   line-height: 1.5;
@@ -159,7 +158,7 @@
 /* === Review-Beispielzitate === */
 .zitate-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: var(--space-10); }
 .zitat-item {
-  padding: var(--space-sm) 12px;
+  padding: var(--space-sm) var(--space-md);
   background: var(--color-bg);
   border-left: 3px solid var(--color-border);
   border-radius: var(--radius-sm);
@@ -175,7 +174,7 @@
   margin-bottom: var(--space-xs);
 }
 .zitat-text {
-  margin: 0 0 4px 0;
+  margin: 0 0 var(--space-xs) 0;
   font-family: var(--font-serif);
   font-style: italic;
   font-size: var(--font-size-base);
