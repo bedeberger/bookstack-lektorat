@@ -3,7 +3,7 @@
 // vorab laden + Relevanz-Scoring) UND agentischer Pfad (Tool-Use über den
 // Buchindex). Dispatcher wählt anhand der App-Settings (Provider/Modus).
 
-const { db } = require('../../../db/schema');
+const { db, listWorldFacts, worldFactsScanState } = require('../../../db/schema');
 const { callAIChat, chatTemperature, getContextConfigFor, resolveProvider, providerClass, providerSupportsTools } = require('../../../lib/ai');
 const {
   _promptConfig,
@@ -23,7 +23,7 @@ const { setContext } = require('../../../lib/log-context');
 const appSettings = require('../../../lib/app-settings');
 const { recordChatLedgerForMessage } = require('../../../db/cost-ledger');
 const {
-  _parseChatResponse, figurenBlockChars,
+  _parseChatResponse, figurenBlockChars, weltfaktenBlockChars,
   bookPageCache, BOOK_PAGE_CACHE_TTL_MS, BOOK_PAGE_CACHE_MAX,
 } = require('./shared');
 
@@ -422,6 +422,21 @@ async function _agentPreContext(bookId, message, jobSignal, logger) {
   }
 }
 
+// Welt-Fakten fuer den stabilen (gecachten) Prompt-Block. `scanned` reist mit, damit
+// buildWeltfaktenBlock einen NICHT erhobenen Index von einem leeren unterscheiden kann
+// — ein leerer Block wuerde als «diese Welt hat keine Regeln» gelesen. Nicht-fatal:
+// ein DB-Fehler kostet den Block, nicht den Chat.
+function _agentWeltContext(bookId, userEmail, logger) {
+  try {
+    const fakten = listWorldFacts(bookId, userEmail);
+    const { scanned } = worldFactsScanState(bookId, userEmail);
+    return { scanned, fakten };
+  } catch (e) {
+    logger.warn(`Welt-Fakten-Block uebersprungen (${e.message}).`);
+    return null;
+  }
+}
+
 // Agentischer Buch-Chat: ruft Tools aus routes/jobs/book-chat-tools.js auf, um
 // Fragen über den gesamten Buchindex zu beantworten, statt alle Seiten vorab zu
 // laden. Loop/Persistenz kommen aus makeAgenticChatJob (siehe agentic-chat.js);
@@ -470,13 +485,22 @@ const runBookChatJobAgent = makeAgenticChatJob({
     // Der Prompt darf nur empfehlen, was tatsaechlich angeboten wird — sonst
     // verbrennt das Modell Runden an Werkzeugen, die es nicht hat.
     const figurenMaxChars = figurenBlockChars(aiCfg);
+    // Welt-Fakten: kurze, schon verdichtete Buchaussagen — Stufe 1 der Kosten-Leiter.
+    // Buch-stabil, darum im gecachten Block 1 und nicht im Erst-Kontext.
+    const welt = _agentWeltContext(session.book_id, userEmail, logger);
+    const weltfaktenMaxChars = weltfaktenBlockChars(aiCfg);
     const systemPrompt = buildBookChatAgentSystemPrompt(
       session.book_name || '', figuren, review, bookChatSys, maxToolIter,
-      { passages: preContext?.hits || [], semantic: embOn, toolNames: tools.map(t => t.name), figurenMaxChars },
+      {
+        passages: preContext?.hits || [], semantic: embOn, toolNames: tools.map(t => t.name),
+        figurenMaxChars, welt, weltfaktenMaxChars,
+      },
     );
     logger.info(`Werkzeugsatz: ${toolSet} (${tools.length} Werkzeuge), max ${maxToolIter} Iterationen, Provider=${provider}/${providerClass(provider, { userEmail })}.`);
     logger.info(`System-Prompt: ${systemPrompt.reduce((n, b) => n + (b.text?.length || 0), 0)} Zeichen `
-      + `(Figuren: ${figuren.length}, Block-Deckel ${figurenMaxChars} Zeichen), Input-Budget ${aiCfg.inputBudgetChars} Zeichen.`);
+      + `(Figuren: ${figuren.length}, Block-Deckel ${figurenMaxChars} Zeichen; `
+      + `Welt-Fakten: ${welt ? `${welt.fakten.length}${welt.scanned ? '' : ' (Index nicht erhoben)'}` : 'aus'}, `
+      + `Deckel ${weltfaktenMaxChars} Zeichen), Input-Budget ${aiCfg.inputBudgetChars} Zeichen.`);
     return {
       systemPrompt,
       tools,

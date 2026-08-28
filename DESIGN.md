@@ -47,6 +47,7 @@ Token-Referenz (Farben, Radien, Spacing, Schriftgrössen): [public/css/tokens.cs
 - [Klappbarer Section-Toggle](#klappbarer-section-toggle-accordion) — Accordion via `.collapsible-toggle`
 - [Card-Status](#card-status--loading--empty--error) — Loading/Empty/Error
 - [Sortierbare Tabelle](#sortierbare-tabelle-sortabletable) — Client-Side-Sort via `sortableTable` Alpine-Komponente
+- [Aktions-Spalte in Tabellen](#aktions-spalte-in-tabellen) — letzte Spalte mit Icon-Buttons; die Zelle bleibt Zelle
 - [Chevron-Konventionen](#chevron-konventionen) — `›` 90°, `▾` 180°
 
 **Layout & Navigation**
@@ -518,6 +519,11 @@ mit `myCardOptions() { return this.cardData.map(...); }` am Karten-Scope.
 **Severity-Tags** [public/css/entities/entity-list.css:143](public/css/entities/entity-list.css#L143):
 - `.severity-tag--kritisch` / `--stark` / `--mittel` / `--schwach` / `--niedrig`
 - Verwendet für Lektorats-/Kontinuitäts-Schweregrade.
+
+**Umfangs-Plakette** (`.tok-badge` in [public/css/tokens-est.css](public/css/tokens-est.css)):
+- Zeigt den Umfang einer Seite bzw. eines Kapitels als Zeichenzahl (Sidebar-Baum, Notebook-Kopfleiste, Kapitelbewertung).
+- **Beschriftung ausschliesslich ueber `charBadge(chars)`** (Root-Methode, [public/js/app/app-ui.js](public/js/app/app-ui.js), pure Funktion `charBadgeLabel` in [public/js/utils/format.js](public/js/utils/format.js)). Unter 1000 die genaue Zahl, darueber auf Tausender gerundet mit Tilde.
+- **Die Einheit kommt aus der i18n** (`bookstats.unit.z` — de „Z", en „c"), nie als Literal im Template. Sonst steht in der englischen UI die Σ-Zeile auf „c" und die Plaketten darunter auf „Z".
 
 **Hue-getriebener Badge** (`.palette-badge` in [public/css/layout/utilities.css](public/css/layout/utilities.css)):
 - Basis-Pattern für alle farb-codierten Badges (Sozialschicht, Präsenz, Figurentyp).
@@ -1400,6 +1406,38 @@ gewinnt unabhängig von der Ladereihenfolge. Wer im eigenen Stylesheet
 `.xxx-table th { padding: … 0; }` setzt, überschreibt sie und das Sortier-Chevron
 sitzt im Spaltentitel. Dann den Platz für sortierbare Köpfe explizit zurückholen:
 `.xxx-table th.sortable-th { padding-right: calc(var(--space-md) + 14px); }`.
+
+---
+
+## Aktions-Spalte in Tabellen
+
+**Use:** Die letzte Spalte einer Listen-/Verwaltungstabelle mit Zeilen-Aktionen (Anheften, Archivieren, Loeschen, Oeffnen). Icon-Buttons nach der [Action-Icon-Library](#action-icon-library-verbindlich).
+
+**Markup — die Knoepfe liegen in einem Kasten IN der Zelle, nicht direkt in ihr:**
+```html
+<td class="mybooks-actions">
+  <div class="mybooks-actions-row">
+    <button type="button" class="icon-btn icon-btn--ghost" …>…</button>
+    <button type="button" class="icon-btn icon-btn--ghost" …>…</button>
+  </div>
+</td>
+```
+
+**CSS:**
+```css
+.mybooks-actions-row {         /* Wrapper traegt das Layout */
+  display: flex;
+  gap: var(--space-2xs);
+  justify-content: flex-end;
+}
+```
+Die Zelle selbst bekommt **kein** `display`. Braucht sie nur Ausrichtung und keinen Abstand zwischen den Knoepfen, reicht die schlanke Form ganz ohne Wrapper: `.xxx-actions { text-align: right; white-space: nowrap; }` (so in [admin-users.css](public/css/admin/admin-users.css), [admin-settings.css](public/css/admin/admin-settings.css)).
+
+**Harte Regel: kein `display: flex|grid|block` auf einer `<td>`/`<th>`-Klasse.** Damit verliert die Zelle ihre Tabellenzellen-Rolle — der Browser schiebt eine anonyme Zelle darum, und ab da laufen Rahmen, Hintergrund, Zeilenhoehe und `vertical-align` der Spalte nicht mehr mit der Zeile mit, sondern nur noch mit dem Inhalt. Die Aktions-Spalte sitzt dann sichtbar versetzt neben ihrer eigenen Zeile. Der Fehler ist im Code unsichtbar: HTML und CSS sind je fuer sich korrekt, erst ihre Kombination bricht das Layout. Gegated durch [tests/unit/table-cell-display.test.mjs](tests/unit/table-cell-display.test.mjs) — neue Zellen-Klasse mit `display:*` → CI rot. Erlaubt bleiben `display: none` (Spalte ausblenden) und `display: table-cell` (Rueckkehr zur Rolle).
+
+**Am rechten Rand mitlaufen lassen** (breite Tabelle in `.table-scroll`): `position: sticky; right: 0;` plus eigener `background` und `border-left` gehoeren an die **Zelle** — sticky funktioniert auf `<td>`/`<th>`, und nur dort deckt die Flaeche die volle Zeilenhoehe ab. Beispiel: `.mybooks-table th:last-child, .mybooks-actions` in [my-books.css](public/css/components/my-books.css).
+
+**Kein `sortable-th`** auf dem Kopf der Aktions-Spalte — sie hat keine Sortier-Semantik (siehe [Sortierbare Tabelle](#sortierbare-tabelle-sortabletable)).
 
 ## Card-Status / Loading / Empty / Error
 
@@ -2782,7 +2820,7 @@ Struktur: 8 thematische Subfolder unter [public/css/](public/css/) + Root-Solit�
 | [card-accents.css](public/css/card-accents.css) | `.card--<key> { --card-accent: var(--card-accent-<key>); }` — SSoT für Karten-Akzentfarben (alle Karten). |
 | [chat.css](public/css/chat.css) | Seiten-/Buch-Chat. |
 | [search.css](public/css/search.css) | Volltext-Suche, Buchwahl. |
-| [tokens-est.css](public/css/tokens-est.css) | Token-Schätzung Inline-Badges + Tooltip. |
+| [tokens-est.css](public/css/tokens-est.css) | Token-Schätzung Inline-Badges + Tooltip. Nur das — der Figuren-Bestand, den die Datei entgegen ihrem Namen lange mittrug, liegt in `entities/figuren*.css` und `components/kapitel-badges.css`. |
 | [landing.css](public/css/landing.css) | Landing-/Register-/Login-Seiten (kein SPA-Bundle). |
 | [share.css](public/css/share.css) | Facade des Share-Reader-Stylesheets (kein SPA-Bundle; nur via `share.html`/`share.gone.html`/E2E-Harness verlinkt). `@import` der `share/`-Module in Quell-Reihenfolge (= Kaskade). |
 
@@ -2841,6 +2879,7 @@ Struktur: 8 thematische Subfolder unter [public/css/](public/css/) + Root-Solit�
 | [components/user-chip.css](public/css/components/user-chip.css) | User-Avatar-Chip. |
 | [components/feature-tiles.css](public/css/components/feature-tiles.css) | Palette (Hero/Overlay/Panel/Item), Quick-Pills. |
 | [components/tooltip.css](public/css/components/tooltip.css) | `.tip-layer` / `.tip-bubble` / `.tip-arrow` für `[data-tip]`. |
+| [components/kapitel-badges.css](public/css/components/kapitel-badges.css) | `.kapitel-badges` / `.kapitel-badge` (+ `--primary`/`--secondary`/`--more`) — die Kapitel-Plakette an einer Entitätszeile. Geteilt von Figuren, Orten, Szenen, Songs, Kontinuität, Plot-Beats, Weltfakten und der Quellen-Erkennung; darum Komponente und nicht Feature-Datei. |
 | [components/graph-tooltip.css](public/css/components/graph-tooltip.css) | `.graph-tooltip` (+ `.visible`, `strong`/`em`/`p`-Zeilen) — Hover-Detailkarte über einem vis-network-Canvas. Geteilt von Figuren-Graph (`#figur-tooltip`) und Motiv-Konstellation (`#motiv-tooltip`); positioniert wird in [public/js/graph-kit/tooltip.js](public/js/graph-kit/tooltip.js). Nicht `[data-tip]` — die Karte hängt an einem Canvas-Knoten, nicht an einem DOM-Element. Siehe „Graph-Tooltip (vis-network)". |
 | [components/sortable-table.css](public/css/components/sortable-table.css) | `.sortable-th` + `--asc`/`--desc`-Modifier für die `sortableTable`-Alpine-Komponente. |
 | [components/year-month-heatmap.css](public/css/components/year-month-heatmap.css) | `.ymheat-*` — geteiltes Jahr×Monat-Raster (Jahre als Zeilen, 12 Monate als Spalten), Zell-Level 0..4 aus `var(--ymheat-accent)`, `--has`-Eckmarker, `--current`-Innenring, `--active`-Auswahlring. Self-containing (`container-type`). Konsumenten: Rückblick-Karte + Buch-Übersicht. Siehe „Jahr×Monat-Heatmap". |
@@ -2895,7 +2934,8 @@ Drei Editoren leben in eigenen Subfoldern (`book/`, `focus/`, `notebook/`); edit
 ### entities/
 | File | Inhalt |
 |------|--------|
-| [entities/figuren.css](public/css/entities/figuren.css) | Figuren-Karte (Graph, Familie, Soziogramm). |
+| [entities/figuren.css](public/css/entities/figuren.css) | Figuren-Karte, **Liste + Detail**: Listenzeile (`.figur-item`, stale-Zustand, `.figur-typ-dot`), die drei Detail-Gruppen (Steckbrief/Charakter/Im Buch), Beziehungszeile (`.figur-bz-*`), Schicht-/Präsenz-Plakette, Entwicklungsbogen, Schlüsselzitate. Hier steht auch die **Farbton-Zuordnung je Figurentyp** (`--fig-hue`), die sich Listenpunkt und Legendenpunkt teilen. |
+| [entities/figuren-graph.css](public/css/entities/figuren-graph.css) | Figuren-Karte, **Netz-Ansicht**: Rahmen + Vollbild (`.figuren-graph-wrap`, native `:fullscreen` und `.is-fullscreen`-Rückfall), Werkzeugleiste, Kapitel-Filter, Knoten- und Kanten-Legende inkl. Sozialschicht-Bändern. Getrennt von `figuren.css`, weil beides zusammen über dem CSS-Limit liegt und die zwei Bereiche nur die Karte teilen. |
 | [entities/figuren-alter.css](public/css/entities/figuren-alter.css) | Alterstabelle der Figuren (5. Reiter): Kopfzeile mit Analyse-Knopf, Tabelle mit aufklappbarer Beleg-Zeile, Konfidenz-/Widerspruch-Tags. Akzent via `var(--card-accent)` von `.card--figuren`. |
 | [entities/figuren-lebenslauf.css](public/css/entities/figuren-lebenslauf.css) | Lebenslauf der Figuren (6. Reiter): Auswahl-Chip-Reihe, Phasen-x-Figuren-Matrix mit `table-layout: fixed`, Jahr-/Alter-Marke pro Ereignis. Akzent via `var(--card-accent)` von `.card--figuren`. |
 | [entities/figur-werkstatt.css](public/css/entities/figur-werkstatt.css) | Figuren-Werkstatt (Mindmap, Drafts-Sidebar, Read-only-Tree). |

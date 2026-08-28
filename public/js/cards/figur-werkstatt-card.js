@@ -104,7 +104,18 @@ export function registerFigurWerkstattCard() {
         name: 'figurWerkstatt',
         showFlag: 'showFigurWerkstattCard',
         timerKeys: ['_brainstormPollTimer', '_consistencyPollTimer'],
-        resetState: { drafts: [], selectedDraftId: null, selectedKnotenId: null, creating: false, newName: '', editName: '', editArchetype: '', editNotes: '', errorMessage: '', brainstormResult: null, consistencyResult: null, brainstormLoading: false, consistencyLoading: false, mindmapFullscreen: false, contextMenuOpen: false, contextMenuNodeId: null, importing: false, importables: [], selectedImportFigureId: '', runs: { brainstorm: [], consistency: [] }, runsLoadedDraftId: null, plotUsage: null, selectedRunId: null, selectedKonfliktIdx: null, _mindmapDirty: false, _pendingDraftId: null, _pendingKnotenId: null},
+        // Kein resetState-Literal: der Reset dieser Karte muss die jsMind-
+        // Instanz abraeumen, die Poll-Timer stoppen und ein offenes Vollbild
+        // verlassen — das kann nur resetDrafts() (crud.js), und zwei Fassungen
+        // desselben Resets driften. onBookChanged uebernimmt darum auch das
+        // Nachladen, das der Default-Pfad sonst anhaengt.
+        onBookChanged: async () => {
+          this.resetDrafts();
+          if (!window.__app?.showFigurWerkstattCard) return;
+          if (!window.Alpine?.store('nav').selectedBookId) return;
+          await this.loadDrafts();
+        },
+        onViewReset: () => this.resetDrafts(),
         load: () => this.loadDrafts(),
         onCardRefresh: async () => {
           if (this.isDirty()) {

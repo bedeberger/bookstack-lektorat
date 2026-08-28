@@ -94,6 +94,61 @@ function deleteDraftFigure(id) {
   _stmtDelete.run(parseInt(id));
 }
 
+// ── Import-Kandidaten ───────────────────────────────────────────────────────
+// figures des Buchs, fuer die dieser User noch keinen Werkstatt-Draft hat.
+// Liegt hier statt im Route-Handler, weil die Zweitzeile des Import-Pickers
+// `chapters` joint (Kapitelname zur Lesezeit) — genau der Fall, den die
+// Content-Store-Regel ins db/-Modul verweist.
+//
+// Pro Figur kommt Kontext mit (Hauptkapitel = haeufigster Auftritt, Beruf,
+// Geburtstag/Jahrgang), den der Picker als Zweitzeile anzeigt.
+//
+// `sort_order` MUSS in der SELECT-Liste stehen: die Dedupe-Map unten zerstoert
+// die Reihenfolge des ORDER BY, und der Wiederherstellungs-Vergleich rechnet
+// sonst mit `undefined` → NaN → falsy → die Katalog-Reihenfolge faellt still
+// auf die id zurueck. Aus der Antwort faellt die Spalte wieder heraus.
+const _stmtImportable = db.prepare(`
+  SELECT f.id, f.name, f.kurzname, f.typ, f.beschreibung, f.beruf, f.geburtstag,
+         f.sort_order,
+         (SELECT c.chapter_name
+            FROM figure_appearances fa
+            JOIN chapters c ON c.chapter_id = fa.chapter_id
+           WHERE fa.figure_id = f.id
+           ORDER BY fa.haeufigkeit DESC, c.position
+           LIMIT 1) AS hauptkapitel,
+         (SELECT COALESCE(SUM(fa.haeufigkeit), 0)
+            FROM figure_appearances fa
+           WHERE fa.figure_id = f.id) AS auftritte
+    FROM figures f
+    LEFT JOIN draft_figures d
+      ON d.source_figure_id = f.id AND d.user_email = ?
+   WHERE f.book_id = ? AND f.user_email IS ? AND d.id IS NULL
+   ORDER BY f.sort_order, f.id
+`);
+
+// Welche von zwei gleichnamigen figures-Rows ist im Import-Picker zu bevorzugen?
+// Der Katalog kann durch Komplettanalyse-Merge-Kollisionen (fig_id `__2`-Suffix)
+// zwei Rows mit demselben Namen tragen; angeboten wird die inhaltsreichste.
+function _figureRicher(a, b) {
+  if ((a.auftritte || 0) !== (b.auftritte || 0)) return (a.auftritte || 0) > (b.auftritte || 0);
+  const al = (a.beschreibung || '').length, bl = (b.beschreibung || '').length;
+  if (al !== bl) return al > bl;
+  return a.id > b.id;
+}
+
+function listImportableFigures(bookId, userEmail) {
+  const rows = _stmtImportable.all(userEmail, parseInt(bookId), userEmail);
+  const byName = new Map();
+  for (const r of rows) {
+    const key = (r.name || '').trim().toLowerCase();
+    const prev = byName.get(key);
+    if (!prev || _figureRicher(r, prev)) byName.set(key, r);
+  }
+  return [...byName.values()]
+    .sort((a, b) => (a.sort_order - b.sort_order) || (a.id - b.id))
+    .map(({ auftritte, sort_order, ...rest }) => rest);
+}
+
 // ── werkstatt_runs (Brainstorm + Consistency History) ───────────────────────
 // Persistierte KI-Läufe pro Draft. Insert beim Job-Complete in routes/jobs/
 // figur-werkstatt.js; List/Get/Delete via /draft-figures/:id/runs Routes.
@@ -150,5 +205,6 @@ function deleteWerkstattRun(id, userEmail) {
 module.exports = {
   listDraftFigures, getDraftFigure, getDraftFigureBySource,
   createDraftFigure, updateDraftFigure, deleteDraftFigure,
+  listImportableFigures,
   insertWerkstattRun, listWerkstattRuns, getWerkstattRun, deleteWerkstattRun,
 };

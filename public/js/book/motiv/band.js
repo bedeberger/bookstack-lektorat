@@ -75,11 +75,23 @@ export const bandMethods = {
     });
   },
 
-  // Zeilensumme (Fundstellen des Motivs über alle Kapitel) für die Summenspalte.
+  // Zeilensummen (Fundstellen je Motiv über alle Kapitel) für die Summenspalte.
+  // Als EINE memoisierte Karte statt einer Summe pro Aufruf: motiv.html liest den
+  // Wert pro Motivzeile, und jede Summe lief über alle Kapitel des Motivs.
+  _bandRowTotals() {
+    return this._memo('bandRowTotals', [this.motifs], () => {
+      const totals = new Map();
+      for (const [motifId, byCh] of this._bandIndex()) {
+        let sum = 0;
+        for (const n of byCh.values()) sum += n;
+        totals.set(motifId, sum);
+      }
+      return totals;
+    });
+  },
+
   bandRowTotal(motifId) {
-    let sum = 0;
-    for (const n of (this._bandIndex().get(motifId)?.values() || [])) sum += n;
-    return sum;
+    return this._bandRowTotals().get(motifId) || 0;
   },
 
   // Zell-Klasse: leer (schraffiert, kein Klick) vs. getönt (Intensität via --heatmap-t).

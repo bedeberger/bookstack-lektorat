@@ -17,16 +17,26 @@ export const rootGetterDescriptors = {
     configurable: true,
     get() {
       const ts = this.tokEsts;
-      if (this._tokTotalsCache?.tokRef === ts) {
-        return this._tokTotalsCache.value;
-      }
+      // Cache-Schluessel ist Identitaet UND Eintragszahl. Die Identitaet allein
+      // reicht nicht: Pfade, die eine frisch angelegte Seite eintragen, setzen
+      // per Index-Assign (`tokEsts[id] = …`) und lassen die Identitaet stehen —
+      // ein reiner Ref-Vergleich liefert dort dauerhaft den alten Wert zurueck,
+      // im Erstfall inklusive `any: false`, sodass die Σ-Zeile der Sidebar gar
+      // nicht erst erscheint. Die Zahl der Eintraege deckt Hinzufuegen und
+      // Entfernen ab; geaenderte WERTE kommen ausschliesslich ueber eine
+      // Reassignment (Save-Sync, Backfill, Buch-Sync) und damit ueber die
+      // Identitaet. Der Zaehler kostet nichts Zusaetzliches — die Aggregation
+      // darunter laeuft ohnehin ueber dieselben Keys.
+      const size = ts ? Object.keys(ts).length : 0;
+      const cache = this._tokTotalsCache;
+      if (cache && cache.tokRef === ts && cache.size === size) return cache.value;
       const { chars, words, tok } = aggregateLiveBookStats(ts);
       const value = {
         chars, words, tok,
         normseiten: Math.round((chars / 1500) * 10) / 10,
-        any: Object.keys(ts || {}).length > 0,
+        any: size > 0,
       };
-      this._tokTotalsCache = { tokRef: ts, value };
+      this._tokTotalsCache = { tokRef: ts, size, value };
       return value;
     },
   },

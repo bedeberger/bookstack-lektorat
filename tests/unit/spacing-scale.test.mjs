@@ -54,9 +54,11 @@ const ALLOW = {
   'css/components/card-form/card-blocks.css': 1,
   'css/components/card-form/form-elements.css': 1,
   'css/components/comment-rail.css': 1,
+  'css/components/kapitel-badges.css': 1,
   'css/components/icon-btn.css': 1,
   'css/editor/book/book-editor.css': 2,
   'css/editor/notebook/page-head.css': 2,
+  'css/entities/figuren-graph.css': 1,
   'css/entities/figuren.css': 1,
   'css/entities/ideen.css': 1,
   'css/entities/szenen.css': 4,
@@ -66,7 +68,6 @@ const ALLOW = {
   'css/page/tagebuch-rueckblick.css': 1,
   'css/page/tts-dock.css': 1,
   'css/search.css': 4,
-  'css/tokens-est.css': 2,
 };
 
 // `em` bewusst NICHT geprueft: es ist schriftgroessen-relativ und gehoert damit

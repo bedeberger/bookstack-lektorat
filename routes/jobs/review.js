@@ -16,7 +16,7 @@ const {
   jsonBody,
 } = require('./shared');
 const { narrativeLabels } = require('./narrative-labels');
-const { loadReviewKomplettContext, loadReviewMotivContext, loadStrukturContext } = require('./review-context');
+const { loadReviewKomplettContext, loadReviewMotivContext, loadStrukturContext, loadWeltContext } = require('./review-context');
 const { applyQuoteVerification, belegHaystack } = require('../../lib/quote-verify');
 const { toIntId } = require('../../lib/validate');
 const { setContext } = require('../../lib/log-context');
@@ -112,10 +112,20 @@ async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
       optionsSig = _sigHash({ optionsSig, strukturContext });
       logger.info(`Struktur-Befunde: ${strukturContext.geprueft}/${strukturContext.gesamt} Beiträge geprüft – fliessen in die Bewertung ein.`);
     }
-    const reviewOptions = { ...reviewBaseOptions, strukturContext };
-
     updateJob(jobId, { progress: 65 });
     const { groupOrder, groups } = groupByChapter(pageContents);
+
+    // Weltaufbau-Messung am Fakten-Index. Braucht die Kapitel in Lesereihenfolge
+    // (Verteilung ueber den Buchbogen) — darum erst hier, nach der Gruppierung, und
+    // damit auch erst hier in die Cache-Signatur einrechenbar. Null, solange die
+    // Komplettanalyse nie lief: „nicht erhoben" darf nicht als „weltarm" in die Note.
+    const weltContext = loadWeltContext(bookIdInt, userEmail, groupOrder.map(k => groups.get(k).name));
+    if (weltContext) {
+      optionsSig = _sigHash({ optionsSig, weltContext });
+      logger.info(`Weltaufbau-Befunde: ${weltContext.gesamt} Welt-Fakten, `
+        + `${weltContext.kapitelAbdeckung.mitFakten}/${weltContext.kapitelAbdeckung.gesamt} Kapitel mit Fakt – fliessen in die Bewertung ein.`);
+    }
+    const reviewOptions = { ...reviewBaseOptions, strukturContext, weltContext };
     const totalChars = pageContents.reduce((s, p) => s + p.text.length, 0);
     let r;
     // Auf welcher Grundlage die Note steht: Volltext oder verdichtete

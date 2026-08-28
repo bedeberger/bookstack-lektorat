@@ -18,8 +18,11 @@ export const coverageMethods = {
     return this._memo(`vbeats:${actId}`, [base], () => base.filter(b => !b.verworfen));
   },
 
+  // Memoisiert auf die (ihrerseits memoisierte) Akt-Liste: plot-board-flat.html
+  // liest die Zahl zweimal pro Akt-Spalte (Sichtbarkeit + Label).
   verworfenCountForAct(actId) {
-    return this.filteredBeatsForAct(actId).filter(b => b.verworfen).length;
+    const base = this.filteredBeatsForAct(actId);
+    return this._memo(`vcount:${actId}`, [base], () => base.filter(b => b.verworfen).length);
   },
 
   toggleVerworfen(actId) {

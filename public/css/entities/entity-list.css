@@ -341,4 +341,11 @@
   .song-interpret { display: block; margin-left: 0; font-size: var(--font-size-mini); }
 }
 
+
+/* Stand vorher in der generischen Kapitel-Badge-Regel (tokens-est.css) — die
+   Stimmung eines Orts ist aber kein Badge-Verhalten. */
+@media (max-width: 480px) {
+  .ort-stimmung { display: none; }
+}
+
 }

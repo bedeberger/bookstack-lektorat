@@ -1,0 +1,238 @@
+@layer components {
+/* Figuren-Graph: alles, was zur Netz-Ansicht der Figurenkarte gehoert —
+   Rahmen und Vollbild, Werkzeugleiste, Kapitel-Filter und die Legende (Knoten
+   wie Kanten).
+   Getrennt von entities/figuren.css (Liste + Detail), weil beides zusammen ueber
+   dem CSS-Limit aus CLAUDE.md liegt und die zwei Bereiche nichts teilen ausser
+   der Karte. Die Canvas-Farben selbst kann CSS nicht setzen — sie liegen in
+   public/js/graph/constants.js und werden pro Render aufgeloest. */
+
+/* === Figuren: Graph-Bereich === */
+.figur-graph-section { margin-top: var(--space-14); position: relative; }
+
+/* Der Hover-Tooltip über dem Graph ist die geteilte Komponente `.graph-tooltip`
+   ([components/graph-tooltip.css](../components/graph-tooltip.css)). */
+
+.figuren-graph-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+  margin-bottom: var(--space-xs);
+}
+.figuren-graph-toolbar-zoom {
+  display: flex;
+  gap: var(--space-xs);
+  flex-shrink: 0;
+}
+
+/* Icon-Button-Basis (`.icon-btn` / `.icon-btn--ghost`) lebt in
+   components/icon-btn.css. Die Graph-Toolbar konsumiert sie nur. */
+
+.figuren-graph-wrap {
+  position: relative;
+}
+
+.figuren-graph-container {
+  width: 100%;
+  height: 600px;
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  overflow: hidden;
+}
+
+/* Mobile: Einfinger-Vertikalwisch scrollt die Seite, nicht den Graph;
+   Pinch (zwei Finger) bleibt für vis-network nutzbar. */
+@media (max-width: 700px) {
+  .figuren-graph-container {
+    height: 380px;
+    touch-action: pan-y;
+  }
+}
+
+/* Vollbild-Modus: native Browser-Fullscreen-API (`:fullscreen`) ist die
+   primäre Variante — versteckt Browser-Chrome, nutzt den gesamten Screen.
+   `.is-fullscreen` bleibt als CSS-Overlay-Fallback für Engines ohne
+   Fullscreen-API (iOS Safari u.ä.). Beide Selektoren gleiche Regeln. */
+.figuren-graph-wrap:fullscreen {
+  background: var(--color-surface);
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-md);
+  gap: var(--space-sm);
+}
+.figuren-graph-wrap:fullscreen .figuren-graph-container {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+  border-radius: var(--radius-sm);
+  touch-action: none;
+}
+
+.figuren-graph-wrap.is-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay);
+  background: var(--color-surface);
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-sm);
+  gap: var(--space-6);
+}
+.figuren-graph-wrap.is-fullscreen .figuren-graph-container {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+  border-radius: var(--radius-sm);
+  touch-action: none;
+}
+
+.figur-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm) var(--space-14);
+  font-size: var(--font-size-xs);
+  color: var(--color-muted);
+  align-items: center;
+  margin-bottom: var(--space-xs);
+}
+
+/* Der Rueckfall-Ton steht in der `var()`-Fallback-Position, NICHT als eigene
+   `--fig-hue`-Deklaration auf der Basisklasse: die Typ-Modifier liegen in
+   entities/figuren.css und haetten dieselbe Spezifitaet — welcher Ton gewinnt,
+   haenge dann an der Reihenfolge der beiden <link>-Tags. So gibt es keinen
+   Konflikt, den eine Umsortierung in index.html kippen koennte. */
+.figur-legend-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 0;
+  border: 1.5px solid var(--fig-hue, var(--palette-gray));
+  margin-right: var(--space-3);
+  vertical-align: middle;
+  background: color-mix(in srgb, var(--fig-hue, var(--palette-gray)) var(--figpal-bg-mix), var(--color-surface));
+}
+
+/* === Figurengraph: Kapitel-Filter === */
+.figuren-graph-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  align-items: center;
+}
+.figuren-graph-filter-btn {
+  padding: var(--space-2xs) 9px;
+  font-size: var(--font-size-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-muted);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+  white-space: nowrap;
+}
+.figuren-graph-filter-btn:hover:not(.figuren-graph-filter-btn--active) {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+.figuren-graph-filter-btn--active {
+  background: var(--color-primary);
+  color: var(--color-surface);
+  border-color: var(--color-primary);
+  font-weight: var(--fw-bold);
+}
+.figuren-graph-filter-btn--active:hover {
+  background: var(--color-primary);
+  color: var(--color-surface);
+}
+
+/* === Figuren: Knoten-Legende ===
+   Die Farbtoene der FIGURENTYPEN stehen nicht hier, sondern einmal in
+   entities/figuren.css — Legendenpunkt und Listenpunkt teilen sie sich. */
+
+/* Sozialschicht-Legende (Soziogramm-Modus, Schweiz Mittelland 90er–2010er) */
+.figur-legend-dot--wirtschaftselite     { --fig-hue: var(--palette-amber); }
+.figur-legend-dot--gehobenes_buergertum { --fig-hue: var(--palette-blue); }
+.figur-legend-dot--mittelschicht        { --fig-hue: var(--palette-green); }
+.figur-legend-dot--arbeiterschicht      { --fig-hue: var(--palette-brown); }
+.figur-legend-dot--migrantenmilieu      { --fig-hue: var(--palette-orange); }
+.figur-legend-dot--prekariat            { --fig-hue: var(--palette-wine); }
+/* Unterwelt: invertierte Darstellung (dunkler Hintergrund, helle Linie) – braucht starken Mix */
+.figur-legend-dot--unterwelt            { --fig-hue: var(--palette-dark); --figpal-bg-mix: 95%; border-color: var(--color-border-contrast); }
+:root[data-theme="dark"] .figur-legend-dot--unterwelt {
+  --fig-hue: var(--palette-gray-light);
+  border-color: var(--palette-dark);
+}
+
+/* === Figuren: Kanten-Legende === */
+.figur-legend--soziogramm { flex-wrap: wrap; row-gap: var(--space-xs); }
+
+.figur-legend-entry {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+/* === Figuren: kollabierbare Legende ===
+   Die Legende steht zwischen der Modus-Tab-Reihe und der Graph-Toolbar und
+   muss ihren Abstand nach BEIDEN Seiten selbst mitbringen: die Tab-Reihe hat
+   keine Bottom-Margin, sonst klebt die Caps-Zeile an deren Unterkante.
+   Nach unten faellt der Wert etwas kleiner aus als nach oben — die Legende
+   gehoert zum Graphen, den sie erklaert, nicht zur Tab-Reihe darueber.
+   Achtung beim Nachjustieren: `.figuren-graph-toolbar` bringt 8px Top-Margin
+   mit, die durch die randlose `.figuren-graph-wrap` nach aussen durchschlaegt
+   und mit der Bottom-Margin hier kollabiert (wirksam ist der groessere Wert). */
+.figur-legend-wrap {
+  margin-top: var(--space-md);
+  margin-bottom: var(--space-10);
+}
+.figur-legend-body {
+  margin-top: var(--space-sm);
+}
+.figur-legend-body .figur-soziogramm-hint {
+  margin: var(--space-xs) 0 0;
+}
+.figur-legend-sep {
+  display: inline-block;
+  width: 1px;
+  height: 10px;
+  background: var(--color-border);
+  margin: 0 var(--space-2xs);
+}
+
+.figur-edge-line {
+  display: inline-block;
+  width: 18px;
+  height: 2px;
+}
+.figur-edge-line--eltern          { --edge-hue: var(--palette-gray);   background: var(--edge-hue); }
+.figur-edge-line--geschwister     { --edge-hue: var(--palette-blue);   background: var(--edge-hue); border-top: 2px dashed var(--edge-hue); }
+.figur-edge-line--freund          { --edge-hue: var(--palette-green);  background: var(--edge-hue); border-top: 2px dashed var(--edge-hue); }
+.figur-edge-line--feind           { --edge-hue: var(--palette-red);    background: var(--edge-hue); border-top: 2px dashed var(--edge-hue); }
+.figur-edge-line--liebesbeziehung { --edge-hue: var(--palette-pink);   background: var(--edge-hue); border-top: 2px dashed var(--edge-hue); }
+.figur-edge-line--patronage       { --edge-hue: var(--palette-purple); background: var(--edge-hue); height: 3px; }
+.figur-edge-line--geschaeft       { --edge-hue: var(--palette-amber);  background: var(--edge-hue); border-top: 2px dashed var(--edge-hue); }
+
+/* === Figuren: Soziogramm-Hint + Actions === */
+.soziogramm-placeholder {
+  display: block;
+  padding: var(--space-2xl) var(--space-20);
+  text-align: center;
+  line-height: 1.6;
+}
+
+.figur-soziogramm-hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-muted);
+  margin: var(--space-xs) 0 var(--space-sm);
+}
+.figur-soziogramm-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10);
+  margin-bottom: var(--space-6);
+}
+
+}

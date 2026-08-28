@@ -124,7 +124,7 @@
                 </template>
               </span>
               <span x-show="issue.resolved" class="kontinuitaet-resolved-badge" x-text="$app.t('kontinuitaet.resolved')"></span>
-              <span class="history-chevron" :class="{ open: selectedKontinuitaetIssueKey === kontinuitaetIssueKey(issue, i) }">›</span>
+              <span class="history-chevron" :class="{ open: selectedKontinuitaetIssueKey === kontinuitaetIssueKey(issue, i) }" aria-hidden="true"></span>
             </div>
             <div x-show="selectedKontinuitaetIssueKey === kontinuitaetIssueKey(issue, i)" class="entity-detail" x-cloak>
               <p x-show="issue.beschreibung" x-text="issue.beschreibung" class="entity-detail-text"></p>
@@ -207,7 +207,7 @@
                   <span class="nameguard-canonical" x-text="cluster.canonical"></span>
                   <span class="nameguard-count" x-text="cluster.canonicalCount + '×'"></span>
                   <span class="nameguard-variant-summary" x-text="cluster.variants.map(v => v.form).join(', ')"></span>
-                  <span class="history-chevron" :class="{ open: selectedNameGuardKey === nameGuardKey(cluster) }">›</span>
+                  <span class="history-chevron" :class="{ open: selectedNameGuardKey === nameGuardKey(cluster) }" aria-hidden="true"></span>
                 </div>
                 <div x-show="selectedNameGuardKey === nameGuardKey(cluster)" class="entity-detail" x-cloak>
                   <template x-for="v in cluster.variants" :key="v.form">

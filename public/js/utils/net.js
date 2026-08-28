@@ -54,6 +54,33 @@ export function isRetriableFetchError(err) {
 }
 
 /**
+ * `fetchJson` mit EINEM Retry nach kurzem Backoff — aber nur bei transienten
+ * Fehlern (siehe `isRetriableFetchError`). Für Lade-Pfade, die viele Endpoints
+ * parallel abfragen und bei denen ein einzelner Blip sonst eine leere Kachel
+ * erzeugt, die wie „keine Daten" aussieht.
+ *
+ * Bewusst kein Retry auf 4xx: der erwartbare 403 (Reader ohne Editor-Recht)
+ * würde sonst jeden Ladevorgang verdoppeln, und ein wiederholter 401 löst über
+ * den globalen fetch-Wrapper ein zweites `session-expired` aus.
+ *
+ * @param {string} url
+ * @param {object} [opts]  wie bei `fetchJson`.
+ * @param {string} [label] Kontext für die Konsolen-Warnung beim zweiten Fehlschlag.
+ */
+export async function fetchJsonRetry(url, opts, label = 'fetchJsonRetry') {
+  try { return await fetchJson(url, opts); }
+  catch (e1) {
+    if (!isRetriableFetchError(e1)) throw e1;
+    await new Promise(r => setTimeout(r, 250));
+    try { return await fetchJson(url, opts); }
+    catch (e2) {
+      console.warn(`[${label}] fetch failed twice`, url, e2);
+      throw e2;
+    }
+  }
+}
+
+/**
  * `fetchJson` mit JSON-Body-Boilerplate: setzt Methode + Content-Type-Header
  * und serialisiert `body` (weggelassen, wenn falsy — z.B. DELETE ohne Payload).
  * Ersetzt das an vielen Stellen ausgeschriebene

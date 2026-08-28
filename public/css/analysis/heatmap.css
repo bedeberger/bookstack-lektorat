@@ -139,6 +139,16 @@
   outline: 1px solid var(--color-primary);
   outline-offset: -1px;
 }
+/* Zellen mit Befunden tragen `.internal-link`, damit sie ueber die globale
+   Delegation tastatur-erreichbar sind (Tab/Enter/Space). Deren globaler
+   Hover-Stil passt hier nicht: der Underline verunstaltet die Zahl, und
+   `opacity: 0.65` wuerde die Zell-Opacity ueberschreiben — die traegt die
+   Abdeckungs-Information (--heatmap-opacity). Den Hover zeigt bereits
+   `.heatmap-cell:hover` als Outline. Der Fokus-Ring bleibt unangetastet. */
+.heatmap-cell.internal-link:hover {
+  opacity: var(--heatmap-opacity, 1);
+  text-decoration: none;
+}
 
 /* Coverage-Progress in Rowhead (Fehler-Heatmap) */
 .heatmap-coverage {

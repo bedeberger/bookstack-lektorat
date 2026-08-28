@@ -11,9 +11,18 @@ export function registerStilCard() {
     stilLoading: false,
     stilSyncing: false,
     stilStatus: '',
+    // Aufgeklappte Zelle: `<chapterKey>:<metricKey>`. Die Beispielsätze dazu
+    // liegen NICHT im Kapitel-Raster, sondern werden pro Zelle nachgeladen
+    // (/history/style-samples) — sie sind der grösste Posten der Rohdaten und
+    // werden immer nur für genau eine Zelle gebraucht.
     activeStilDetailKey: null,
-    // Speicher des _memo-Helpers aus stil-rhythmus.js (Band + Satzanfänge werden
-    // im Template mehrfach pro Render abgefragt).
+    stilDetail: null,
+    stilDetailLoading: false,
+    // Re-Entry-Guard für den Drilldown-Fetch: bei schnellen Klicks darf nur die
+    // zuletzt geöffnete Zelle ihr Ergebnis setzen.
+    _stilDetailSeq: 0,
+    // Speicher des _memo-Helpers aus stil-heatmap.js (die render-fertigen Zeilen
+    // werden im Template pro Render mehrfach abgefragt).
     _memos: {},
     _lifecycle: null,
 
@@ -35,6 +44,8 @@ export function registerStilCard() {
           stilLoading: false,
           stilSyncing: false,
           activeStilDetailKey: null,
+          stilDetail: null,
+          stilDetailLoading: false,
           _memos: {},
         },
       });

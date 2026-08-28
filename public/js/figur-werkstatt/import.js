@@ -86,11 +86,14 @@ export const importMethods = {
 
   // Quell-Figur-Name für Header-Badge. null wenn frei angelegt oder Quell-Figur
   // gelöscht (FK SET NULL).
+  //
+  // Quelle ist `source_figure_name` aus der Draft-Antwort: db/draft-figures.js
+  // loest den Namen schon per LEFT JOIN auf. Ein zweiter Lookup im
+  // catalog-Store waere von dessen Ladezustand abhaengig — das Badge fehlte
+  // dann, obwohl der Server den Namen laengst mitgeschickt hat.
   importedFromName() {
     const sel = this.selectedDraft();
     if (!sel?.source_figure_id) return null;
-    const figs = window.__app?.$store.catalog.figuren || [];
-    const fig = figs.find(f => f.id === sel.source_figure_id);
-    return fig?.name || null;
+    return sel.source_figure_name || null;
   },
 };

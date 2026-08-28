@@ -7,6 +7,7 @@
 // Spaltenauswahl, Skalierung und Zeilen-Aufbau der Matrix teilt sich das Modul
 // mit Schauplätzen und Motiven — siehe ./presence.js.
 import { buildPresenceMatrix } from './presence.js';
+import { rankPreferRecurring } from './ranking.js';
 
 export const figurenMethods = {
   overviewFigurenCount() { return (this.overviewFiguren || []).length; },
@@ -21,20 +22,14 @@ export const figurenMethods = {
         if (!Array.isArray(s.fig_ids)) continue;
         for (const fid of s.fig_ids) totals.set(fid, (totals.get(fid) || 0) + 1);
       }
-      const ranked = figs
-        .map(f => ({
-          id: f.id,
-          name: f.name,
-          kurzname: f.kurzname,
-          rolle: f.rolle || null,
-          mentions: totals.get(f.id) || 0,
-        }))
-        .sort((a, b) => b.mentions - a.mentions);
-      // Bevorzugt Figuren mit mehreren Szenen; Einmal-Auftritte nur als Fallback,
-      // falls keine Figur mehrfach vorkommt (analog Orte-Tile).
-      const recurring = ranked.filter(f => f.mentions >= 2);
-      const base = recurring.length ? recurring : ranked;
-      return base.slice(0, 6);
+      const rows = figs.map(f => ({
+        id: f.id,
+        name: f.name,
+        kurzname: f.kurzname,
+        rolle: f.rolle || null,
+        mentions: totals.get(f.id) || 0,
+      }));
+      return rankPreferRecurring(rows, { valueOf: f => f.mentions });
     });
   },
 

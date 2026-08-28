@@ -57,6 +57,8 @@ module.exports = {
   getChapterLocations: locationsWrite.getChapterLocations,
   // welt-fakten
   saveFaktenToDb: worldFacts.saveFaktenToDb,
+  listWorldFacts: worldFacts.listWorldFacts,
+  worldFactsScanState: worldFacts.worldFactsScanState,
   // songs
   saveSongsToDb: songs.saveSongsToDb,
   // kontinuitaet / faktencheck
@@ -117,6 +119,7 @@ module.exports = {
   updateFigurenEvents:      figures.updateFigurenEvents,
   updateFigurenSoziogramm:  figures.updateFigurenSoziogramm,
   cleanupDuplicateFiguren:  figures.cleanupDuplicateFiguren,
+  listFigurenWithDetails:   figures.listFigurenWithDetails,
   getChapterFigures:        figures.getChapterFigures,
   getChapterFigureRelations: figures.getChapterFigureRelations,
   getFigureWithDetails:     figures.getFigureWithDetails,
@@ -157,6 +160,7 @@ module.exports = {
   createDraftFigure:       draftFigures.createDraftFigure,
   updateDraftFigure:       draftFigures.updateDraftFigure,
   deleteDraftFigure:       draftFigures.deleteDraftFigure,
+  listImportableFigures:   draftFigures.listImportableFigures,
   insertWerkstattRun:      draftFigures.insertWerkstattRun,
   listWerkstattRuns:       draftFigures.listWerkstattRuns,
   getWerkstattRun:         draftFigures.getWerkstattRun,

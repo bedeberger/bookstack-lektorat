@@ -199,132 +199,12 @@ export const treeLoadMethods = {
       const qs = opts.source ? `?source=${encodeURIComponent(opts.source)}` : '';
       fetch('/sync/pages/' + bookId + qs, { method: 'POST', signal }).catch(() => {});
 
-      // contentRepo.bookTree liefert Kapitel nested (subchapters[]) + topPages
-      // fuer Seiten ohne Kapitel. UI-Items behalten internes `priority`-Feld
-      // als Sort-Schluessel. Sidebar-Tree wird flach + depth-annotiert gebaut:
-      // jedes Kapitel kennt seine Tiefe (1-3) und parent_id; Reihenfolge ist
-      // Depth-First, damit Sub-Kapitel visuell unter ihrem Parent stehen.
-      const sortedChapters = tree.chapters;
-      const flatChapters = []; // [{ id, name, position, _depth, _parent_id, pages }]
-      const walkChapters = (chapters, depth, parentId) => {
-        for (const c of chapters) {
-          flatChapters.push({
-            id: c.id,
-            name: c.name,
-            position: c.position,
-            excluded: !!c.excluded,
-            pages: c.pages || [],
-            _depth: depth,
-            _parent_id: parentId,
-          });
-          walkChapters(c.subchapters || [], depth + 1, c.id);
-        }
-      };
-      walkChapters(sortedChapters, 1, null);
-      const chMap = Object.fromEntries(flatChapters.map(c => [c.id, c.name]));
-      const childCountMap = new Map();
-      for (const c of flatChapters) {
-        if (c._parent_id) childCountMap.set(c._parent_id, (childCountMap.get(c._parent_id) || 0) + 1);
-      }
+      // Tree-Bau (nav.pages + nav.tree + Sortier-Indexe) liegt in tree/build.js.
+      this._buildTreeFromResponse(tree, bookId);
 
-      const decoratePage = (p) => ({
-        ...p,
-        priority: p.position, // legacy alias fuer UI-Sortierung + drag/drop
-        chapterName: p.chapter_id ? (chMap[p.chapter_id] || this.t('tree.chapterFallback')) : null,
-      });
-
-      // Seiten ohne Kapitel immer zuerst — danach Kapitel in Tree-Reihenfolge.
-      this.$store.nav.pages = [
-        ...tree.topPages.map(decoratePage),
-        ...flatChapters.flatMap(c => c.pages.map(decoratePage)),
-      ];
-
-      const openState = this._loadTreeOpenState(bookId);
-      this.$store.nav.tree = [
-        ...this.$store.nav.pages.filter(p => !p.chapter_id).map(p => ({
-          type: 'chapter',
-          id: 'solo-' + p.id,
-          name: p.name,
-          priority: p.priority,
-          depth: 1,
-          parent_id: null,
-          open: true,
-          solo: true,
-          pages: [p],
-        })),
-        ...flatChapters.map(c => ({
-          type: 'chapter',
-          id: c.id,
-          name: c.name,
-          priority: c.position,
-          depth: c._depth,
-          parent_id: c._parent_id,
-          excluded: c.excluded,
-          open: Object.prototype.hasOwnProperty.call(openState, c.id) ? !!openState[c.id] : true,
-          solo: false,
-          hasChildren: (childCountMap.get(c.id) || 0) > 0,
-          pages: this.$store.nav.pages.filter(p => p.chapter_id === c.id),
-        })),
-      ];
-
-      // Persistent sort maps – built once per book load, used by all filter sorting
-      this._chapterOrderMap = new Map();
-      let chIdx = 0;
-      for (const item of this.$store.nav.tree) {
-        if (item.type === 'chapter' && !item.solo) this._chapterOrderMap.set(item.name, chIdx++);
-      }
-      this._pageOrderMap = new Map();
-      this._pageIdOrderMap = new Map();
-      for (let i = 0; i < this.$store.nav.pages.length; i++) {
-        const p = this.$store.nav.pages[i];
-        if (!this._pageOrderMap.has(p.name)) this._pageOrderMap.set(p.name, i);
-        this._pageIdOrderMap.set(p.id, i);
-      }
-      this._refreshChapterStats();
-
-      // Gecachte Stats + Page-Ages + Ideen-Counts (Page + Chapter) + Recherche-Counts laden
+      // Gecachte Stats + Lektorats-Alter + die sechs Plaketten-Zaehler.
       try {
-        const [statsCache, ageMap, ideenMap, chapterIdeenMap, rechercheMap, chapterRechercheMap, shareCommentMap, shareLinkMap, plotBeatMap, chapterPlotBeatMap] = await Promise.all([
-          fetchJson('/history/page-stats/' + bookId, { signal }),
-          fetchJson('/history/page-ages/' + bookId, { signal }),
-          fetchJson('/ideen/counts?book_id=' + bookId, { signal }).catch(() => ({})),
-          fetchJson('/ideen/counts?book_id=' + bookId + '&kind=chapter', { signal }).catch(() => ({})),
-          fetchJson('/research/page-counts?book_id=' + bookId, { signal }).catch(() => ({})),
-          fetchJson('/research/chapter-counts?book_id=' + bookId, { signal }).catch(() => ({})),
-          fetchJson('/share/api/page-comment-counts?book_id=' + bookId, { signal }).catch(() => ({})),
-          fetchJson('/share/api/page-link-counts?book_id=' + bookId, { signal }).catch(() => ({})),
-          fetchJson('/plot/page-beat-counts?book_id=' + bookId, { signal }).catch(() => ({})),
-          fetchJson('/plot/chapter-beat-counts?book_id=' + bookId, { signal }).catch(() => ({})),
-        ]);
-        this.pageLastChecked = ageMap || {};
-        const badges = this.$store.badges;
-        badges.ideenCounts = ideenMap || {};
-        badges.chapterIdeenCounts = chapterIdeenMap || {};
-        badges.rechercheCounts = rechercheMap || {};
-        badges.chapterRechercheCounts = chapterRechercheMap || {};
-        badges.shareCommentCounts = shareCommentMap || {};
-        badges.shareLinkCounts = shareLinkMap || {};
-        badges.plotBeatCounts = plotBeatMap || {};
-        badges.chapterPlotBeatCounts = chapterPlotBeatMap || {};
-        // Editor-Badge der offenen Seite mit frischer Map abgleichen (Race: Seite
-        // kann vor dem Counts-Fetch via restoreLastPage geöffnet worden sein).
-        if (this.currentPage?.id) {
-          this.currentPageRechercheCount = badges.rechercheCounts[this.currentPage.id] || 0;
-          this.currentPageShareCommentCount = badges.shareCommentCounts[this.currentPage.id] || 0;
-          this.currentPageShareLinkCount = badges.shareLinkCounts[this.currentPage.id] || 0;
-          this.currentPagePlotBeatCount = badges.plotBeatCounts[this.currentPage.id] || 0;
-        }
-        // Cache-Hits in einem Rutsch zuweisen (statt Index-Assign in der Loop),
-        // damit der tokEsts-$watch in app.js#init feuert und die Kapitel-Stats
-        // synchron mit dem ersten Tree-Render aktualisiert.
-        const initialTokEsts = {};
-        for (const p of this.$store.nav.pages) {
-          const c = statsCache[p.id];
-          if (c && c.updated_at === p.updated_at) {
-            initialTokEsts[p.id] = { tok: c.tok, words: c.words, chars: c.chars };
-          }
-        }
-        if (Object.keys(initialTokEsts).length) this.tokEsts = initialTokEsts;
+        await this._loadSidebarBadges(bookId, signal);
       } catch { /* Cache-Fehler ignorieren, Fallback auf Live-Berechnung */ }
 
       this.showTreeCard = true;
@@ -388,6 +268,7 @@ export const treeLoadMethods = {
   // Input gespeist) — ohne Input-Feld in der Sidebar wäre der Direktaufruf ein
   // No-op, darum hier der Prompt-Pfad.
   async createChapterPrompt() {
+    if (!this.canEdit()) return null;
     const name = await this.appPrompt?.({
       message: this.t('bookOrganizer.promptChapterName'),
       placeholder: this.t('bookOrganizer.placeholderChapterName'),
@@ -431,7 +312,7 @@ export const treeLoadMethods = {
       this.$store.nav.tree = insertChapterItem(this.$store.nav.tree, chapterItem, {
         afterChapterId: afterItem?.id ?? null,
       });
-      if (this._chapterOrderMap) this._chapterOrderMap.set(chapterItem.name, this._chapterOrderMap.size);
+      this._rebuildTreeOrderMaps();
       this._persistTreeOpenState();
       return chapterItem;
     } catch (e) {
@@ -567,7 +448,11 @@ export const treeLoadMethods = {
       }
     }
     if (!removed) return;
-    if (this._pageIdOrderMap) this._pageIdOrderMap.delete(id);
+    // Alle drei Sortier-Indexe neu bauen, nicht nur den ID-Index: `_pageOrderMap`
+    // keyt auf den SEITENNAMEN und zeigte sonst weiter auf die tote Position
+    // (app/app-ui.js#_pageIdx). Ausserdem verschieben sich durch das Entfernen
+    // die Positionen aller nachfolgenden Seiten.
+    this._rebuildTreeOrderMaps();
     this._refreshChapterStats();
     window.dispatchEvent(new CustomEvent(EVT.PAGE_REMOVED, { detail: { pageId: id } }));
   },

@@ -3,8 +3,10 @@
 // und schreibt das Resultat in den State. `_checkBookStatsStaleness` läuft
 // anschliessend silent im Hintergrund; `resetBookOverview` setzt State + Memos
 // beim Buchwechsel auf den Initialstand zurück.
-import { fetchJson, isRetriableFetchError } from '../utils.js';
+import { fetchJsonRetry as fetchJsonRetryBase } from '../utils.js';
 import { komplettHiddenFor } from '../cards/feature-registry.js';
+
+const fetchJsonRetry = (url, opts) => fetchJsonRetryBase(url, opts, 'bookOverview');
 
 // Initialer Tile-State der Karte. SSoT für BEIDE Seiten: die Card-Registrierung
 // spreadet das Objekt als Startzustand, `resetBookOverview` weist es beim
@@ -37,26 +39,8 @@ export function initialOverviewState() {
   };
 }
 
-// Ein Retry mit kurzem Backoff — aber nur bei transienten Fehlern (Netzwerk
-// oder 5xx). 4xx sind bewusst ausgenommen: der erwartbare 403 auf /plot für
-// Reader ohne Editor-Recht würde sonst jedes Overview-Laden verdoppeln, und
-// ein wiederholter 401 löst über den globalen fetch-Wrapper ein zweites
-// `session-expired` aus.
-async function fetchJsonRetry(url, opts) {
-  try { return await fetchJson(url, opts); }
-  catch (e1) {
-    if (!isRetriableFetchError(e1)) throw e1;
-    await new Promise(r => setTimeout(r, 250));
-    try { return await fetchJson(url, opts); }
-    catch (e2) {
-      console.warn('[bookOverview] fetch failed twice', url, e2);
-      throw e2;
-    }
-  }
-}
-
 export const loadMethods = {
-  async loadBookOverview(bookId) {
+  async loadBookOverview(bookId, opts = {}) {
     if (!bookId) return;
     // Dedupe: laufender Load fürs gleiche Buch wird ignoriert. Buchwechsel
     // setzt _loadingBookId auf die neue ID; In-flight-Antworten fürs alte
@@ -81,8 +65,8 @@ export const loadMethods = {
       // bzw. erwartbar (Reader ohne Editor-Recht → 403 auf /plot) — darum stiller
       // Catch statt `guard`, damit ein 403/leerer Payload NICHT den Fehler-Banner
       // auslöst. Das Tile bleibt bei fehlenden Daten via x-if einfach aus.
-      const [stats, coverage, heat, reviews, recent, figuren, szenen, orte, songs, lektoratTime, settings, plot, motifs] = await Promise.all([
-        fetchJsonRetry(`/history/book-stats/${bookId}`).catch(guard('stats', [])),
+      const [shared, coverage, heat, reviews, recent, figuren, szenen, orte, songs, lektoratTime, plot, motifs] = await Promise.all([
+        this._loadSharedBookStats(bookId, opts),
         fetchJsonRetry(`/history/coverage/${bookId}`).catch(guard('coverage', null)),
         fetchJsonRetry(`/history/fehler-heatmap/${bookId}?mode=open`).catch(guard('heat', null)),
         fetchJsonRetry(`/history/review/${bookId}`).catch(guard('review', [])),
@@ -92,12 +76,13 @@ export const loadMethods = {
         fetchJsonRetry(`/locations/${bookId}`).catch(guard('orte', null)),
         fetchJsonRetry(`/songs/${bookId}`).catch(guard('songs', null)),
         fetchJsonRetry(`/history/lektorat-time/${bookId}`).catch(guard('lektorat', null)),
-        fetchJsonRetry(`/booksettings/${bookId}`).catch(guard('settings', null)),
         fetchJsonRetry(`/plot?book_id=${bookId}`).catch(() => null),
         fetchJsonRetry(`/motifs?book_id=${bookId}`).catch(() => null),
       ]);
       if (this.overviewBookId !== bookId) return;
-      this.overviewStats = Array.isArray(stats) ? stats : [];
+      const settings = shared?.settings || null;
+      failed.push(...(shared?.failed || []));
+      this.overviewStats = Array.isArray(shared?.stats) ? shared.stats : [];
       this.overviewCoverage = coverage || null;
       this.overviewHeat = heat || null;
       const reviewArr = Array.isArray(reviews) ? reviews : [];
@@ -136,6 +121,32 @@ export const loadMethods = {
     // Wenn Seiten seit dem letzten Sync editiert wurden → /sync/book im Hintergrund,
     // danach Overview-Tiles refreshen. Silent (kein Spinner / Status).
     this._checkBookStatsStaleness(bookId);
+  },
+
+  // Snapshot-Verlauf + Buch-Einstellungen kommen aus dem GETEILTEN Loader
+  // (app-view/bookscope.js#loadDailyProgress) — es sind exakt die zwei
+  // Antworten, die auch der Header-Donut braucht. `reuse` beim normalen
+  // Oeffnen, frisch beim ausdruecklichen Refresh (Knopf / Re-Klick auf die
+  // Karte). Was sich waehrend der Sitzung am Umfang aendert, faengt ohnehin
+  // der Staleness-Check unten ab, nicht ein erneuter Fetch derselben Liste.
+  //
+  // Fallback auf eigene Fetches, solange kein App-Root steht: die Karte darf
+  // sich nicht darauf verlassen, und die Unit-Tests mounten die Methoden ohne
+  // Wurzel.
+  async _loadSharedBookStats(bookId, { fresh = false } = {}) {
+    const app = typeof window !== 'undefined' ? window.__app : null;
+    if (app?.loadDailyProgress) return app.loadDailyProgress(bookId, { reuse: !fresh });
+    const failed = [];
+    const grab = (key, fallback) => (e) => {
+      failed.push(key);
+      console.warn(`[bookOverview] ${key} fehlgeschlagen`, e);
+      return fallback;
+    };
+    const [stats, settings] = await Promise.all([
+      fetchJsonRetry(`/history/book-stats/${bookId}`).catch(grab('stats', [])),
+      fetchJsonRetry(`/booksettings/${bookId}`).catch(grab('settings', null)),
+    ]);
+    return { stats: Array.isArray(stats) ? stats : [], settings: settings || null, failed };
   },
 
   // True, sobald die Karte zerstört wurde (Lifecycle-AbortController). Die
@@ -211,7 +222,13 @@ export const loadMethods = {
     ]);
     if (this._overviewAborted()) return;
     if (this.overviewBookId !== bookId || Alpine.store('nav').selectedBookId !== bookId) return;
-    if (Array.isArray(stats)) this.overviewStats = stats;
+    if (Array.isArray(stats)) {
+      this.overviewStats = stats;
+      // Der Header-Donut liest dieselbe Zeitreihe aus dem geteilten Store.
+      // Ohne dieses Nachziehen zeigte er nach dem Hintergrund-Sync weiter den
+      // Stand von davor, waehrend die Kachel daneben schon den neuen hatte.
+      app.publishDailyProgressStats?.(bookId, stats);
+    }
     if (coverage) this.overviewCoverage = coverage;
     if (fresh) {
       const updated = { ...app.tokEsts };

@@ -255,6 +255,120 @@ test('Consistency: KI ohne fazit → failJob', async () => {
   assert.equal(job.error, 'job.error.werkstatt.fazitMissing');
 });
 
+// ── Buch-Kontext: Ausschluss der Werkstatt-Figur selbst ────────────────────
+// Die Figur darf nicht in ihrem eigenen Abgrenzungs-Kontext stehen: sonst lehnt
+// die KI ihre eigenen Eigenschaften als „Doppelung mit Buchfigur" ab und der
+// Consistency-Check meldet jeden importierten Aspekt als Namenskonflikt.
+// Zwei Filter, weil ein frei angelegter Draft keine source_figure_id hat und
+// der User den Werkstatt-Namen jederzeit aendern darf. Beide sitzen im Loader
+// (_loadBookFiguren) — vorher standen sie in jedem Job-Runner einzeln.
+
+function _seedFigur(bookId, userEmail, figId, name, sortOrder) {
+  const now = new Date().toISOString();
+  return ctx.dbSchema.db.prepare(`
+    INSERT INTO figures (book_id, fig_id, name, typ, beschreibung, sort_order, user_email, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(bookId, figId, name, 'Nebenfigur', 'Beschreibung', sortOrder, userEmail, now).lastInsertRowid;
+}
+
+// Der Figuren-Block des Prompts ist der einzige Ort, an dem Namen als
+// Abgrenzungs-Liste auftauchen; der Rest des Prompts nennt die Werkstatt-Figur
+// natuerlich sehr wohl (als FIGUR: und in der Mindmap).
+function _figurenBlock(prompt) {
+  const m = /BESTEHENDE FIGUREN IM BUCH[^\n]*:\n([\s\S]*?)\n\n/.exec(prompt);
+  return m ? m[1] : '';
+}
+
+test('Brainstorm: importierte Quell-Figur fehlt im Abgrenzungs-Kontext', async () => {
+  const BOOK_ID = 6301;
+  const userEmail = 'autor@test.dev';
+  ctx.dbSeed.setBook({ chapters: [], pages: [], pageBodies: {} });
+  ctx.dbSchema.upsertBookByName(BOOK_ID, 'Ausschluss-Buch');
+
+  const annaId = _seedFigur(BOOK_ID, userEmail, 'fig_anna', 'Anna', 0);
+  _seedFigur(BOOK_ID, userEmail, 'fig_boris', 'Boris', 1);
+
+  const draft = draftFigDb.createDraftFigure(BOOK_ID, userEmail, {
+    name: 'Anna', archetype: 'protagonist', mindmap: sampleMindmap('Anna'),
+    sourceFigureId: annaId,
+  });
+
+  ctx.mockAi.on((e) => e.schemaKeys.includes('vorschlaege'), brainstormResponse());
+  const jobId = ctx.shared.createJob('werkstatt-brainstorm', BOOK_ID, userEmail,
+    'job.label.werkstattBrainstorm', { figur: 'Anna' }, `${draft.id}|hintergrund`);
+  ctx.shared.enqueueJob(jobId, () =>
+    werkstatt.runBrainstormJob(jobId, draft.id, 'hintergrund', userEmail));
+  const job = await waitForJob(ctx.shared, jobId);
+  assert.equal(job.status, 'done', job.error || '');
+
+  const block = _figurenBlock(ctx.mockAi.log.at(-1).prompt);
+  assert.ok(block.includes('Boris'), 'fremde Buchfigur muss im Abgrenzungs-Kontext stehen');
+  assert.ok(!block.includes('Anna'), 'die Werkstatt-Figur selbst darf nicht darin stehen');
+});
+
+test('Consistency: gleichnamige Buchfigur ohne Import-Referenz faellt ebenfalls raus', async () => {
+  const BOOK_ID = 6302;
+  const userEmail = 'autor@test.dev';
+  ctx.dbSeed.setBook({ chapters: [], pages: [], pageBodies: {} });
+  ctx.dbSchema.upsertBookByName(BOOK_ID, 'Namensfilter-Buch');
+
+  _seedFigur(BOOK_ID, userEmail, 'fig_clara', 'Clara', 0);
+  _seedFigur(BOOK_ID, userEmail, 'fig_dora',  'Dora',  1);
+
+  // Frei angelegt: keine source_figure_id, nur der Name deckt sich.
+  const draft = draftFigDb.createDraftFigure(BOOK_ID, userEmail, {
+    name: '  clara ', mindmap: sampleMindmap('Clara'),
+  });
+
+  ctx.mockAi.on((e) => e.schemaKeys.includes('konflikte'), consistencyResponse());
+  const jobId = ctx.shared.createJob('werkstatt-consistency', BOOK_ID, userEmail,
+    'job.label.werkstattConsistency', { figur: 'Clara' }, draft.id);
+  ctx.shared.enqueueJob(jobId, () =>
+    werkstatt.runConsistencyJob(jobId, draft.id, userEmail));
+  const job = await waitForJob(ctx.shared, jobId);
+  assert.equal(job.status, 'done', job.error || '');
+
+  const block = _figurenBlock(ctx.mockAi.log.at(-1).prompt);
+  assert.ok(block.includes('Dora'), 'fremde Buchfigur muss im Kontext stehen');
+  assert.ok(!block.includes('Clara'), 'Namensgleichheit (getrimmt, case-insensitiv) muss ausschliessen');
+});
+
+// ── Lauf-Historie: aufgezeichnetes Modell ──────────────────────────────────
+// `werkstatt_runs.model` beantwortet spaeter „womit ist dieser Lauf entstanden".
+// Der Name muss vom EFFEKTIVEN Provider kommen; ein Aufruf ohne Provider faellt
+// im _modelName-Zweig auf Claude zurueck und schreibt bei jedem lokalen Modell
+// einen falschen Namen in die Historie.
+test('Brainstorm-Lauf haelt das Modell des effektiven Providers fest', async () => {
+  const BOOK_ID = 6303;
+  const userEmail = 'autor@test.dev';
+  ctx.dbSeed.setBook({ chapters: [], pages: [], pageBodies: {} });
+  ctx.dbSchema.upsertBookByName(BOOK_ID, 'Modell-Buch');
+
+  const appSettings = require('../../lib/app-settings');
+  const prevProvider = appSettings.get('ai.provider');
+  const prevModel = appSettings.get('ai.ollama.model');
+  appSettings.set('ai.provider', 'ollama');
+  appSettings.set('ai.ollama.model', 'mistral-small3.2');
+  try {
+    const draft = draftFigDb.createDraftFigure(BOOK_ID, userEmail, {
+      name: 'Emil', mindmap: sampleMindmap('Emil'),
+    });
+    ctx.mockAi.on((e) => e.schemaKeys.includes('vorschlaege'), brainstormResponse());
+    const jobId = ctx.shared.createJob('werkstatt-brainstorm', BOOK_ID, userEmail,
+      'job.label.werkstattBrainstorm', { figur: 'Emil' }, `${draft.id}|hintergrund`);
+    ctx.shared.enqueueJob(jobId, () =>
+      werkstatt.runBrainstormJob(jobId, draft.id, 'hintergrund', userEmail));
+    const job = await waitForJob(ctx.shared, jobId);
+    assert.equal(job.status, 'done', job.error || '');
+
+    const run = draftFigDb.getWerkstattRun(job.result.runId);
+    assert.equal(run.model, 'mistral-small3.2');
+  } finally {
+    appSettings.set('ai.provider', prevProvider);
+    appSettings.set('ai.ollama.model', prevModel);
+  }
+});
+
 // ── _findKnotenPfad ─────────────────────────────────────────────────────────
 
 test('_findKnotenPfad: liefert "Wurzel > … > Knoten"-Pfad', () => {

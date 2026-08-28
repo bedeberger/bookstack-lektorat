@@ -38,6 +38,18 @@ export function charsToNormseiten(chars) {
   return Math.round((n / CHARS_PER_NORMSEITE) * 10) / 10;
 }
 
+// Kompakte Zeichen-Plakette der Sidebar/Editor-Leisten: unter 1000 die genaue
+// Zahl, darueber auf Tausender gerundet mit Tilde. Die EINHEIT kommt als
+// Parameter herein (`t('bookstats.unit.z')` — de „Z", en „c"); ohne das stand
+// sie in fuenf Templates als Literal „Z" und blieb in der englischen UI deutsch,
+// waehrend die Σ-Zeile direkt daneben schon „c" zeigte.
+export function charBadgeLabel(chars, unit) {
+  const n = Number(chars) || 0;
+  return n >= 1000
+    ? '~' + Math.round(n / 1000) + 'k ' + unit
+    : n + ' ' + unit;
+}
+
 // Live-Σ Zeichen/Wörter/Tokens über alle Seiten. Spiegelt
 // routes/sync.js#syncBook-Total: Σ per-Seite-Stats. Seiten- und Kapitelnamen
 // sind kein Teil des Umfangs.
@@ -53,13 +65,27 @@ export function aggregateLiveBookStats(tokEsts) {
   return { chars, words, tok };
 }
 
+// Ein `Intl.NumberFormat` pro (Locale, Dezimalstellen). `toLocaleString` mit
+// Options-Objekt baut den Formatter bei JEDEM Aufruf neu — das kostet rund 15 µs
+// und faellt auf, sobald eine Tabelle vierstellig viele Zellen formatiert
+// (Stil-Heatmap: Kapitel × 9 Metriken). Die Instanzen sind unveraenderlich, das
+// Ergebnis ist identisch; die Zahl der Kombinationen ist zweistellig.
+const _numFormatters = new Map();
+function _numFormatter(uiLocale, decimals) {
+  const tag = localeTag(uiLocale);
+  const key = `${tag}|${decimals}`;
+  let f = _numFormatters.get(key);
+  if (!f) {
+    f = new Intl.NumberFormat(tag, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+    _numFormatters.set(key, f);
+  }
+  return f;
+}
+
 // Locale-korrekte Zahl mit fixer Dezimalstellenzahl. Null/NaN → '–'.
 export function formatNumber(value, uiLocale, decimals = 1) {
   if (value == null || !isFinite(value)) return '–';
-  return value.toLocaleString(localeTag(uiLocale), {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  });
+  return _numFormatter(uiLocale, decimals).format(value);
 }
 
 // Exakte Dauer in h/min/s. 0 wird als „0 s" zurückgegeben. Komponenten mit

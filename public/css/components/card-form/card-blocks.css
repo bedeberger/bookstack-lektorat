@@ -258,4 +258,12 @@
   .filter-count { width: 100%; text-align: right; }
 }
 
+
+/* Zeitstempel in der Karten-Subline („Stand: …"). Karten-Kopf-Vokabular, kein
+   Feature-Element: ueber ein Dutzend Karten setzen ihn. */
+.card-timestamp {
+  font-size: var(--font-size-mini);
+  color: var(--color-muted);
+}
+
 }

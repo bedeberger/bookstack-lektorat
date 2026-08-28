@@ -1,4 +1,4 @@
-import { escPreserveStrong, fetchText, tzOpts, formatRelativeShort } from '../utils.js';
+import { escPreserveStrong, fetchText, tzOpts, formatRelativeShort, charBadgeLabel } from '../utils.js';
 import { avatarHue } from '../avatar.js';
 
 // Pure Filter-Logik für die Szenen-Liste. Getrennt von Alpine-Getter, damit
@@ -49,6 +49,13 @@ export const appUiMethods = {
         this.statusSpinner = false;
       }, duration);
     }
+  },
+
+  // Kompakte Zeichen-Plakette („842 Z" / „~13k Z"). SSoT fuer alle Oberflaechen,
+  // die sie zeigen (Sidebar-Kapitel + -Seite, Notebook-Kopfleiste, Kapitel-
+  // bewertung) — die Einheit kommt aus der i18n, nicht aus einem Literal.
+  charBadge(chars) {
+    return charBadgeLabel(chars, this.t('bookstats.unit.z'));
   },
 
   // ── Sort helpers (use persistent order maps from loadPages) ─────────────

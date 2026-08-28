@@ -10,7 +10,7 @@
           class="collapsible-toggle"
           @click="open = !open"
           :aria-expanded="open">
-    <span class="history-chevron" :class="{ open }" aria-hidden="true">›</span>
+    <span class="history-chevron" :class="{ open }" aria-hidden="true"></span>
     <span x-text="$app.t('editor.revisions.count', { n: total || revisions.length })"></span>
   </button>
   <div x-show="open" x-cloak class="page-revisions-list">

@@ -1,13 +1,16 @@
 'use strict';
 // Seiten-/Buch-Statistik: Stats-Cache lesen und im Batch schreiben, der
-// Buchstatistik-Verlauf, die Staleness-Frage des Clients und die Stil-Metriken
-// pro Seite.
+// Buchstatistik-Verlauf, die Staleness-Frage des Clients und die Stil-Karte
+// (verdichtetes Kapitel-Raster + Drilldown pro Zelle).
 
 const { db } = require('../../db/schema');
 const { toIntId } = require('../../lib/validate');
 const { ACLError, requireBookAccess } = require('../../lib/acl');
 const logger = require('../../logger');
 const { jsonBodyLarge } = require('./shared');
+const { loadStyleRows, loadStyleSamples, chapterNameOf } = require('../../db/style-stats');
+const { buildStilHeatmap, buildStilDetail, isSampleBucket, UNCAT } = require('../../lib/stil-heatmap');
+const { METRICS_VERSION } = require('../../lib/page-index');
 
 function register(router) {
   // Seiten-Stats-Cache: alle gecachten Stats für ein Buch (geteilter Cache, nicht user-spezifisch)
@@ -175,54 +178,36 @@ function register(router) {
     res.json({ stale: false });
   });
 
-  // Stil-Heatmap: alle Stil-Metriken pro Seite eines Buchs (inkl. Kapitel-Info).
-  // Frontend aggregiert nach Kapitel, erkennt noch nicht berechnete Seiten via metrics_version.
+  // Stil-Karte: Kapitel-Raster + Satzrhythmus + Satzanfaenge, fertig verdichtet.
+  // Die Rohform ist eine Zeile PRO SEITE mit der vollstaendigen Satzlaengen-
+  // Sequenz — bei einem grossen Buch zweistellige Megabytes fuer ein Raster mit
+  // ein paar hundert Zeilen. Darum aggregiert der Server (Muster /fehler-heatmap);
+  // die Beispielsaetze holt /style-samples pro aufgeklappter Zelle nach.
   router.get('/style-stats/:book_id', (req, res) => {
-    const bookId = req.bookId;
-    const rows = db.prepare(`
-      SELECT ps.page_id, p.page_name, p.chapter_id, c.chapter_name,
-             ps.words, ps.chars, ps.sentences, ps.dialog_chars,
-             ps.filler_count, ps.passive_count, ps.adverb_count,
-             ps.avg_sentence_len, ps.sentence_len_p90, ps.repetition_data,
-             ps.lix, ps.flesch_de, ps.style_samples, ps.metrics_version, ps.cached_at,
-             ps.sentence_lens, ps.opener_counts
-      FROM page_stats ps
-      JOIN pages p ON p.page_id = ps.page_id
-      LEFT JOIN chapters c ON c.chapter_id = p.chapter_id AND c.book_id = p.book_id
-      WHERE ps.book_id = ?
-      ORDER BY p.chapter_id, p.page_id
-    `).all(bookId);
-    // JSON-Spalten parsen; defensiv, damit eine korrupte Zeile die Antwort nicht kippt.
-    // `sentence_lens` steht in LESERICHTUNG — die Reihenfolge der Zeilen (chapter_id,
-    // page_id) und die Reihenfolge innerhalb des Arrays tragen zusammen den Rhythmus.
-    const pages = rows.map(r => {
-      let rep = null, samples = null, lens = null, openers = null;
-      if (r.repetition_data) {
-        try { rep = JSON.parse(r.repetition_data); } catch { rep = null; }
-      }
-      if (r.style_samples) {
-        try { samples = JSON.parse(r.style_samples); } catch { samples = null; }
-      }
-      if (r.sentence_lens) {
-        try { lens = JSON.parse(r.sentence_lens); } catch { lens = null; }
-      }
-      if (r.opener_counts) {
-        try { openers = JSON.parse(r.opener_counts); } catch { openers = null; }
-      }
-      return {
-        ...r,
-        repetition_data: rep,
-        style_samples: samples,
-        sentence_lens: Array.isArray(lens) ? lens : null,
-        opener_counts: (openers && typeof openers === 'object') ? openers : null,
-      };
+    const rows = loadStyleRows(req.bookId);
+    res.json(buildStilHeatmap({ rows, metricsVersion: METRICS_VERSION }));
+  });
+
+  // Drilldown einer Heatmap-Zelle: die Treffer-Beispiele EINES Kapitels fuer EINEN
+  // Eimer (filler|passive|adverb|repetition). `chapter` ist der Kapitel-Key der
+  // Heatmap-Zeile; '__uncat__' meint die Seiten ohne Kapitel.
+  router.get('/style-samples/:book_id', (req, res) => {
+    const bucket = String(req.query.bucket || '');
+    if (!isSampleBucket(bucket)) {
+      return res.status(400).json({ error: 'Unbekannter Beispiel-Eimer.', error_code: 'INVALID_SAMPLE_BUCKET' });
+    }
+    const raw = String(req.query.chapter || '');
+    const chapterId = (raw === UNCAT || raw === '') ? null : toIntId(raw);
+    if (raw && raw !== UNCAT && !chapterId) {
+      return res.status(400).json({ error: 'Ungueltige Kapitel-ID.', error_code: 'INVALID_CHAPTER_ID' });
+    }
+    const rows = loadStyleSamples(req.bookId, chapterId);
+    res.json({
+      chapterKey: chapterId == null ? UNCAT : String(chapterId),
+      chapterName: chapterNameOf(req.bookId, chapterId),
+      bucket,
+      ...buildStilDetail({ rows, bucket }),
     });
-    // Neuestes cached_at = letzter Sync-Zeitpunkt für dieses Buch.
-    const lastUpdated = pages.reduce((max, p) => {
-      if (!p.cached_at) return max;
-      return (!max || p.cached_at > max) ? p.cached_at : max;
-    }, null);
-    res.json({ pages, last_updated: lastUpdated });
   });
 }
 

@@ -3,19 +3,33 @@ import { contentRepo } from '../repo/content.js';
 import { localIsoDate } from '../utils.js';
 // Pagetree-Rechtsklick-Menü. Aktionen pro Node-Typ:
 //   page    → Öffnen, Editieren (Notebook), Teilen, Exportieren, Neues Kapitel,
-//             Löschen (danger, canEdit-gated)
+//             Löschen (danger)
 //   chapter → Öffnen (Header-Activate = Toggle + ggf. Kapitel-Review), Teilen,
 //             Exportieren, Neues Kapitel, Neue Seite, Aus-/Einschliessen
 //   Neues Kapitel wird hinter dem Ziel-Kapitel (bzw. dem Kapitel der Ziel-Seite)
 //   eingefügt, sonst ans Ende — createChapter positioniert nur Top-Level.
+//
+// SCHREIBENDE EINTRAEGE SIND `canEdit()`-GEGATET — Neue Seite, Neues Kapitel,
+// Aus-/Einschliessen und Loeschen. Die Sichtbarkeit im Partial und der Guard in
+// der Methode gehoeren zusammen: ohne den Guard bliebe der Pfad ueber Tastatur
+// oder einen veralteten Rollen-Stand erreichbar, ohne die Sichtbarkeit saehe ein
+// viewer/lektor Eintraege, die serverseitig mit 403 enden. Lesende Eintraege
+// (Oeffnen, Teilen, Exportieren) bleiben ungegated — sie brauchen nur `viewer`.
 //
 // State lebt im Root (`pageTreeMenuOpen`/`Pos`/`Target`, deklariert in
 // app-state.js#navigationState). Render-HTML in public/partials/sidebar.html.
 // Methoden hier werden über `treeContextMenuMethods` in den Root gespreadet —
 // `this` ist die Alpine-Root-Komponente.
 
-const MENU_W = 240;
-const MENU_H = 340;
+// Erst-Schaetzung fuer die Position, bevor das Menue gerendert ist. Die
+// tatsaechliche Groesse haengt am Node-Typ (Seite vs. Kapitel) und am Edit-Recht
+// und wird nach dem Render gemessen (`_remeasurePagetreeMenu`) — geraten wird
+// hier nur der erste Frame.
+const MENU_W_EST = 240;
+const MENU_H_EST = 340;
+const MENU_GAP = 8;
+
+const MENU_ITEM_SEL = '.context-menu-item:not([hidden])';
 
 export const treeContextMenuMethods = {
   _openPagetreeContextMenu(ev, target) {
@@ -23,8 +37,22 @@ export const treeContextMenuMethods = {
     ev.preventDefault();
     ev.stopPropagation();
     this.pageTreeMenuTarget = target;
-    this.pageTreeMenuPos = this._clampPagetreeMenuPos(ev.clientX, ev.clientY);
+    // Roh-Koordinaten merken: das Nachmessen klemmt gegen dieselbe Cursor-
+    // Position, nicht gegen die bereits geklemmte Schaetzung (sonst wandert das
+    // Menue bei jeder Messung ein Stueck weiter nach oben/links).
+    this._pageTreeMenuAnchor = { x: ev.clientX, y: ev.clientY };
+    this._pageTreeMenuReturnFocus = document.activeElement;
+    this.pageTreeMenuPos = this._clampPagetreeMenuPos(ev.clientX, ev.clientY, MENU_W_EST, MENU_H_EST);
     this.pageTreeMenuOpen = true;
+    // Erst nach dem Render steht die echte Groesse fest (Seiten-Menue hat andere
+    // Eintraege als das Kapitel-Menue, `canEdit` blendet weitere aus). Ohne das
+    // Nachmessen schiebt die zu grosse Schaetzung das Menue unnoetig weit vom
+    // Cursor weg. rAF statt reinem $nextTick: die x-if-Bloecke im Partial haben
+    // eigene Effects, die in einem einzelnen Tick noch nicht gerendert sind.
+    this.$nextTick(() => requestAnimationFrame(() => {
+      this._remeasurePagetreeMenu();
+      this._focusFirstPagetreeMenuItem();
+    }));
     if (!this._pageTreeMenuOutsideHandler) {
       this._pageTreeMenuOutsideHandler = (e) => {
         const menu = document.querySelector('.pagetree-context-menu');
@@ -32,46 +60,114 @@ export const treeContextMenuMethods = {
       };
       document.addEventListener('mousedown', this._pageTreeMenuOutsideHandler, true);
     }
-    if (!this._pageTreeMenuEscHandler) {
-      this._pageTreeMenuEscHandler = (e) => {
-        if (e.key === 'Escape') this._hidePagetreeContextMenu();
-      };
-      document.addEventListener('keydown', this._pageTreeMenuEscHandler);
+    if (!this._pageTreeMenuKeyHandler) {
+      this._pageTreeMenuKeyHandler = (e) => this._onPagetreeMenuKeydown(e);
+      document.addEventListener('keydown', this._pageTreeMenuKeyHandler);
+    }
+    // Das Menue ist position:fixed und cursor-verankert — es scrollt nicht mit
+    // seinem Ziel mit. Beim Scrollen (im Tree oder in der Seite) stuende es
+    // sonst ueber einem fremden Eintrag und wuerde dessen Aktionen suggerieren.
+    // Gleiches Argument fuer Resize.
+    if (!this._pageTreeMenuDismissHandler) {
+      this._pageTreeMenuDismissHandler = () => this._hidePagetreeContextMenu();
+      window.addEventListener('scroll', this._pageTreeMenuDismissHandler, { capture: true, passive: true });
+      window.addEventListener('resize', this._pageTreeMenuDismissHandler);
+      // Ein Buchwechsel oder Tree-Reload macht `pageTreeMenuTarget` ungueltig:
+      // die ID zeigt danach auf eine Seite, die es in diesem Buch nicht gibt.
+      window.addEventListener(EVT.BOOK_CHANGED, this._pageTreeMenuDismissHandler);
+      window.addEventListener(EVT.PAGES_LOADED, this._pageTreeMenuDismissHandler);
+      window.addEventListener(EVT.VIEW_RESET, this._pageTreeMenuDismissHandler);
     }
   },
 
-  _clampPagetreeMenuPos(x, y) {
+  _clampPagetreeMenuPos(x, y, w, h) {
     return {
-      left: Math.min(window.innerWidth - MENU_W - 8, x),
-      top: Math.min(window.innerHeight - MENU_H - 8, y),
+      left: Math.max(MENU_GAP, Math.min(window.innerWidth - w - MENU_GAP, x)),
+      top: Math.max(MENU_GAP, Math.min(window.innerHeight - h - MENU_GAP, y)),
     };
   },
 
+  // Reale Groesse des gerenderten Menues messen und neu klemmen.
+  _remeasurePagetreeMenu() {
+    if (!this.pageTreeMenuOpen) return;
+    const menu = document.querySelector('.pagetree-context-menu');
+    const anchor = this._pageTreeMenuAnchor;
+    if (!menu || !anchor) return;
+    const r = menu.getBoundingClientRect();
+    if (!r.height) return;
+    this.pageTreeMenuPos = this._clampPagetreeMenuPos(anchor.x, anchor.y, r.width, r.height);
+  },
+
+  _pagetreeMenuItems() {
+    const menu = document.querySelector('.pagetree-context-menu');
+    if (!menu) return [];
+    return [...menu.querySelectorAll(MENU_ITEM_SEL)].filter(el => el.offsetParent !== null);
+  },
+
+  // Fokus in das `role="menu"` ziehen. Ohne das bleibt er im Baum stehen: ein
+  // Screenreader kuendigt das Menue an, findet aber keinen Eintrag darin.
+  _focusFirstPagetreeMenuItem() {
+    // preventScroll: das Menue ist position:fixed und liegt bereits im Bild —
+    // ein Fokus-Scroll wuerde nur den Baum darunter verschieben.
+    this._pagetreeMenuItems()[0]?.focus({ preventScroll: true });
+  },
+
+  // Roving-Fokus im offenen Menue (Pfeile/Home/End) + Escape.
+  _onPagetreeMenuKeydown(e) {
+    if (!this.pageTreeMenuOpen) return;
+    if (e.key === 'Escape') { this._hidePagetreeContextMenu(); return; }
+    const keys = ['ArrowDown', 'ArrowUp', 'Home', 'End'];
+    if (!keys.includes(e.key)) return;
+    const items = this._pagetreeMenuItems();
+    if (!items.length) return;
+    e.preventDefault();
+    const cur = items.indexOf(document.activeElement);
+    let next;
+    if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = items.length - 1;
+    else if (e.key === 'ArrowDown') next = cur < 0 ? 0 : (cur + 1) % items.length;
+    else next = cur < 0 ? items.length - 1 : (cur - 1 + items.length) % items.length;
+    items[next].focus({ preventScroll: true });
+  },
+
   _hidePagetreeContextMenu() {
+    const wasOpen = this.pageTreeMenuOpen;
     this.pageTreeMenuOpen = false;
     this.pageTreeMenuTarget = null;
+    this._pageTreeMenuAnchor = null;
     if (this._pageTreeMenuOutsideHandler) {
       document.removeEventListener('mousedown', this._pageTreeMenuOutsideHandler, true);
       this._pageTreeMenuOutsideHandler = null;
     }
-    if (this._pageTreeMenuEscHandler) {
-      document.removeEventListener('keydown', this._pageTreeMenuEscHandler);
-      this._pageTreeMenuEscHandler = null;
+    if (this._pageTreeMenuKeyHandler) {
+      document.removeEventListener('keydown', this._pageTreeMenuKeyHandler);
+      this._pageTreeMenuKeyHandler = null;
     }
+    if (this._pageTreeMenuDismissHandler) {
+      window.removeEventListener('scroll', this._pageTreeMenuDismissHandler, { capture: true });
+      window.removeEventListener('resize', this._pageTreeMenuDismissHandler);
+      window.removeEventListener(EVT.BOOK_CHANGED, this._pageTreeMenuDismissHandler);
+      window.removeEventListener(EVT.PAGES_LOADED, this._pageTreeMenuDismissHandler);
+      window.removeEventListener(EVT.VIEW_RESET, this._pageTreeMenuDismissHandler);
+      this._pageTreeMenuDismissHandler = null;
+    }
+    // Fokus zurueck auf den Baum-Eintrag, von dem aus geoeffnet wurde — aber nur,
+    // wenn er noch im Dokument haengt (nach „Loeschen" ist er weg) und der Fokus
+    // noch im Menue steht (eine Folgeaktion wie selectPage darf ihn behalten).
+    const back = this._pageTreeMenuReturnFocus;
+    this._pageTreeMenuReturnFocus = null;
+    if (!wasOpen || !back?.isConnected) return;
+    const active = document.activeElement;
+    if (active && active !== document.body && !active.closest?.('.pagetree-context-menu')) return;
+    back.focus?.({ preventScroll: true });
   },
 
-  // Sucht Chapter-Item rekursiv im Tree. `_onChapterHeaderActivate` braucht die
-  // Item-Referenz (open-Flag, Pages, hasChildren), nicht nur die ID.
-  _findTreeChapter(id, items = this.$store.nav.tree) {
-    if (!items) return null;
-    for (const it of items) {
-      if (it.type === 'chapter' && String(it.id) === String(id)) return it;
-      if (it.subchapters?.length) {
-        const sub = this._findTreeChapter(id, it.subchapters);
-        if (sub) return sub;
-      }
-    }
-    return null;
+  // Sucht das Chapter-Item im Tree. `nav.tree` ist FLACH + depth-annotiert
+  // (Invariante in tree/load.js) — Sub-Kapitel stehen als eigene Items darin,
+  // nicht in einem `subchapters`-Array. Ein `find` trifft daher alle Ebenen.
+  _findTreeChapter(id) {
+    return (this.$store.nav.tree || []).find(
+      it => it.type === 'chapter' && String(it.id) === String(id)) || null;
   },
 
   _findTreePage(id) {
@@ -140,7 +236,7 @@ export const treeContextMenuMethods = {
   pagetreeCtxToggleExclude() {
     const target = this.pageTreeMenuTarget;
     this._hidePagetreeContextMenu();
-    if (!target || target.kind !== 'chapter') return;
+    if (!target || target.kind !== 'chapter' || !this.canEdit()) return;
     this.setChapterExcluded(target.id, !target.excluded);
   },
 
@@ -167,7 +263,7 @@ export const treeContextMenuMethods = {
   async pagetreeCtxNewPage() {
     const target = this.pageTreeMenuTarget;
     this._hidePagetreeContextMenu();
-    if (!target || target.kind !== 'chapter') return;
+    if (!target || target.kind !== 'chapter' || !this.canEdit()) return;
     const item = this._findTreeChapter(target.id);
     if (!item || item.solo) return;
     const isDiary = typeof this.isTagebuch === 'function' && this.isTagebuch();
@@ -190,12 +286,14 @@ export const treeContextMenuMethods = {
         priority: created.position, // Sort-Alias wie decoratePage
         chapterName: item.name,
       };
-      Alpine.store('nav').pages = [...Alpine.store('nav').pages, newPage];
+      this.$store.nav.pages = [...this.$store.nav.pages, newPage];
       // Reassignment statt push: Property-Set auf `.pages` triggert die
       // Alpine-Watcher zuverlässig — nested-Array-push tut das nicht immer.
       item.pages = [...(item.pages || []), newPage];
       item.open = true;
-      this.tokEsts[newPage.id] = { tok: 0, words: 0, chars: 0 };
+      // Ebenfalls Reassignment: der `tokTotals`-Memo haengt an der Identitaet
+      // von `tokEsts` (app/app-root-getters.js).
+      this.tokEsts = { ...this.tokEsts, [newPage.id]: { tok: 0, words: 0, chars: 0 } };
       await this.selectPage(newPage);
     } catch (e) {
       this.setStatus?.(this.t('bookOrganizer.saveFailed', { detail: e.message }));
@@ -209,7 +307,7 @@ export const treeContextMenuMethods = {
   async pagetreeCtxNewChapter() {
     const target = this.pageTreeMenuTarget;
     this._hidePagetreeContextMenu();
-    if (!target) return;
+    if (!target || !this.canEdit()) return;
     let afterChapterId = null;
     if (target.kind === 'chapter') {
       afterChapterId = target.id;

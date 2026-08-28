@@ -41,7 +41,7 @@
             :data-tip="noteTip(entry.review_json?.gesamtnote)"
             x-html="renderStars(entry.review_json?.gesamtnote)"></span>
           <span class="tag" x-text="entry.model"></span>
-          <span class="history-chevron" :class="{ open: selectedBookReviewId === entry.id }">›</span>
+          <span class="history-chevron" :class="{ open: selectedBookReviewId === entry.id }" aria-hidden="true"></span>
         </div>
         <div x-show="selectedBookReviewId === entry.id" class="history-detail">
           <div x-html="entry.review_json ? _renderReviewHtml(entry.review_json) : ''"></div>

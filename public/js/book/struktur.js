@@ -23,9 +23,14 @@ export const strukturMethods = {
   get strukturTextsorten() { return TEXTSORTEN; },
   get strukturTextsorteKeys() { return TEXTSORTE_KEYS; },
 
-  /** Combobox-Optionen: die neun Textsorten, plus „ohne" als Leerwert. */
+  /** Combobox-Optionen: die neun Textsorten, plus „ohne" als Leerwert.
+   *  Memoisiert auf die UI-Sprache: struktur.html haengt die Combobox PRO
+   *  Beitragszeile daran (`x-effect`), und die Liste ist fuer alle Zeilen
+   *  dieselbe — ungecacht baut jede Zeile neun Objekte und neun t()-Lookups auf. */
   strukturTextsorteOptions() {
-    return TEXTSORTE_KEYS.map(k => ({ value: k, label: window.__app.t(`textsorte.${k}`) }));
+    const locale = window.Alpine?.store('shell')?.uiLocale;
+    return this._memo('textsorteOptions', [locale], () =>
+      TEXTSORTE_KEYS.map(k => ({ value: k, label: window.__app.t(`textsorte.${k}`) })));
   },
 
   async loadStruktur() {

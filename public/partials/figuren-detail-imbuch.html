@@ -1,0 +1,104 @@
+<!-- Figur-Detail: Im Buch (Auftritte, Beziehungen, Zeitstrahl)
+     Fragment der Figurenübersicht — eingebunden via `<!-- @include figuren-detail-imbuch -->`
+     in figuren-detail.html. String-seitiger Include statt DOM-Placeholder, weil
+     der Block INNERHALB des `x-for` über die Figuren steht (querySelector steigt
+     nicht in Template-Content ab). Scope ist damit `figurenCard` + die
+     Schleifenvariable `f`; Root-Zugriffe laufen über `$app`.
+-->
+<!-- ===== Gruppe: Im Buch (Auftritte, Beziehungen, Zeitstrahl) ===== -->
+<section class="figur-group" x-show="f.kapitel?.length > 1 || $app.songsByFigurId.get(f.id)?.length || f.eltern_ids?.length || f.geschwister_ids?.length || f.beziehungen?.length || f.lebensereignisse?.length">
+  <h4 class="figur-group-title" x-text="$app.t('figuren.group.imBuch')"></h4>
+  <!-- Kapitelauftritte -->
+  <div class="figur-kapitelauftritte" x-show="f.kapitel?.length > 1">
+    <div class="bewertung-section-title" x-text="$app.t('figuren.field.kapitelauftritte')"></div>
+    <div class="figur-tags-row">
+      <template x-for="(k, ki) in (f.kapitel || [])" :key="ki">
+        <span class="tag internal-link" @click="$store.catalogUi.figurenFilters.kapitel = k.name; $store.catalogUi.figurenFilters.seite = ''" x-text="ki === 0 ? k.name : k.name + (k.haeufigkeit > 1 ? ' ×' + k.haeufigkeit : '')"></span>
+      </template>
+    </div>
+  </div>
+  <!-- Präsenz-Streifen dieser Figur (Auftritte je Kapitel + Wendepunkt-Marker) -->
+  <!-- @include figuren-presence-strip -->
+  <!-- Musikgeschmack — abgeleitet aus song_figures-Rollup -->
+  <div x-show="$app.songsByFigurId.get(f.id)?.length" class="figur-musikgeschmack">
+    <div class="bewertung-section-title" x-text="$app.t('figuren.field.musikgeschmack')"></div>
+    <div class="figur-tags-row">
+      <template x-for="s in ($app.songsByFigurId.get(f.id) || [])" :key="s.id">
+        <span class="tag internal-link" @click.stop="$app.openSongById(s.id)" x-text="(s.titel || '') + (s.interpret ? ' — ' + s.interpret : '')"></span>
+      </template>
+    </div>
+  </div>
+  <!-- Familie -->
+  <div x-show="f.eltern_ids?.length || f.geschwister_ids?.length">
+    <div class="bewertung-section-title" x-text="$app.t('figuren.field.familie')"></div>
+    <div class="figur-tags-row">
+      <template x-for="pid in (f.eltern_ids || [])" :key="'e'+pid">
+        <span class="tag figur-rel-tag internal-link" :data-tip="$app.t('figuren.rel.parent')" @click.stop="$app.openFigurById(pid)" x-text="'↑ ' + ($app.figurenById.get(pid)?.name || pid)"></span>
+      </template>
+      <template x-for="sid in (f.geschwister_ids || [])" :key="'s'+sid">
+        <span class="tag figur-rel-tag internal-link" :data-tip="$app.t('figuren.rel.sibling')" @click.stop="$app.openFigurById(sid)" x-text="'⇔ ' + ($app.figurenById.get(sid)?.name || sid)"></span>
+      </template>
+    </div>
+  </div>
+  <!-- Beziehungen -->
+  <div x-show="f.beziehungen?.length">
+    <div class="bewertung-section-title" x-text="$app.t('figuren.field.beziehungen')"></div>
+    <div class="figur-bz-list">
+      <template x-for="(bz, i) in (f.beziehungen || [])" :key="i">
+        <div class="figur-beziehung-item">
+          <span class="figur-bz-typ" :class="'figur-bz-' + bz.typ" x-text="bz.typ"></span>
+          <span class="figur-bz-name internal-link" @click.stop="$app.openFigurById(bz.figur_id)" x-text="$app.figurenById.get(bz.figur_id)?.name || bz.figur_id"></span>
+          <span x-show="bz.machtverhaltnis && bz.machtverhaltnis !== 0" class="figur-bz-macht" :class="bz.machtverhaltnis > 0 ? 'figur-bz-macht--positiv' : 'figur-bz-macht--negativ'" x-text="bz.machtverhaltnis > 0 ? '↑'.repeat(Math.abs(bz.machtverhaltnis)) : '↓'.repeat(Math.abs(bz.machtverhaltnis))"></span>
+          <span x-show="bz.beschreibung" class="card-hint card-hint--sm" x-text="'– ' + bz.beschreibung"></span>
+          <template x-if="bz.belege?.length">
+            <span class="figur-bz-belege">
+              <template x-for="(bg, bi) in (bz.belege || [])" :key="bi">
+                <span class="figur-bz-beleg internal-link" @click.stop="bg.page_id ? $app.gotoPageById(bg.page_id) : (bg.chapter_id ? $app.gotoChapterById(bg.chapter_id) : $app.gotoStelle(bg.kapitel, bg.seite))" x-text="bg.seite || bg.kapitel" :data-tip="(bg.kapitel || '') + (bg.seite ? ' · ' + bg.seite : '')"></span>
+              </template>
+            </span>
+          </template>
+        </div>
+      </template>
+    </div>
+  </div>
+  <!-- Lebensereignisse / Zeitstrahl -->
+  <div x-show="f.lebensereignisse?.length">
+    <div class="bewertung-section-title" x-text="$app.t('figuren.field.zeitstrahl')"></div>
+    <div class="global-zeitstrahl-body">
+      <template x-for="(ev, i) in (f.lebensereignisse || [])" :key="i">
+        <!-- Dieselbe `figure_events`-Zeile wie in der Ereignisse-Karte, aber
+             bewusst KEIN geteiltes Fragment: dort traegt die Zeile die
+             Bruecke zum Jahres-Band (Auswahl, Listen-Index, Abschnitts-
+             Trenner), die es in der Figuren-Karte nicht gibt. Geteilt
+             sind Datums-Formatierung und Subtyp-Codierung — also das,
+             was denselben Datensatz sonst je Karte anders aussehen liesse. -->
+        <div class="gz-item"
+             :class="[ ev.typ === 'extern' ? 'gz-item--extern' : '',
+                       'gz-item--subtyp-' + (ev.subtyp || 'sonstiges') ]">
+          <div class="gz-marker" :class="ev.typ === 'extern' ? 'gz-marker--extern' : ''"></div>
+          <div class="gz-content">
+            <div class="gz-datum-row">
+              <span class="gz-datum" x-text="formatEventDate(ev)"></span>
+              <span class="gz-subtyp-badge"
+                    :class="'gz-subtyp-badge--' + (ev.subtyp || 'sonstiges')">
+                <svg class="icon gz-subtyp-icon" aria-hidden="true"><use :href="'/icons.svg?v=690#' + subtypIcon(ev.subtyp || 'sonstiges')"/></svg>
+                <span x-text="$app.t('events.subtyp.' + (ev.subtyp || 'sonstiges'))"></span>
+              </span>
+              <template x-if="ev.typ === 'extern'">
+                <span class="gz-extern-badge" x-text="$app.t('figuren.external')"></span>
+              </template>
+            </div>
+            <div class="gz-ereignis internal-link" @click="$app.openEreignisseMitFigur(f.id)" x-text="ev.ereignis"></div>
+            <div x-show="ev.kapitel" class="gz-kapitel">
+              <span class="gz-kapitel-link internal-link" @click="$app.gotoStelle(ev.kapitel, null)" x-text="ev.kapitel"></span>
+            </div>
+            <div x-show="ev.seite" class="gz-seite">
+              <span class="internal-link" @click="$app.gotoStelle(ev.kapitel, ev.seite)" x-text="ev.seite"></span>
+            </div>
+            <div x-show="ev.bedeutung" class="gz-bedeutung" x-text="ev.bedeutung"></div>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+</section>

@@ -15,7 +15,7 @@
   </div>
 
   <div x-show="fakten.length === 0 && !wfLoading" class="card-empty">
-    <p class="card-empty-text" x-text="$app.t('weltfakten.empty')"></p>
+    <p class="card-empty-text" x-text="$app.t(wfScanned ? 'weltfakten.emptyScanned' : 'weltfakten.empty')"></p>
     <button type="button" class="primary card-empty-cta"
             @click="$app.alleAktualisieren()"
             :disabled="$store.jobs.alleAktualisierenLoading || !$store.nav.selectedBookId">

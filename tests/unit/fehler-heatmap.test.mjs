@@ -13,7 +13,7 @@ import { buildFehlerHeatmap, normalizeMode, MODES } from '../../lib/fehler-heatm
 
 const page = (page_id, chapter_id, words, extra = {}) => ({
   page_id, chapter_id, chapter_name: chapter_id ? `Kapitel ${chapter_id}` : null,
-  page_name: `Seite ${page_id}`, words, ...extra,
+  page_name: `Seite ${page_id}`, words, position: null, ...extra,
 });
 const finding = (typ, original, extra = {}) => ({ typ, original, korrektur: original + '!', erklaerung: 'weil', ...extra });
 const check = (page_id, findings) => ({ page_id, errors_json: JSON.stringify(findings) });
@@ -63,22 +63,37 @@ test('all zaehlt alle Findings des juengsten Checks, unabhaengig von applied', (
   assert.equal(r.matrix[10].stil.count, 2);
 });
 
-test('Dichte per1k rechnet gegen die Woerter des Kapitels, 0 Woerter → 0', () => {
+test('Dichte per1k rechnet gegen die GEPRUEFTEN Woerter, nicht gegen das ganze Kapitel', () => {
+  // Zwei Seiten a 500 Woerter, nur Seite 1 geprueft, 2 Befunde. Gegen den
+  // vollen Kapitelumfang (1000) waeren das 2.0/1k — die Haelfte der Wahrheit,
+  // weil die ungeprueften 500 Woerter nichts ueber ihre Fehlerdichte sagen.
   const r = buildFehlerHeatmap({
     pages: [page(1, 10, 500), page(2, 10, 500)],
     checks: [check(1, [finding('stil', 'A'), finding('stil', 'B')])],
     appliedRows: [],
   });
-  // 2 Fehler auf 1000 Woerter = 2.0 je 1000
-  assert.equal(r.matrix[10].stil.per1k, 2);
+  assert.equal(r.matrix[10].stil.per1k, 4, '2 Befunde auf 500 geprueften Woertern = 4.0/1k');
   assert.equal(r.matrix[10].stil.pages, 1, 'nur Seite 1 traegt den Typ');
+
+  const ch = r.chapters.find(c => c.chapter_id === 10);
+  assert.equal(ch.words, 1000, 'words bleibt der Umfang des Kapitels');
+  assert.equal(ch.words_checked, 500, 'words_checked ist der Bezug der Dichte');
+
+  // Voll geprueft: beide Groessen fallen zusammen, per1k unveraendert zur
+  // alten Rechnung.
+  const full = buildFehlerHeatmap({
+    pages: [page(1, 10, 500), page(2, 10, 500)],
+    checks: [check(1, [finding('stil', 'A'), finding('stil', 'B')]), check(2, [])],
+    appliedRows: [],
+  });
+  assert.equal(full.matrix[10].stil.per1k, 2);
 
   const zero = buildFehlerHeatmap({
     pages: [page(1, 10, 0)],
     checks: [check(1, [finding('stil', 'A')])],
     appliedRows: [],
   });
-  assert.equal(zero.matrix[10].stil.per1k, 0);
+  assert.equal(zero.matrix[10].stil.per1k, 0, 'kein Nenner → 0 statt Infinity');
 });
 
 test('ungeprueft ist nicht fehlerfrei: pages_checked zaehlt nur Seiten mit Check', () => {
@@ -101,6 +116,36 @@ test('Seiten ohne Kapitel landen unter __uncat__ und sortieren ans Ende', () => 
   });
   assert.deepEqual(r.chapters.map(c => c.chapter_id), [2, 7, null]);
   assert.equal(r.matrix.__uncat__.stil.count, 1);
+});
+
+test('Kapitel stehen in Lesereihenfolge (position), nicht nach chapter_id', () => {
+  // Buchorganizer-Fall: Kapitel 30 wurde nachtraeglich VOR Kapitel 10
+  // einsortiert. `position` sagt die Lesereihenfolge, `chapter_id` die
+  // Anlage-Reihenfolge — nach ID sortiert stuende die Heatmap quer zum Buch.
+  const r = buildFehlerHeatmap({
+    pages: [
+      page(1, 10, 100, { position: 1 }),
+      page(2, 30, 100, { position: 0 }),
+      page(3, 20, 100, { position: 2 }),
+    ],
+    checks: [],
+    appliedRows: [],
+  });
+  assert.deepEqual(r.chapters.map(c => c.chapter_id), [30, 10, 20]);
+});
+
+test('Kapitel ohne position haengen hinten und fallen auf die chapter_id zurueck', () => {
+  const r = buildFehlerHeatmap({
+    pages: [
+      page(1, 40, 100),                    // position null
+      page(2, 30, 100, { position: 5 }),
+      page(3, 20, 100),                    // position null
+      page(4, null, 100),                  // unkategorisiert
+    ],
+    checks: [],
+    appliedRows: [],
+  });
+  assert.deepEqual(r.chapters.map(c => c.chapter_id), [30, 20, 40, null]);
 });
 
 test('details: pro Kapitel+Typ absteigend nach Anzahl, max 3 Beispiele je Seite', () => {

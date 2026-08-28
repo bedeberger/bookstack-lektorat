@@ -112,7 +112,7 @@ function buildAuthorChatSamples(ctx) {
   buildReverseLookupSamples(subCtx);       // Block 23: revPage + revChap
   buildArchitectureSamples(subCtx);        // Block 24+25: kapitel-list + begin/end
   buildReviewSamples(subCtx);              // Block 26+27+28: book-rev + chap-rev + chat
-  buildWorldFactSamples(subCtx);           // Block 29: world_facts (kuratierte Welt-Lore)
+  buildWorldFactSamples(subCtx);           // Block 29: world_facts (extrahierte Welt-Lore)
   buildSongSamples(subCtx);                // Block 30: songs (Buch-Soundtrack)
   buildStorylineSamples(subCtx);           // Block 31: storylines (Erzählstränge)
 }

@@ -18,7 +18,7 @@
 //
 // Gespreadet in cards/figuren-card.js; Root-Zugriffe via window.__app.
 
-const TYP_ORDER = { hauptfigur: 0, antagonist: 1, mentor: 2, nebenfigur: 3, randfigur: 4, andere: 5 };
+import { typRank } from './figur-typen.js';
 
 // Wie viele Spalten die Tabelle von sich aus oeffnet. Mehr als eine Handvoll
 // nebeneinander liest niemand mehr; der Rest wird zugeschaltet.
@@ -57,6 +57,19 @@ export function jahrAusDatum(s) {
   if (!s) return null;
   const m = String(s).match(/\b(\d{4})\b/);
   return m ? parseInt(m[1], 10) : null;
+}
+
+/** Jahr eines Lebensereignisses. Vorrang hat die strukturierte Spalte
+ *  (`figure_events.datum_year`, vom Schreibpfad normalisiert und seit jeher
+ *  persistiert); der String-Parse ist nur noch der Rueckfall fuer Ereignisse
+ *  ohne strukturiertes Datum. Ohne diesen Vorrang faellt jedes Ereignis aus der
+ *  Matrix, dessen Datum NUR strukturiert vorliegt (leeres `datum`-Label) — und
+ *  ein Jahr wie „2011" in „22.07.2011" haengt daran, dass der Freitext es
+ *  ueberhaupt nennt. */
+export function ereignisJahr(e) {
+  const y = e?.datum_year;
+  if (Number.isFinite(y) && y !== 0) return Math.trunc(y);
+  return jahrAusDatum(e?.datum);
 }
 
 /** Geburtsjahr einer Figur, in der Vorrangordnung der Alters-Analyse:
@@ -103,9 +116,11 @@ export function computeLebenslaufKandidaten(figuren, ages, { suche = '', typ = '
       anzahl: evts.length,
     });
   }
+  // Zweitachse ist hier die Zahl der Ereignisse (die praesentesten stehen als
+  // Spalten-Vorschlag oben) — darum nicht byTypDannName aus figur-typen.js.
   liste.sort((a, b) => {
-    const at = TYP_ORDER[a.typ] ?? 99, bt = TYP_ORDER[b.typ] ?? 99;
-    if (at !== bt) return at - bt;
+    const t = typRank(a.typ) - typRank(b.typ);
+    if (t) return t;
     if (a.anzahl !== b.anzahl) return b.anzahl - a.anzahl;
     return (a.name || '').localeCompare(b.name || '', 'de');
   });
@@ -135,14 +150,14 @@ export function computeLebenslauf(figuren, ages, ids) {
   spalten.forEach((sp, si) => {
     const f = byId.get(String(sp.id));
     for (const e of (f?.lebensereignisse || [])) {
-      const jahr = jahrAusDatum(e.datum);
+      const jahr = ereignisJahr(e);
       // Ein Ereignis VOR der Geburt ist kein Rechenfehler, sondern Vorgeschichte
       // (Herkunft, Elterngeneration) — darum eine eigene Phase statt eines Filters.
       const alter = jahr != null ? jahr - sp.geburtsjahr : null;
       push(phaseFuerAlter(alter), si, {
         jahr,
         alter,
-        datum: e.datum || '',
+        datum: e.datum || e.datum_label || '',
         ereignis: e.ereignis || '',
         bedeutung: e.bedeutung || '',
         subtyp: e.subtyp || 'sonstiges',
@@ -232,7 +247,7 @@ export const figurenLebenslaufMethods = {
 
   // ── Anzeige-Helfer ────────────────────────────────────────────────────────
   figurenLebenslaufPhaseLabel(zeile) {
-    return window.__app?.t?.('figuren.lebenslauf.phase.' + zeile.key) || zeile.key;
+    return this._t('figuren.lebenslauf.phase.' + zeile.key) || zeile.key;
   },
 
   // Die Altersangabe neben dem Phasennamen macht die Zeilen-Achse lesbar: ohne
@@ -240,14 +255,12 @@ export const figurenLebenslaufMethods = {
   // Zeile steht.
   figurenLebenslaufPhaseSpanne(zeile) {
     if (zeile.key === PHASE_UNDATIERT) return '';
-    const t = window.__app?.t?.bind(window.__app);
-    if (!t) return '';
-    if (zeile.von == null) return t('figuren.lebenslauf.spanne.vorGeburt');
+    if (zeile.von == null) return this._t('figuren.lebenslauf.spanne.vorGeburt');
     // Ein Punkt statt einer Spanne (die Geburt) traegt seine Erklaerung schon im
     // Zeilennamen; „0 Jahre" daneben waere Fuellsel.
     if (zeile.von === zeile.bis) return '';
-    if (zeile.bis == null) return t('figuren.lebenslauf.spanne.ab', { n: zeile.von });
-    return t('figuren.lebenslauf.spanne.von', { a: zeile.von, b: zeile.bis });
+    if (zeile.bis == null) return this._t('figuren.lebenslauf.spanne.ab', { n: zeile.von });
+    return this._t('figuren.lebenslauf.spanne.von', { a: zeile.von, b: zeile.bis });
   },
 
   // Jahr UND Alter in der Zelle: das Jahr verankert im Buch, das Alter erklaert
@@ -255,12 +268,12 @@ export const figurenLebenslaufMethods = {
   figurenLebenslaufMarke(evt) {
     if (evt.jahr == null) return evt.datum || '';
     if (evt.alter == null) return String(evt.jahr);
-    return window.__app?.t?.('figuren.lebenslauf.marke', { jahr: evt.jahr, alter: evt.alter })
+    return this._t('figuren.lebenslauf.marke', { jahr: evt.jahr, alter: evt.alter })
         || `${evt.jahr}`;
   },
 
   figurenLebenslaufSubtypLabel(evt) {
-    return window.__app?.t?.('events.subtyp.' + evt.subtyp) || '';
+    return this._t('events.subtyp.' + evt.subtyp);
   },
 
   figurenLebenslaufGoto(evt) {

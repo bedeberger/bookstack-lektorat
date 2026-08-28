@@ -1,0 +1,48 @@
+@layer components {
+/* Kapitel-Plaketten — generisch, nicht figuren-eigen: Figuren, Orte, Szenen,
+   Songs, Kontinuitaet, Plot-Beats, Weltfakten und die Quellen-Erkennung setzen
+   dieselben Klassen. Darum eine Komponente und keine Feature-Datei (CLAUDE.md,
+   „Besitzer-Regel": ein Klassenname, den mehrere Karten benutzen, gehoert nicht
+   in die Feature-Datei, die ihn zufaellig zuerst brauchte — sonst haengt die
+   Darstellung an der Ladereihenfolge zweier unbeteiligter Dateien). */
+
+.kapitel-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.kapitel-badge {
+  font-size: var(--font-size-xs);
+  padding: var(--space-2xs) 7px;
+  border-radius: 0;
+  white-space: nowrap;
+}
+
+.kapitel-badge--primary {
+  font-weight: var(--fw-bold);
+  background: var(--color-text);
+  color: var(--color-surface);
+}
+
+.kapitel-badge--secondary {
+  background: var(--color-tag-bg);
+  color: var(--color-muted);
+}
+
+.kapitel-badge--more {
+  padding: var(--space-2xs) var(--space-6);
+  background: var(--color-tag-bg);
+  color: var(--color-muted);
+  font-weight: var(--fw-bold);
+}
+
+@media (max-width: 600px) {
+  [data-ortid] .kapitel-badges { display: none; }
+}
+@media (max-width: 480px) {
+  .kapitel-badges { display: none; }
+}
+
+}

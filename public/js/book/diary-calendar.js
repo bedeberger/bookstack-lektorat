@@ -356,7 +356,9 @@ export const diaryCalendarMethods = {
         treeCh.pages = [...treeCh.pages, created];
         treeCh.open = true;
       }
-      this.tokEsts[created.id] = { tok: 0, words: 0, chars: 0 };
+      // Reassignment statt Index-Assign: der `tokTotals`-Memo haengt an der
+      // Identitaet von `tokEsts` (app/app-root-getters.js).
+      this.tokEsts = { ...this.tokEsts, [created.id]: { tok: 0, words: 0, chars: 0 } };
       this.diaryCalendarYearMonth = { year, month: monthNum };
       this.selectPage(created);
     } catch (e) {

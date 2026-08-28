@@ -98,7 +98,7 @@
           <template x-if="tokEsts[currentPage?.id]?.words > 0">
             <span class="display-contents">
               <span class="tok-badge tok-neutral"
-                x-text="tokEsts[currentPage.id]?.chars >= 1000 ? '~' + Math.round(tokEsts[currentPage.id].chars/1000) + 'k Z' : tokEsts[currentPage.id]?.chars + ' Z'"></span>
+                x-text="charBadge(tokEsts[currentPage.id]?.chars)"></span>
               <span class="tok-badge tok-neutral"
                 :data-tip="t('bookstats.metric.normseiten')"
                 x-text="(Math.round((tokEsts[currentPage.id]?.chars || 0) / 1500 * 10) / 10).toLocaleString($store.shell.uiLocale === 'en' ? 'en-US' : 'de-CH', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' ' + t('bookstats.unit.ns')"></span>

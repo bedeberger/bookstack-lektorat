@@ -6,7 +6,7 @@
 
 import { tzOpts, localIsoDate, localIsoDaysAgo } from '../utils.js';
 import { EVT } from '../events.js';
-import { computeWritingStreak, computeWeekdayPattern, computeDerived, computeMilestones,
+import { computeWritingTimeStreak, computeWeekdayPattern, computeDerived, computeMilestones,
          computeReadability, computeWeeklyDelta, computePerBookTime, computeEffortSplit,
          computeVolumeDelta, computeHourPattern, computeGoalAttainment, computeBookGoals,
          filterByWindow } from './my-stats-compute.js';
@@ -167,7 +167,7 @@ export function registerMyStatsCard() {
     // ── Schreibrhythmus (aus der gefilterten writing-Zeitreihe) ────────────
     myStatsStreak() {
       const win = this._winWriting();
-      return this._memo('streak', [win], () => computeWritingStreak(win));
+      return this._memo('streak', [win], () => computeWritingTimeStreak(win));
     },
     myStatsWeekdays() {
       const win = this._winWriting();

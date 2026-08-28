@@ -196,21 +196,31 @@ export const appNavigationMethods = {
     }
   },
 
+  // Ereignis-Filter setzen: erst ALLE fuenf nullen, dann `patch` anwenden.
+  // Ein Einstieg in die Ereignisse-Karte kommt immer mit einer Absicht („dieses
+  // Ereignis", „dieses Kapitel", „diese Figur") — ein stehender Filter aus einem
+  // frueheren Besuch schneidet das Ziel aus `filteredEreignisse()`, die Zeile
+  // wird nie gerendert und der Sprung endet sichtbar im Nichts. Genau darum ist
+  // das ein Helper und keine Liste von Zuweisungen je Einstieg: die drei
+  // Einstiege hatten drei verschiedene Teilmengen genullt.
+  _setEreignisseFilter(patch = {}) {
+    const f = this.$store.catalogUi.ereignisseFilters;
+    f.figurId = ''; f.kapitel = ''; f.seite = ''; f.subtyp = ''; f.suche = '';
+    Object.assign(f, patch);
+  },
+
   // Einzelnes Ereignis oeffnen (Palette-Treffer, Deep-Link `#…/ereignis/<id>`).
-  // Filter zuruecksetzen wie bei Figur/Ort/Szene: ein stehender Filter wuerde
-  // das Ziel sonst aus der Liste schneiden und der Sprung liefe ins Leere.
   async openEreignisById(ereignisId) {
     this._beginNavigation();
     try {
       const eid = _coerceId(ereignisId);
-      const f = this.$store.catalogUi.ereignisseFilters;
-      f.figurId = ''; f.kapitel = ''; f.seite = ''; f.subtyp = ''; f.suche = '';
+      this._setEreignisseFilter();
       if (!this.showEreignisseCard) {
         await this.toggleEreignisseCard({ skipCardScroll: true });
       }
       this.$store.catalogUi.selectedEreignisId = eid;
       await this.$nextTick();
-      _scrollToWhenReady(`[data-evid="${eid}"]`);
+      _scrollToWhenReady(`[data-event-id="${eid}"]`);
     } finally {
       this._endNavigation();
     }
@@ -222,7 +232,7 @@ export const appNavigationMethods = {
       if (!this.showEreignisseCard) {
         await this.toggleEreignisseCard();
       }
-      this.$store.catalogUi.ereignisseFilters.kapitel = kapitel;
+      this._setEreignisseFilter({ kapitel });
     } finally {
       this._endNavigation();
     }
@@ -234,10 +244,7 @@ export const appNavigationMethods = {
       if (!this.showEreignisseCard) {
         await this.toggleEreignisseCard();
       }
-      this.$store.catalogUi.ereignisseFilters.figurId = figurId;
-      this.$store.catalogUi.ereignisseFilters.kapitel = '';
-      this.$store.catalogUi.ereignisseFilters.seite = '';
-      this.$store.catalogUi.ereignisseFilters.suche = '';
+      this._setEreignisseFilter({ figurId });
     } finally {
       this._endNavigation();
     }

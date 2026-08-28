@@ -147,7 +147,8 @@ export const runsMethods = {
     if (!iso) return '';
     try {
       const d = new Date(iso);
-      const locale = Alpine.store('shell').uiLocale === 'en' ? 'en-GB' : 'de-CH';
+      // Locale-Abbildung wie im Rest der App (num-input.js): de→de-CH, en→en-US.
+      const locale = Alpine.store('shell').uiLocale === 'en' ? 'en-US' : 'de-CH';
       return d.toLocaleString(locale, tzOpts());
     } catch { return iso; }
   },

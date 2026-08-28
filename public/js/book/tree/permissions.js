@@ -24,11 +24,20 @@ export const treePermissionsMethods = {
     };
     if (!id) { reset(); return; }
     try {
-      const res = await fetch('/booksettings/' + encodeURIComponent(id), {
-        headers: { Accept: 'application/json' },
-      });
-      if (!res.ok) { reset(); return; }
-      const data = await res.json();
+      // Ueber den geteilten Loader (app-view/bookscope.js#loadDailyProgress) —
+      // dieselbe /booksettings-Antwort brauchen Header-Donut und Buch-Uebersicht
+      // beim selben Ausloeser (Buchwechsel). Frueher holten sie drei Aufrufer
+      // getrennt. Fallback auf den Direkt-Fetch, solange kein Root steht.
+      let data = null;
+      if (this.loadDailyProgress) {
+        data = (await this.loadDailyProgress(bookId, { reuse: true }))?.settings || null;
+      } else {
+        const res = await fetch('/booksettings/' + encodeURIComponent(id), {
+          headers: { Accept: 'application/json' },
+        });
+        data = res.ok ? await res.json() : null;
+      }
+      if (!data) { reset(); return; }
       // Buch kann waehrend des Fetch gewechselt haben → nur uebernehmen, wenn
       // die Antwort noch zum ausgewaehlten Buch gehoert.
       if (String(this.$store.nav.selectedBookId) === id) {
@@ -60,6 +69,7 @@ export const treePermissionsMethods = {
         this.entitiesEnabledForCurrentBook = !next;
         throw new Error('HTTP ' + res.status);
       }
+      this.invalidateBookSettingsCache?.();
       window.dispatchEvent(new CustomEvent(EVT.BOOK_SETTINGS_UPDATED, { detail: {
         bookId: id, entities_enabled: next ? 1 : 0,
       }}));

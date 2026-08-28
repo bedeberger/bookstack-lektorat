@@ -1,5 +1,10 @@
 // Teil von appViewMethods (siehe Facade app-view.js).
-import { EVT, EXCLUSIVE_CARDS, FILTER_SCOPES, computeTodayRing, computeWeekBars, computeWritingStreak, fetchJson, resetFilterScopes, restoreFilterScopes } from './_shared.js';
+import { EVT, EXCLUSIVE_CARDS, FILTER_SCOPES, computeTodayRing, computeWeekBars, computeWritingStreak, fetchJsonRetry, resetFilterScopes, restoreFilterScopes } from './_shared.js';
+
+// In-Flight-Handle von `loadDailyProgress`. Modul-Scope statt Store: ein
+// Promise im reaktiven Alpine-Proxy wird beim `await` mit dem Proxy als `this`
+// aufgerufen und wirft. Kurzlebiger Re-Entry-Guard, kein fachlicher State.
+let _dailyProgressInflight = { bookId: null, promise: null };
 
 export const bookscopeMethods = {
 
@@ -232,38 +237,102 @@ export const bookscopeMethods = {
   },
 
 
-  // Tages-Schreibziel-Donut im Header. Eigener Loader (statt Book-Overview-
-  // Card-State zu spiegeln), damit der Donut auch sichtbar ist, wenn die
-  // Overview-Karte nie geoeffnet wurde. Faecht stats + booksettings parallel —
-  // is_finished gated die Sichtbarkeit (kein Donut auf abgeschlossenen Buechern,
-  // analog zur Book-Overview-Karte). Dedupe via _dailyProgressLoadingBookId;
-  // stale Responses (Buch waehrend des Loads gewechselt) werden verworfen.
-  async loadDailyProgress(bookId) {
-    if (!bookId) return;
+  // Geteilter Loader fuer `/history/book-stats/:id` + `/booksettings/:id`.
+  // Zwei Oberflaechen brauchen genau diese zwei Antworten: der Header-Donut
+  // (deshalb ein eigener Loader statt Book-Overview-Card-State zu spiegeln —
+  // der Donut muss auch ohne je geoeffnete Uebersicht stehen) und die
+  // Buch-Uebersicht. Sie holen sie nicht mehr getrennt: das waren vier
+  // Requests pro Buchwechsel und zwei Kopien derselben Zeitreihe, von denen
+  // der Auto-Sync der Uebersicht nur eine auffrischte.
+  //
+  // `reuse: true` gibt einen bereits geladenen Stand desselben Buchs zurueck,
+  // ohne neu zu holen — dafuer ruft die Uebersicht beim Oeffnen. Ein
+  // ausdruecklicher Refresh (Knopf, Re-Klick auf die Karte) laesst es weg und
+  // holt frisch. Laeuft schon ein Load fuers selbe Buch, haengen sich beide
+  // Aufrufer an DESSEN Promise (der Boolean-Guard allein liess den zweiten
+  // Aufrufer auf leeren State laufen).
+  //
+  // Rueckgabe: { stats, settings, failed } — `failed` traegt die Schluessel der
+  // Endpoints, die auch nach dem Retry nicht kamen. Der Header ignoriert das
+  // (kein Donut ist dort die richtige Antwort), die Uebersicht zeigt daraus
+  // ihren Hinweis, damit eine leere Kachel nicht als „keine Daten" gilt.
+  async loadDailyProgress(bookId, { reuse = false } = {}) {
+    if (!bookId) return null;
     const progress = this.$store.progress;
-    if (progress._dailyProgressLoadingBookId === bookId) return;
-    progress._dailyProgressLoadingBookId = bookId;
-    try {
+    if (_dailyProgressInflight.bookId === bookId && _dailyProgressInflight.promise) {
+      return _dailyProgressInflight.promise;
+    }
+    // `dailyProgressSettings` ist zugleich das Gueltigkeits-Flag: das
+    // Einstellungs-Formular setzt es beim Speichern auf null, damit der
+    // naechste reuse-Leser den geaenderten Buchtyp/das neue Ziel sieht.
+    if (reuse && progress.dailyProgressBookId === bookId && progress.dailyProgressSettings) {
+      return {
+        stats: progress.dailyProgressStats,
+        settings: progress.dailyProgressSettings,
+        failed: [...progress.dailyProgressFailed],
+      };
+    }
+    const run = (async () => {
+      const failed = [];
+      const guard = (key, fallback) => (e) => {
+        failed.push(key);
+        console.warn(`[dailyProgress] ${key} fehlgeschlagen`, e);
+        return fallback;
+      };
       const [stats, settings] = await Promise.all([
-        fetchJson(`/history/book-stats/${bookId}`).catch(() => []),
-        fetchJson(`/booksettings/${bookId}`).catch(() => null),
+        fetchJsonRetry(`/history/book-stats/${bookId}`, undefined, 'dailyProgress').catch(guard('stats', [])),
+        fetchJsonRetry(`/booksettings/${bookId}`, undefined, 'dailyProgress').catch(guard('settings', null)),
       ]);
-      if (this.$store.nav.selectedBookId != bookId) return;
-      progress.dailyProgressStats = Array.isArray(stats) ? stats : [];
-      progress.dailyProgressIsFinished = !!settings?.is_finished;
-      progress.dailyProgressDailyGoalChars = settings?.daily_goal_chars != null ? Number(settings.daily_goal_chars) : null;
-      progress.dailyProgressBookId = bookId;
-    } finally {
-      if (progress._dailyProgressLoadingBookId === bookId) progress._dailyProgressLoadingBookId = null;
+      const result = { stats: Array.isArray(stats) ? stats : [], settings: settings || null, failed };
+      // Stale-Gate: Buch waehrend des Loads gewechselt → Store nicht anfassen.
+      // Das Ergebnis geht trotzdem an den Aufrufer zurueck; dessen eigener
+      // Buch-Guard entscheidet, ob er es noch braucht.
+      if (this.$store.nav.selectedBookId == bookId) {
+        progress.dailyProgressStats = result.stats;
+        progress.dailyProgressSettings = result.settings;
+        progress.dailyProgressIsFinished = !!settings?.is_finished;
+        progress.dailyProgressDailyGoalChars = settings?.daily_goal_chars != null ? Number(settings.daily_goal_chars) : null;
+        progress.dailyProgressFailed = failed;
+        progress.dailyProgressBookId = bookId;
+      }
+      return result;
+    })();
+    // In-Flight-Handle bewusst im Modul-Scope, nicht im Store: ein Promise im
+    // reaktiven Alpine-Proxy wird beim `await` mit dem Proxy als `this`
+    // aufgerufen und wirft.
+    _dailyProgressInflight = { bookId, promise: run };
+    try { return await run; }
+    finally {
+      if (_dailyProgressInflight.bookId === bookId) _dailyProgressInflight = { bookId: null, promise: null };
     }
   },
 
+  // Frisch gesyncte Zeitreihe in den geteilten Store nachziehen. Ruft die
+  // Buch-Uebersicht nach ihrem Hintergrund-Sync — ohne das zeigte der
+  // Header-Donut weiter den Stand von vor dem Sync.
+  publishDailyProgressStats(bookId, stats) {
+    const progress = this.$store.progress;
+    if (!Array.isArray(stats)) return;
+    if (progress.dailyProgressBookId !== bookId) return;
+    progress.dailyProgressStats = stats;
+  },
+
+  // Geteilten `/booksettings`-Rohstand verwerfen. Jeder Schreibpfad auf
+  // `/booksettings/:id*` ruft das — sonst servierte der naechste `reuse`-Leser
+  // (Buch-Uebersicht, Editor-Flags) die eben geaenderten Werte von vorher.
+  // Nur den Rohstand, nicht den ganzen Store: der Snapshot-Verlauf des Donuts
+  // aendert sich durch eine Einstellung nicht.
+  invalidateBookSettingsCache() {
+    this.$store.progress.dailyProgressSettings = null;
+  },
 
   resetDailyProgress() {
     const progress = this.$store.progress;
     progress.dailyProgressStats = [];
+    progress.dailyProgressSettings = null;
     progress.dailyProgressIsFinished = false;
     progress.dailyProgressDailyGoalChars = null;
+    progress.dailyProgressFailed = [];
     progress.dailyProgressBookId = null;
   },
 

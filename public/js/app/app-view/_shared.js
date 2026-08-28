@@ -1,5 +1,5 @@
 // Geteilte Imports + Modul-Konstanten der appViewMethods-Submodule.
-import { htmlToText, fetchJson, escHtml, decorateMentions } from '../../utils.js';
+import { htmlToText, fetchJson, fetchJsonRetry, escHtml, decorateMentions } from '../../utils.js';
 import { computeTodayRing, computeWeekBars, computeWritingStreak } from '../../today-ring.js';
 import { EXCLUSIVE_CARDS, hiddenForBuchtyp, matchesRequiredBuchtyp } from '../../cards/feature-registry.js';
 import { contentRepo } from '../../repo/content.js';
@@ -64,7 +64,12 @@ export async function _toggleCardGeneric(entry, opts = {}) {
       window.dispatchEvent(new CustomEvent(EVT.CARD_REFRESH, { detail: { name: entry.refreshName || entry.key } }));
       if (!opts.skipCardScroll) this._scrollToCardByKey(entry.key);
     } else {
+      // Schliessen = derselbe Weg wie das `x` im Karten-Header (`closeCard`):
+      // zurueck auf die Buchuebersicht statt auf eine leere Spalte. Ohne
+      // letzte Seite zu restaurieren — der User wollte die Karte weg, nicht
+      // in den Editor.
       await _withCardTransition(this, () => { this[entry.flag] = false; });
+      await this._maybeOpenBookOverview({ restoreLastPage: false });
     }
     return;
   }
@@ -119,4 +124,4 @@ for (const entry of EXCLUSIVE_CARDS) {
 // Reset-Logik beim Buch-/Seitenwechsel. Buchebenen-Features und Editor sind
 // gegenseitig exklusiv (siehe CLAUDE.md-Regel "Feature-Toggle").
 
-export { EVT, EXCLUSIVE_CARDS, clearDraft, computeTodayRing, computeWeekBars, computeWritingStreak, contentRepo, decorateMentions, escHtml, fetchJson, getDeviceId, getLastPageId, htmlToText, readDraft, resetFilterScopes, restoreFilterScopes, setLastPageId };
+export { EVT, EXCLUSIVE_CARDS, clearDraft, computeTodayRing, computeWeekBars, computeWritingStreak, contentRepo, decorateMentions, escHtml, fetchJson, fetchJsonRetry, getDeviceId, getLastPageId, htmlToText, readDraft, resetFilterScopes, restoreFilterScopes, setLastPageId };

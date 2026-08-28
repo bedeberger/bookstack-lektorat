@@ -7,6 +7,7 @@
 // Spaltenauswahl, Skalierung und Zeilen-Aufbau der Matrix teilt sich das Modul
 // mit Figuren und Motiven — siehe ./presence.js.
 import { buildPresenceMatrix, bucketByRoot } from './presence.js';
+import { rankPreferRecurring } from './ranking.js';
 
 export const orteMethods = {
   overviewOrteCount() { return (this.overviewOrte || []).length; },
@@ -14,19 +15,12 @@ export const orteMethods = {
   overviewTopOrte() {
     const orte = this.overviewOrte || [];
     return this._memo('topOrte', [orte], () => {
-      const ranked = orte
-        .map(o => {
-          const kap = Array.isArray(o.kapitel) ? o.kapitel : [];
-          const total = kap.reduce((s, k) => s + (Number(k.haeufigkeit) || 0), 0);
-          return { id: o.id, name: o.name, typ: o.typ || 'andere', total };
-        })
-        .sort((a, b) => b.total - a.total);
-      // Bevorzugt mehrfach erwähnte Schauplätze. Einmal-Nennungen (häufig alle aus
-      // einem einzelnen Kapitel) verdrängen sonst die wiederkehrenden Orte. Fallback
-      // auf die alte Schwelle, falls kein Ort mehrfach vorkommt (z. B. dünne Daten).
-      const recurring = ranked.filter(o => o.total >= 2);
-      const base = recurring.length ? recurring : ranked.filter(o => o.total > 0 || orte.length <= 6);
-      return base.slice(0, 6);
+      const rows = orte.map(o => {
+        const kap = Array.isArray(o.kapitel) ? o.kapitel : [];
+        const total = kap.reduce((s, k) => s + (Number(k.haeufigkeit) || 0), 0);
+        return { id: o.id, name: o.name, typ: o.typ || 'andere', total };
+      });
+      return rankPreferRecurring(rows, { valueOf: o => o.total });
     });
   },
 

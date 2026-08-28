@@ -144,7 +144,16 @@ function figurenBlockChars(aiCfg) {
   return Math.max(6000, Math.floor((aiCfg?.inputBudgetChars || 0) * 0.25));
 }
 
+// Welt-Fakten-Block: dieselbe Logik, aber ein Zehntel des Budgets — die Fakten sind
+// kurze Einzeiler, und der Block soll den Figuren-Block nicht verdraengen. Kein
+// eigenes App-Setting: der Wert leitet sich wie der Figuren-Deckel aus dem
+// Kontextfenster des effektiven Providers ab. Kappung + Offenlegung macht
+// public/js/prompts/chat.js#buildWeltfaktenBlock.
+function weltfaktenBlockChars(aiCfg) {
+  return Math.max(2000, Math.floor((aiCfg?.inputBudgetChars || 0) * 0.10));
+}
+
 module.exports = {
-  _sanitizeVorschlaege, _parseChatResponse, _handleChatPost, figurenBlockChars,
+  _sanitizeVorschlaege, _parseChatResponse, _handleChatPost, figurenBlockChars, weltfaktenBlockChars,
   bookPageCache, BOOK_PAGE_CACHE_TTL_MS, BOOK_PAGE_CACHE_MAX, invalidateBookPageCache,
 };

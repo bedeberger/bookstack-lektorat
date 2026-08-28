@@ -1,5 +1,6 @@
 const { db } = require('../connection');
 const { figIdMaps, _cleanRefName } = require('./refs');
+const { computeFigureYears } = require('../../lib/figure-years');
 require('../migrations');
 
 /** Figuren eines Kapitels laden — gleiche Quelle wie die Figurenliste
@@ -168,7 +169,204 @@ function getFigureWithDetails(figureId) {
   return { ...fig, tags, relationsOut, relationsIn };
 }
 
+/** Der vollstaendige Figuren-Katalog eines Buchs, so wie ihn die Figurenkarte
+ *  liest (`GET /figures/:book_id`): Stammdaten plus Eigenschaften, Kapitel-
+ *  Auftritte, Szenen-Seiten, Lebensereignisse, Beziehungen und die abgeleiteten
+ *  Jahres-/Altersfelder.
+ *
+ *  **Why hier und nicht im Route-Handler:** die Aufloesung braucht Kapitel- und
+ *  Seitennamen (`chapters.chapter_name`, `pages.page_name`). Ein solcher
+ *  Namens-JOIN gehoert nach CLAUDE.md („Content-Store-Facade als einziger
+ *  Eintrittspunkt") in das `db/`-Modul der abgeleiteten Tabelle, nicht in den
+ *  Handler — Muster wie `db/sources/citations.js#listSourceCitations`.
+ *
+ *  Rueckgabe `{ figuren, updated_at }`. `updated_at` ist der JUENGSTE Stempel des
+ *  Katalogs (nicht der irgendeiner einzelnen Zeile), damit er als „Stand" taugt.
+ *  Ohne Figuren: `{ figuren: [], updated_at: null }` — die leere Liste ist eine
+ *  Antwort, kein Sonderfall, den jeder Aufrufer eigens abfangen muss. */
+function listFigurenWithDetails(bookId, userEmail) {
+  const em = userEmail || null;
+  const figs = db.prepare(`
+    SELECT * FROM figures
+    WHERE book_id = ? AND user_email IS ?
+    ORDER BY sort_order, id
+  `).all(bookId, em);
+  if (!figs.length) return { figuren: [], updated_at: null };
+
+  const tags = db.prepare(`
+    SELECT ft.figure_id, ft.tag FROM figure_tags ft
+    JOIN figures f ON f.id = ft.figure_id
+    WHERE f.book_id = ? AND f.user_email IS ?`).all(bookId, em);
+  const apps = db.prepare(`
+    SELECT fa.figure_id, fa.chapter_id, c.chapter_name, fa.haeufigkeit
+    FROM figure_appearances fa
+    JOIN figures f ON f.id = fa.figure_id
+    LEFT JOIN chapters c ON c.chapter_id = fa.chapter_id
+    WHERE f.book_id = ? AND f.user_email IS ?`).all(bookId, em);
+  const evts = db.prepare(`
+    SELECT fe.figure_id, fe.datum, fe.datum_label, fe.ereignis, fe.bedeutung, fe.typ, fe.subtyp,
+           fe.datum_year, fe.datum_month, fe.datum_day,
+           fe.datum_ende_year, fe.datum_ende_month, fe.datum_ende_day,
+           fe.story_tag, fe.datum_unsicher,
+           fe.chapter_id, fe.page_id,
+           c.chapter_name AS kapitel, p.page_name AS seite
+    FROM figure_events fe
+    JOIN figures f ON f.id = fe.figure_id
+    LEFT JOIN chapters c ON c.chapter_id = fe.chapter_id
+    LEFT JOIN pages    p ON p.page_id    = fe.page_id
+    WHERE f.book_id = ? AND f.user_email IS ?
+    ORDER BY fe.figure_id, fe.sort_order`).all(bookId, em);
+  const rels = db.prepare(`
+    SELECT ff.fig_id AS from_fig_id, ft.fig_id AS to_fig_id,
+           r.typ, r.beschreibung, r.machtverhaltnis, r.belege
+    FROM figure_relations r
+    JOIN figures ff ON ff.id = r.from_fig_id
+    JOIN figures ft ON ft.id = r.to_fig_id
+    WHERE r.book_id = ? AND r.user_email IS ?
+  `).all(bookId, em);
+  const sceneFigRows = db.prepare(`
+    SELECT c.chapter_name AS kapitel, p.page_name AS seite, f.fig_id
+    FROM figure_scenes fs
+    JOIN scene_figures sf ON sf.scene_id = fs.id
+    JOIN figures f ON f.id = sf.figure_id
+    LEFT JOIN chapters c ON c.chapter_id = fs.chapter_id
+    LEFT JOIN pages    p ON p.page_id    = fs.page_id
+    WHERE fs.book_id = ? AND fs.user_email IS ?
+  `).all(bookId, em);
+
+  const tagMap = {};
+  for (const t of tags) (tagMap[t.figure_id] ??= []).push(t.tag);
+
+  // Kapitel-Auftritte: alleinige Quelle figure_appearances (KI). Die KI erkennt die
+  // Figur im Kontext und unterscheidet sie von gleichnamigen, im Text nur erwähnten
+  // realen Personen (z.B. Figur „Pamela" vs. „Pamela Anderson"). Reine Namensnennungen
+  // (page_figure_mentions) zählen hier bewusst nicht mit. Sortierung: Häufigkeit DESC.
+  // Erst nach einer Komplettanalyse befüllt.
+  const kapMap = {};
+  for (const a of apps) {
+    if (a.chapter_id == null) continue;
+    (kapMap[a.figure_id] ??= new Map()).set(a.chapter_id, {
+      chapter_id: a.chapter_id, name: a.chapter_name, haeufigkeit: a.haeufigkeit || 1,
+    });
+  }
+  const kapitelFor = (figId) => {
+    const m = kapMap[figId];
+    if (!m) return [];
+    return [...m.values()].sort((a, b) =>
+      (b.haeufigkeit || 0) - (a.haeufigkeit || 0) || a.chapter_id - b.chapter_id);
+  };
+
+  // Die strukturierten Datumsspalten gehoeren in die Antwort: sie sind die SSoT
+  // der Datums-Anzeige (formatEventDate) und der Jahres-Achse. Ohne sie muesste
+  // jeder Konsument das Jahr wieder aus dem Freitext `datum` fischen — und ein
+  // Ereignis, dessen Datum NUR strukturiert vorliegt (leeres Label, z.B. aus
+  // einem Kalenderdatum im Text), waere fuer Zeitstrahl-Fallback und Lebenslauf
+  // datumslos.
+  const evtMap = {};
+  for (const e of evts) (evtMap[e.figure_id] ??= []).push({
+    datum: e.datum, datum_label: e.datum_label || e.datum || '',
+    ereignis: e.ereignis, bedeutung: e.bedeutung,
+    typ: e.typ || 'persoenlich', subtyp: e.subtyp || 'sonstiges',
+    datum_year: e.datum_year, datum_month: e.datum_month, datum_day: e.datum_day,
+    datum_ende_year: e.datum_ende_year, datum_ende_month: e.datum_ende_month,
+    datum_ende_day: e.datum_ende_day,
+    story_tag: e.story_tag, datum_unsicher: !!e.datum_unsicher,
+    chapter_id: e.chapter_id ?? null, page_id: e.page_id ?? null,
+    kapitel: e.kapitel || null, seite: e.seite || null,
+  });
+
+  const relMap = {};
+  for (const r of rels) {
+    (relMap[r.from_fig_id] ??= []).push({
+      figur_id: r.to_fig_id,
+      typ: r.typ,
+      beschreibung: r.beschreibung,
+      machtverhaltnis: r.machtverhaltnis ?? null,
+      belege: _parseJsonArray(r.belege),
+    });
+  }
+
+  const seitenMap = {};
+  for (const sc of sceneFigRows) {
+    if (!seitenMap[sc.fig_id]) seitenMap[sc.fig_id] = [];
+    const key = sc.kapitel + '::' + (sc.seite || '');
+    if (!seitenMap[sc.fig_id].some(x => x.kapitel + '::' + x.seite === key)) {
+      seitenMap[sc.fig_id].push({ kapitel: sc.kapitel, seite: sc.seite || '' });
+    }
+  }
+
+  const yearMap = computeFigureYears(bookId, em);
+
+  const figuren = figs.map(f => {
+    const fy = yearMap?.get(f.id) || null;
+    return {
+      id: f.fig_id,
+      stale: !!f.stale,
+      name: f.name,
+      kurzname: f.kurzname,
+      typ: f.typ,
+      geburtstag: f.geburtstag,
+      geschlecht: f.geschlecht,
+      beruf: f.beruf,
+      wohnadresse: f.wohnadresse || null,
+      aeusseres: f.aeusseres || null,
+      stimme: f.stimme || null,
+      hintergrund: f.hintergrund || null,
+      beschreibung: f.beschreibung,
+      sozialschicht: f.sozialschicht || null,
+      praesenz: f.praesenz || null,
+      rolle: f.rolle || null,
+      motivation: f.motivation || null,
+      konflikt: f.konflikt || null,
+      entwicklung: f.entwicklung || null,
+      arc: _parseArc(f.arc),
+      erste_erwaehnung: f.erste_erwaehnung || null,
+      erste_erwaehnung_page_id: f.erste_erwaehnung_page_id || null,
+      schluesselzitate: _parseJsonArray(f.schluesselzitate),
+      eigenschaften: tagMap[f.id] || [],
+      kapitel: kapitelFor(f.id),
+      seiten: seitenMap[f.fig_id] || [],
+      lebensereignisse: evtMap[f.id] || [],
+      beziehungen: relMap[f.fig_id] || [],
+      jahr_im_roman:   fy ? fy.jahr_im_roman   : null,
+      geburtsjahr:     fy ? fy.geburtsjahr     : null,
+      alter_im_roman:  fy ? fy.alter_im_roman  : null,
+      anchor_ereignis: fy ? fy.anchor_ereignis : null,
+      anchor_kapitel:  fy ? fy.anchor_kapitel  : null,
+    };
+  });
+
+  let updatedAt = null;
+  for (const f of figs) if (f.updated_at && (!updatedAt || f.updated_at > updatedAt)) updatedAt = f.updated_at;
+  return { figuren, updated_at: updatedAt };
+}
+
+/** JSON-Spalte, die ein Array halten soll. Kaputtes JSON ist kein Grund, die
+ *  ganze Figur fallenzulassen — es fehlt dann eben die Liste. */
+function _parseJsonArray(raw) {
+  if (!raw) return [];
+  try {
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? v : [];
+  } catch { return []; }
+}
+
+/** Entwicklungsbogen aus der `arc`-Spalte. Alt-Daten hielten dort einen flachen
+ *  String statt JSON — der wird als „Ende" gelesen, statt verloren zu gehen.
+ *  Ein Bogen ohne jeden Inhalt ist `null`, damit die Karte auf das flache
+ *  `entwicklung`-Feld zurueckfaellt. */
+function _parseArc(raw) {
+  if (!raw) return null;
+  let arc = null;
+  try { arc = JSON.parse(raw); } catch { arc = null; }
+  if (arc === null && typeof raw === 'string') arc = { typ: '', anfang: '', wendepunkte: [], ende: raw };
+  const hatInhalt = arc && (arc.anfang || arc.ende || arc.typ
+    || (Array.isArray(arc.wendepunkte) && arc.wendepunkte.length));
+  return hatInhalt ? arc : null;
+}
+
 module.exports = {
+  listFigurenWithDetails,
   getChapterFigures,
   rebuildFigureAppearances,
   getChapterFigureRelations,

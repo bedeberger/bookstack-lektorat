@@ -83,6 +83,7 @@ export const citationMethods = {
       }
       const data = await r.json();
       this.bookXref = { figure_numbering: data?.figure_numbering ? 1 : 0 };
+      window.__app?.invalidateBookSettingsCache?.();
       // Der Ziel-Picker im Editor cacht die Abbildungen samt Vorschau-Nummer;
       // ohne Nummerierung zeigt er den Legendentext. Cache verwerfen.
       window.dispatchEvent(new CustomEvent(EVT.XREFS_CHANGED, { detail: { bookId } }));
@@ -121,6 +122,7 @@ export const citationMethods = {
         throw new Error(window.__app.tError(d) || `HTTP ${r.status}`);
       }
       this._applyCitationSettings(await r.json());
+      window.__app?.invalidateBookSettingsCache?.();
       this.citationSaved = true;
       // Der Kurzbeleg-Chip im Editor formatiert nach `citationStyleForCurrentBook`
       // (Root-State, gesetzt beim Buchwechsel). Nach einem Stilwechsel sofort

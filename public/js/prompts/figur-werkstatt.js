@@ -139,7 +139,18 @@ function _textbelegeSeg(textbelege) {
   return `\nSO IST DIE FIGUR IM MANUSKRIPT GESCHRIEBEN (Textstellen aus der semantischen Suche — der tatsächliche Wortlaut, nicht der Plan):\n${lines.join('\n')}\n`;
 }
 
-export function buildConsistencyPrompt(figurName, archetype, mindmapJson, buchKontext, bestehendeFiguren, bestehendeOrte, beziehungen = [], eigeneAuftritte = null, plotBeats = [], textbelege = []) {
+// Weltgesetze (world_facts, Kategorien regel/technik): was in dieser Welt GILT.
+// Anders als der Buch-Kontext (Freitext der Autorin) und die Textbelege (Prosa der
+// Figur) ist das der harte Rahmen, an dem eine geplante Eigenschaft scheitern kann.
+function _weltgesetzeSeg(weltgesetze) {
+  const lines = (weltgesetze || []).slice(0, 40)
+    .filter(w => w && w.fakt)
+    .map(w => `- [${w.kategorie || 'regel'}] ${w.subjekt ? `${w.subjekt}: ` : ''}${String(w.fakt).trim()}`);
+  if (!lines.length) return '';
+  return `\nETABLIERTE WELTGESETZE (aus der Buchanalyse extrahierte Regeln + Technik-Stand dieser Welt):\n${lines.join('\n')}\n`;
+}
+
+export function buildConsistencyPrompt(figurName, archetype, mindmapJson, buchKontext, bestehendeFiguren, bestehendeOrte, beziehungen = [], eigeneAuftritte = null, plotBeats = [], textbelege = [], weltgesetze = []) {
   const ctxSeg = (buchKontext || '').trim() ? `\nBUCH-KONTEXT:\n${buchKontext}\n` : '';
   const archSeg = archetype ? ` (Archetyp: ${archetype})` : '';
   const figLines = _figurenLines(bestehendeFiguren);
@@ -163,6 +174,12 @@ export function buildConsistencyPrompt(figurName, archetype, mindmapJson, buchKo
   const plotSeg = plotLines
     ? `\nGEPLANTE HANDLUNG DIESER FIGUR (Plot-Beats aus der Plot-Werkstatt — Beats, an denen die Figur beteiligt ist, in Lesereihenfolge):\n${plotLines}\n`
     : '';
+  // Fehlt der Fakten-Index, entfaellt der Block — es wird NICHT behauptet, die Welt
+  // habe keine Regeln (nie erhoben ist „unbekannt", nicht „regelfrei").
+  const weltSeg = _weltgesetzeSeg(weltgesetze);
+  const weltCheck = weltSeg
+    ? '\n- Verstoss gegen ein Weltgesetz: Traegt die Figur eine Eigenschaft, Faehigkeit oder Biografie, die nach den oben gelisteten Regeln/dem Technik-Stand dieser Welt NICHT moeglich ist? Nenne die verletzte Regel woertlich im "problem". Eine bewusste Ausnahme, die die Mindmap selbst als Besonderheit der Figur ausweist, ist KEIN Fehler. Die Regeln sind extrahiert, nicht von der Autorin kuratiert: passt eine Regel erkennbar nicht, urteile nicht dagegen.'
+    : '';
   const plotCheck = plotLines
     ? `
 - Figurenbogen vs. geplante Handlung: Deckt sich der in der Mindmap skizzierte Bogen (bzw. Want/Need/Wound/Lie) mit den oben gelisteten Plot-Beats? Wird der innere Wandel in der Handlung tatsächlich eingelöst — gibt es Beats, die Need/Lie auf die Probe stellen, oder treibt der Plot nur den oberflächlichen Want?
@@ -172,7 +189,7 @@ export function buildConsistencyPrompt(figurName, archetype, mindmapJson, buchKo
   return `Du prüfst eine in Entwicklung befindliche Romanfigur auf Stimmigkeit mit der Buchwelt. Die Autorin arbeitet die Figur als Mindmap aus; deine Aufgabe ist es, Widersprüche, Lücken und Klischees zu benennen — schonungslos, aber konstruktiv.
 
 FIGUR: ${figurName}${archSeg}
-${ctxSeg}${figSeg}${bezSeg}${ortSeg}${auftritteSeg}${tbSeg}${plotSeg}
+${ctxSeg}${figSeg}${bezSeg}${ortSeg}${weltSeg}${auftritteSeg}${tbSeg}${plotSeg}
 FIGUR-MINDMAP (JSON):
 ${JSON.stringify(mindmapJson)}
 
@@ -180,7 +197,7 @@ Prüfe auf:
 - Widersprüche innerhalb der Mindmap (z.B. Hintergrund passt nicht zur Stimme)
 - Konflikte mit Buchkontext (z.B. Beruf passt nicht zum Setting/Epoche)
 - Konflikte mit bestehenden Figuren (z.B. Doppelung von Rolle/Funktion, namentliche Verwechslungsgefahr)
-- Konflikte mit Schauplätzen (z.B. Wohnort existiert nicht)${auftritteCheck}${tbCheck}${plotCheck}
+- Konflikte mit Schauplätzen (z.B. Wohnort existiert nicht)${weltCheck}${auftritteCheck}${tbCheck}${plotCheck}
 - Klischees und blasse Stellen, die mehr Substanz brauchen
 - Fehlende Aspekte, die für eine glaubwürdige Figur unverzichtbar wären
 

@@ -2,12 +2,19 @@
 
 const { db } = require('../../../../../db/schema');
 
-// Block 29: Welt-Fakten (world_facts) — handgepflegte Buchwelt-Lore.
-// Anders als die KI-extrahierten Fakten aus chapter_extract_cache (Block 20)
-// sind dies vom Autor kuratierte, kanonische Weltaussagen — die höchste
-// Faktenqualität im Buch. Darum maximal grosszügig in Q&A giessen:
-// pro Fakt mehrere Paraphrasen, pro Subjekt + Kategorie gruppierte Antworten,
-// plus Reverse-Lookups (Fakt → Kapitel) und globale Listen.
+// Block 29: Welt-Fakten (world_facts) — deklaratives Buch-Wissen der Komplettanalyse.
+//
+// KEIN vom Autor kuratierter Kanon: `world_facts` ist ein abgeleiteter Index, den
+// Phase 1 der Komplettanalyse per Full-Replace schreibt (es gibt keinen Edit-Pfad,
+// die Karte ist read-only). Gegenüber Block 20 (chapter_extract_cache) ist der
+// Unterschied nur, dass diese Fakten PERSISTIERT sind — nicht, dass sie von Hand
+// geprüft wären.
+//
+// Genau darum steht der Faktencheck-Filter unten: ein Fakt vervielfacht sich hier
+// zu rund einem halben Dutzend Trainingssamples (Paraphrasen + Subjekt-Sammlung +
+// Kategorie-Sammlung + Welt-Übersicht). Ein schiefer Fakt würde damit sechsfach
+// eingeübt — bei Trainingsdaten ist die Vervielfachung des Fehlers teurer als das
+// fehlende Sample.
 function buildWorldFactSamples(ctx) {
   const { langIsEn, bookIdInt, userEmail, pushQA, pickVariants } = ctx;
 
@@ -18,6 +25,28 @@ function buildWorldFactSamples(ctx) {
     ORDER BY sort_order
   `).all(bookIdInt, userEmail, userEmail);
   if (!factRows.length) return;
+
+  // Als real FALSCH belegte Fakten aussortieren. Der Faktencheck-Job (web_search,
+  // opt-in pro Buch) persistiert seine Befunde als typ='faktenfehler' in
+  // continuity_issues; `stelle_a` trägt dort die geprüfte Aussage in genau der Form
+  // `subjekt: fakt` (siehe routes/jobs/komplett/job-faktencheck.js). Der Abgleich
+  // läuft deshalb über den normalisierten Text — es gibt keine fact_id am Befund,
+  // und eine einzuführen hiesse, den Befund an einen Index zu hängen, der beim
+  // nächsten Lauf komplett ersetzt wird.
+  // Läuft der Faktencheck nie, ist die Menge leer und nichts wird gefiltert.
+  const _normFakt = (x) => String(x || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const falsch = new Set(
+    db.prepare(`
+      SELECT ci.stelle_a
+        FROM continuity_issues ci
+        JOIN continuity_checks cc ON cc.id = ci.check_id
+       WHERE cc.book_id = ? AND cc.user_email IS ? AND ci.typ = 'faktenfehler'
+    `).all(bookIdInt, userEmail || null)
+      .map(r => _normFakt(r.stelle_a))
+      .filter(Boolean)
+  );
+  const istFalsch = (r) => falsch.size > 0
+    && falsch.has(_normFakt(`${r.subjekt ? `${r.subjekt}: ` : ''}${r.fakt}`));
 
   // Junction: fact_id → [chapter_name]
   const chByFact = new Map();
@@ -45,6 +74,7 @@ function buildWorldFactSamples(ctx) {
   for (const r of factRows) {
     const fakt = (r.fakt || '').trim();
     if (fakt.length < 8) continue;
+    if (istFalsch(r)) continue;   // gegen die reale Faktenlage widerlegt
     const subjekt   = (r.subjekt || '').trim();
     const kategorie = (r.kategorie || '').trim();
     const seite     = (r.seite_label || '').trim();
@@ -106,8 +136,9 @@ function buildWorldFactSamples(ctx) {
   }
 
   // Globale Welt-Übersicht
-  if (factRows.length >= 2) {
-    const all = factRows.map(r => (r.fakt || '').trim()).filter(f => f.length >= 8).slice(0, 30).join(' ');
+  const gueltig = factRows.filter(r => !istFalsch(r));
+  if (gueltig.length >= 2) {
+    const all = gueltig.map(r => (r.fakt || '').trim()).filter(f => f.length >= 8).slice(0, 30).join(' ');
     pushQA('authorChat|wfactAll',
       langIsEn ? `Describe the world of this book.` : `Beschreibe die Welt dieses Buches.`,
       all);

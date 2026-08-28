@@ -8,7 +8,6 @@
 //     kommen aus dem Katalog, der Alters-Index liefert nur bessere Geburtsjahre
 //   - vis-network-Internals (_figurenNetwork, _figurenHash, _figurenNodes, _figurenEdges)
 //   - aufgelöste Canvas-Farben (_graphTheme) + Theme-Observer (_themeObserver)
-//   - figurenUpdatedAt (Render-Timestamp im Card-Header)
 //
 // Geteilt:
 //   - `figuren` (Alpine.store('catalog'))
@@ -16,7 +15,7 @@
 //     (Alpine.store('catalogUi') — app-navigation/Hash-Router/checkPendingJobs
 //     schreiben darauf)
 // Root behält:
-//   - `loadFiguren`, `saveFiguren` (von vielen Modulen gerufen)
+//   - `loadFiguren` (von vielen Modulen gerufen)
 
 import { graphMethods } from '../graph.js';
 import { presenceMethods } from '../book/figuren-presence.js';
@@ -25,8 +24,13 @@ import { figurenLebenslaufMethods } from '../book/figuren-lebenslauf.js';
 import { setupCardLifecycle } from './card-lifecycle.js';
 import { attachFullscreenSync } from '../fullscreen.js';
 import { observeThemeChange } from '../graph-kit.js';
-
-const FIGUR_TYP_ORDER = { hauptfigur: 0, antagonist: 1, mentor: 2, nebenfigur: 3, randfigur: 4, andere: 5 };
+// Datums-Anzeige der Lebensereignisse: dieselbe reine Funktion wie in der
+// Ereignisse-Karte. Der Figuren-Detailbereich zeigt dieselben `figure_events` —
+// mit einer zweiten Formatierung liest derselbe Datensatz sich je Karte anders
+// (und ein Ereignis, dessen Datum NUR strukturiert vorliegt, bliebe ohne Datum).
+import { formatEventDateParts } from './ereignisse/date.js';
+import { subtypIcon } from './ereignisse/subtyp.js';
+import { typRank } from '../book/figur-typen.js';
 
 // Pure Filter+Sort der Figurenliste. Aus dem memoized Wrapper extrahiert, damit
 // sie ohne Alpine-Root testbar bleibt. `chapterMap` = Kapitel-Name → Reihenfolge-
@@ -57,8 +61,8 @@ export function computeFilteredFiguren(figuren, chapterMap, { suche = '', kapite
     const aK = idxOf(a);
     const bK = idxOf(b);
     if (aK !== bK) return aK - bK;
-    const aT = FIGUR_TYP_ORDER[a.typ] ?? 99;
-    const bT = FIGUR_TYP_ORDER[b.typ] ?? 99;
+    const aT = typRank(a.typ);
+    const bT = typRank(b.typ);
     if (aT !== bT) return aT - bT;
     return (a.name ?? '').localeCompare(b.name ?? '', 'de');
   });
@@ -78,7 +82,11 @@ export function computeFigurenSeiten(figuren, kapitel) {
 export function registerFigurenCard() {
   if (typeof window === 'undefined' || !window.Alpine) return;
   window.Alpine.data('figurenCard', () => ({
-    figurenUpdatedAt: null,
+    // Anzeige-Datum eines Lebensereignisses (Figuren-Detail, Zeitstrahl-Block).
+    formatEventDate(ev) {
+      return formatEventDateParts(ev, (k, p) => window.__app.t(k, p));
+    },
+    subtypIcon,
     figurenGraphModus: 'figur',
     figurenGraphKapitel: null,
     figurenGraphFullscreen: false,
@@ -132,8 +140,8 @@ export function registerFigurenCard() {
           await this.$nextTick();
           this.renderFigurGraph();
         },
-        // book:changed: Netzwerk wegwerfen + Header-Timestamp + Kapitelfilter
-        // resetten, dann neu rendern. loadFiguren läuft zwar parallel aus
+        // book:changed: Netzwerk wegwerfen + Kapitelfilter resetten, dann neu
+        // rendern. loadFiguren läuft zwar parallel aus
         // _resetBookScopedState (loadPages), ist aber ein Netz-Fetch — book:changed
         // feuert synchron davor. Ein blosses $nextTick würde rendern, solange
         // figuren noch [] ist → Leer-Platzhalter + gecachter Leer-Hash, und der
@@ -142,7 +150,6 @@ export function registerFigurenCard() {
         onBookChanged: async (e, ctx, root) => {
           destroyNet();
           ctx._memos = {};
-          ctx.figurenUpdatedAt = null;
           ctx.figurenGraphKapitel = null;
           ctx._resetFigurenAlter();
           if (!root.showFiguresCard) return;
@@ -158,7 +165,6 @@ export function registerFigurenCard() {
         onViewReset: (e, ctx) => {
           destroyNet();
           ctx._resetFigurenAlter();
-          ctx.figurenUpdatedAt = null;
           ctx.figurenGraphModus = 'figur';
           ctx.figurenGraphKapitel = null;
           ctx.figurenGraphFullscreen = false;
@@ -234,7 +240,7 @@ export function registerFigurenCard() {
         try { document.exitFullscreen?.(); } catch {}
       }
       this._lifecycle?.destroy();
-      if (this._figurenAlterPollTimer) { clearTimeout(this._figurenAlterPollTimer); this._figurenAlterPollTimer = null; }
+      if (this._figurenAlterPollTimer) { clearInterval(this._figurenAlterPollTimer); this._figurenAlterPollTimer = null; }
       this._themeObserver?.disconnect();
       this._themeObserver = null;
       if (this._figurenNetwork) { this._figurenNetwork.destroy(); this._figurenNetwork = null; }
@@ -283,10 +289,20 @@ export function registerFigurenCard() {
         () => computeFilteredFiguren(figuren, chapterMap, { suche, kapitel, seite }));
     },
 
+    // i18n aus einer Sub-Methode: `t` haengt am Root, die Karte greift ueber
+    // window.__app darauf zu. Ein Helfer statt `window.__app?.t?.(…)` an jeder
+    // Aufrufstelle — die Optional-Chaining-Kette verleitete zu hartcodierten
+    // Fallback-Strings ("Fehler"), und die stehen dann ausserhalb der Locale-
+    // Dateien (harte Regel „UI-Strings nur in i18n"). Alle drei gespreadeten
+    // Reiter-Module (alter/lebenslauf/presence) nutzen ihn.
+    _t(key, params) {
+      return window.__app?.t?.(key, params) ?? '';
+    },
+
     // Buchwechsel/View-Reset: geladener Index gehoert zum alten Buch, ein
     // laufender Poll zu einem Job, dessen Ergebnis niemand mehr anzeigt.
     _resetFigurenAlter() {
-      if (this._figurenAlterPollTimer) { clearTimeout(this._figurenAlterPollTimer); this._figurenAlterPollTimer = null; }
+      if (this._figurenAlterPollTimer) { clearInterval(this._figurenAlterPollTimer); this._figurenAlterPollTimer = null; }
       this.figurenAlterData = null;
       this._figurenAlterLoadedBookId = null;
       this.figurenAlterLoading = false;

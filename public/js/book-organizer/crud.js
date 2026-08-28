@@ -190,7 +190,9 @@ export const crudMethods = {
       }
       nav.tree.splice(lastSolo + 1, 0, this._buildSoloEntry(newPage));
     }
-    window.__app.tokEsts[newPage.id] = { tok: 0, words: 0, chars: 0 };
+    // Reassignment statt Index-Assign: der `tokTotals`-Memo haengt an der
+    // Identitaet von `tokEsts` (app/app-root-getters.js).
+    window.__app.tokEsts = { ...window.__app.tokEsts, [newPage.id]: { tok: 0, words: 0, chars: 0 } };
     this._rebuildPageOrderMaps();
     this._invalidateDiaryCache();
     this._refreshChapterStats();

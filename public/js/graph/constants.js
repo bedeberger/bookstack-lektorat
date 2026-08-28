@@ -108,3 +108,14 @@ export const BZ_SOZIO_CAT = {
 
 // Typen mit fester Pfeilrichtung im Standardgraph
 export const DIRECTED_TYPES = ['elternteil', 'kind', 'mentor', 'schuetzling', 'patronage', 'vorgesetzter', 'untergebener'];
+
+// ── Reiter der Figuren-Karte: welche zeichnen ein Netz? ──────────────────────
+// `figurenGraphModus` steuert sechs Reiter, aber nur drei davon rendern ein
+// vis-network; die uebrigen (praesenz/alter/lebenslauf) sind reine DOM-Ansichten
+// in eigenen Partials. SSoT, weil die Liste doppelt gefuehrt wurde (Render-
+// Dispatcher UND x-show im Partial) und ein spaeter dazugekommener Reiter nur in
+// einer der beiden Listen landete: der Dispatcher lud dann das vis-Bundle nach
+// und zeichnete ein vollstaendiges Netz in einen ausgeblendeten Container.
+// Neuer Reiter ⇒ hier entscheiden, nicht an den Verwendungsstellen.
+export const GRAPH_MODES = ['figur', 'familie', 'soziogramm'];
+export const isGraphMode = (mode) => GRAPH_MODES.includes(mode);

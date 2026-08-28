@@ -14,7 +14,7 @@ const { db } = require('../../db/connection');
 const appUsers = require('../../db/app-users');
 
 // Mig 130 FK: user_email braucht app_users-Row.
-for (const e of ['a@x.test', 'b@x.test', 'cascade@x.test', 'imp@x.test']) {
+for (const e of ['a@x.test', 'b@x.test', 'cascade@x.test', 'imp@x.test', 'pick@x.test']) {
   appUsers.createUser({ email: e, displayName: e });
 }
 
@@ -139,6 +139,62 @@ test('source_figure_id: roundtrip + LEFT JOIN auf figures.name', () => {
   assert.equal(after.source_figure_id, null);
   assert.equal(after.source_figure_name, null);
   assert.equal(after.name, 'Anna Schmidt'); // Mindmap-Arbeit überlebt
+});
+
+// ── listImportableFigures ───────────────────────────────────────────────────
+// Der Import-Picker dedupliziert gleichnamige figures-Rows (Merge-Kollisionen
+// der Komplettanalyse) und stellt danach die Katalog-Reihenfolge wieder her.
+// Genau dort lag der Fehler: `sort_order` fehlte in der SELECT-Liste, der
+// Vergleich rechnete mit `undefined` → NaN → falsy → die Reihenfolge fiel
+// still auf die id zurueck. Der Test faellt, wenn die Spalte wieder verschwindet.
+test('listImportableFigures: sortiert nach Katalog-Reihenfolge, nicht nach id', () => {
+  schema.upsertBookByName(2051, 'Picker-Buch');
+  const user = 'pick@x.test';
+  const now = new Date().toISOString();
+  const add = (figId, name, sortOrder) => db.prepare(`
+    INSERT INTO figures (book_id, fig_id, name, typ, beschreibung, sort_order, user_email, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(2051, figId, name, 'Nebenfigur', '', sortOrder, user, now).lastInsertRowid;
+
+  // Einfuegereihenfolge bewusst GEGEN die sort_order: die id waechst mit dem
+  // Insert, die sort_order laeuft dagegen. Nur so unterscheidet der Test die
+  // beiden Sortierungen ueberhaupt — bei gleichlaufenden Reihenfolgen bliebe er
+  // auch mit dem Fehler gruen.
+  add('f_carla', 'Carla', 2);   // id 1, sort_order 2
+  add('f_bruno', 'Bruno', 1);   // id 2, sort_order 1
+  add('f_zoe',   'Zoe',   0);   // id 3, sort_order 0
+
+  const rows = schema.listImportableFigures(2051, user);
+  assert.deepEqual(rows.map(r => r.name), ['Zoe', 'Bruno', 'Carla']);
+  // sort_order ist Sortier-Hilfsspalte, kein Teil der Antwortform.
+  assert.ok(!('sort_order' in rows[0]), 'sort_order darf nicht an den Client gehen');
+  assert.ok(!('auftritte' in rows[0]), 'auftritte darf nicht an den Client gehen');
+});
+
+test('listImportableFigures: gleiche Namen dedupliziert, importierte fallen raus', () => {
+  schema.upsertBookByName(2052, 'Dedupe-Buch');
+  const user = 'pick@x.test';
+  const now = new Date().toISOString();
+  const add = (figId, name, beschreibung, sortOrder) => db.prepare(`
+    INSERT INTO figures (book_id, fig_id, name, typ, beschreibung, sort_order, user_email, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(2052, figId, name, 'Nebenfigur', beschreibung, sortOrder, user, now).lastInsertRowid;
+
+  add('f_mia',    'Mia', 'kurz', 0);
+  const richerId = add('f_mia__2', 'Mia', 'deutlich ausfuehrlichere Beschreibung', 1);
+  const soloId   = add('f_tom',    'Tom', '', 2);
+
+  const rows = schema.listImportableFigures(2052, user);
+  assert.deepEqual(rows.map(r => r.name), ['Mia', 'Tom']);
+  // Bei Namensgleichheit gewinnt die inhaltsreichste Row (hier: laengere
+  // Beschreibung), nicht die zuerst eingefuegte.
+  assert.equal(rows.find(r => r.name === 'Mia').id, richerId);
+
+  // Wer schon einen Draft hat, verschwindet aus dem Picker.
+  schema.createDraftFigure(2052, user, {
+    name: 'Tom', mindmap: sampleMindmap('Tom'), sourceFigureId: soloId,
+  });
+  assert.deepEqual(schema.listImportableFigures(2052, user).map(r => r.name), ['Mia']);
 });
 
 test.after(() => {

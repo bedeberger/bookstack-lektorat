@@ -58,9 +58,9 @@
     </div>
   </div>
 
-  <div x-show="adminLogsError" class="error-msg" x-text="adminLogsError"></div>
-  <div x-show="adminLogsRotatedHint" class="muted-msg" x-text="$app.t('admin.logs.rotated')"></div>
-  <div x-show="adminLogsStreamError" class="muted-msg" x-text="$app.t('admin.logs.streamError')"></div>
+  <div x-show="adminLogsError" class="error-msg card-section" x-text="adminLogsError"></div>
+  <div x-show="adminLogsRotatedHint" class="muted-msg card-section" x-text="$app.t('admin.logs.rotated')"></div>
+  <div x-show="adminLogsStreamError" class="muted-msg card-section" x-text="$app.t('admin.logs.streamError')"></div>
 
   <!-- Log-Liste -->
   <div class="log-list" x-show="adminLogsEntries.length">

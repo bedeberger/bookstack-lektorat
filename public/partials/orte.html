@@ -102,7 +102,7 @@
               </template>
             </span>
           </template>
-          <span class="history-chevron" :class="{ open: $store.catalogUi.selectedOrtId === o.id }">›</span>
+          <span class="history-chevron" :class="{ open: $store.catalogUi.selectedOrtId === o.id }" aria-hidden="true"></span>
         </div>
         <div x-show="$store.catalogUi.selectedOrtId === o.id" class="entity-detail">
           <p x-show="o.beschreibung" x-text="o.beschreibung" class="entity-detail-text"></p>

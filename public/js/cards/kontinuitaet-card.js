@@ -17,6 +17,9 @@ export function registerKontinuitaetCard() {
     nameGuardLoading: false,
     selectedNameGuardKey: null,
     _kontinuitaetPollTimer: null,
+    // Memo-Speicher des Moduls (book/kontinuitaet.js#_memo): Kapitel-Index,
+    // gefilterte + sortierte Befundliste. Wird bei jedem Daten-Reload geleert.
+    _memos: {},
     _lifecycle: null,
 
     init() {
@@ -24,6 +27,7 @@ export function registerKontinuitaetCard() {
       // localStorage-Persist). Reset/Restore übernimmt der Root via
       // book:changed / view:reset.
       const doReset = (ctx) => {
+        ctx._memos = {};
         ctx.kontinuitaetResult = null;
         ctx.kontinuitaetLoading = false;
         ctx.kontinuitaetProgress = 0;

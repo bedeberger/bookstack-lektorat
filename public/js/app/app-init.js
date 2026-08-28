@@ -89,9 +89,13 @@ export const appInitMethods = {
       const bdpb = this.$store.collab._bookDevicePingBookId;
       if (bdpb) this._sendBookDeviceLeave?.(bdpb);
     }, { signal });
-    // Kapitel-Stats werden bei jeder tokEsts-Reassignment neu berechnet.
-    // Mutationen via Index-Assign (this.tokEsts[id] = …) feuern den Watcher
-    // nicht — solche Pfade müssen _refreshChapterStats() selbst aufrufen.
+    // Kapitel-Stats werden bei jeder tokEsts-Aenderung neu berechnet. Alpines
+    // `$watch` liest den Wert tief (JSON.stringify im Effect) und feuert bei
+    // Objekten bedingungslos — ein Index-Assign (`tokEsts[id] = …`) loest den
+    // Callback also mit aus, nicht nur eine Reassignment.
+    // Trotzdem ist Reassignment die Konvention fuer schreibende Pfade: der
+    // `tokTotals`-Memo in app/app-root-getters.js haengt an der Identitaet von
+    // `tokEsts`, nicht an diesem Watcher.
     // Kein $watch('tree') — refresh mutiert item.stats und würde sich rekursiv
     // selbst triggern (Alpine-Deep-Reactivity → Browser-Freeze).
     this.$watch('tokEsts', () => this._refreshChapterStats());

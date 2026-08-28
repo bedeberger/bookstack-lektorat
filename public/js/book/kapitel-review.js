@@ -53,9 +53,26 @@ export const kapitelReviewMethods = {
   // Review — dann gibt es eine Kapiteleinheit, die als Ganzes bewertet werden
   // kann (unabhängig von der Kapitelanzahl). Bücher aus lauter Ein-Seiten-
   // Kapiteln bzw. reinen Solo-Seiten deckt das Seiten-Lektorat ab.
+  // Memoisiert: sidebar.html liest das Praedikat ZWEIMAL pro Kapitelzeile
+  // (`:class` + `:data-tip`), obwohl es eine Aussage ueber das ganze Buch ist —
+  // ungecacht ist ein Sidebar-Render O(Kapitel x Baumlaenge), und jede Zeile
+  // haengt reaktiv am gesamten Baum, sodass jede Baum-Mutation alle Zeilen
+  // invalidiert. Deps sind bewusst nur O(1)-Groessen (sonst kostet der
+  // Cache-Schluessel genau den Durchlauf, den er spart): Baum-Referenz +
+  // Kapitelzahl decken Anlegen/Loeschen/Neuladen ab, die Referenz der flachen
+  // Seitenliste plus ihre Laenge das Anlegen/Loeschen/Verschieben von Seiten
+  // (der Buchorganizer weist `nav.pages` beim Spiegeln neu zu).
   _bookQualifiesForChapterReview() {
-    const chapters = (this.$store.nav.tree || []).filter(i => i.type === 'chapter' && !i.solo);
-    return chapters.some(c => c.pages.length > 1);
+    const tree = this.$store.nav.tree || [];
+    const pages = this.$store.nav.pages || [];
+    const memo = this._chapterReviewEligibleMemo;
+    if (memo && memo.tree === tree && memo.treeLen === tree.length
+        && memo.pages === pages && memo.pagesLen === pages.length) return memo.val;
+    const val = tree.some(i => i.type === 'chapter' && !i.solo && i.pages.length > 1);
+    this._chapterReviewEligibleMemo = {
+      tree, treeLen: tree.length, pages, pagesLen: pages.length, val,
+    };
+    return val;
   },
 
   kapitelReviewChapterOptions() {

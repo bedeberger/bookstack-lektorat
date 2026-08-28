@@ -48,24 +48,42 @@ const FEHLER_CLUSTERS = [
 ];
 const FEHLER_TYPEN = FEHLER_CLUSTERS.flatMap(c => c.typen);
 
+// Spalten-Indizes der jeweils ersten Spalte eines Clusters (fuer Trennlinien).
+// Das erste Cluster startet bei 0 und faellt raus — links aussen keine Linie.
+// Modul-Konstante, kein Getter: das Template fragt sie einmal PRO ZELLE ab
+// (26 Typen x N Kapiteln), und ein Getter haette dabei jedes Mal zwei Arrays
+// gebaut. Set statt Array, weil der Zugriff ein Enthaltensein-Test ist.
+const FEHLER_CLUSTER_STARTS = new Set(FEHLER_CLUSTERS.reduce((acc, c) => {
+  acc.push(acc.at(-1) + c.typen.length);
+  return acc;
+}, [0]).slice(0, -1).slice(1));
+
 const MODES = ['open', 'applied', 'all'];
 
 export const fehlerHeatmapMethods = {
   get fehlerHeatmapTypen() { return FEHLER_TYPEN; },
   get fehlerHeatmapClusters() { return FEHLER_CLUSTERS; },
-  // Spalten-Indizes der jeweils ersten Spalte eines Clusters (für Trennlinien).
-  // Erstes Cluster startet bei 0 – wird ignoriert (keine Trennlinie ganz links).
-  get fehlerHeatmapClusterStarts() {
-    const starts = [];
-    let cursor = 0;
-    for (const c of FEHLER_CLUSTERS) { starts.push(cursor); cursor += c.typen.length; }
-    return starts.slice(1);
+  // Beginnt an dieser Spalte ein neues Cluster? (→ Trennlinie)
+  fehlerHeatmapIsClusterStart(idx) { return FEHLER_CLUSTER_STARTS.has(idx); },
+
+  // Ein Memo-Helper pro Modul (CLAUDE.md): Cache mit shallow-Array-Deps-
+  // Vergleich (`===`). Reset ueber this._memos = {} im Lade-Pfad.
+  _memo(key, deps, compute) {
+    const memos = (this._memos ||= {});
+    const hit = memos[key];
+    if (hit && hit.deps.length === deps.length && hit.deps.every((d, i) => d === deps[i])) {
+      return hit.value;
+    }
+    const value = compute();
+    memos[key] = { deps: [...deps], value };
+    return value;
   },
 
   async loadFehlerHeatmap() {
     if (!Alpine.store('nav').selectedBookId) return;
     this.fehlerHeatmapLoading = true;
     this.fehlerHeatmapStatus = '';
+    this._memos = {};
     try {
       const mode = MODES.includes(this.fehlerHeatmapMode) ? this.fehlerHeatmapMode : 'open';
       const data = await fetchJson(`/history/fehler-heatmap/${Alpine.store('nav').selectedBookId}?mode=${mode}`);
@@ -229,12 +247,18 @@ export const fehlerHeatmapMethods = {
   },
 
   // Skala pro Typ über alle Kapitel. Rot = hoch, Grün = niedrig.
+  // Memoisiert pro Typ: das Template ruft die Skala ZWEIMAL pro Zelle ab
+  // (Zell-Variante + CSS-Variablen), und jeder Aufruf laeuft ueber alle
+  // Kapitel — ungecacht ist ein Render O(Typen x Kapitel²), und schon das
+  // Auf-/Zuklappen des Detail-Panels loest ihn komplett neu aus (das :class
+  // jeder Zelle liest activeFehlerDetailKey). Deps = die Datenreferenz; ein
+  // neuer Ladevorgang tauscht sie und verwirft damit alle Typ-Slots.
   fehlerHeatmapRange(typ) {
-    const chapters = this.fehlerHeatmapData?.chapters || [];
-    return minMaxBy(chapters, (ch) => {
+    const data = this.fehlerHeatmapData;
+    return this._memo(`range:${typ}`, [data], () => minMaxBy(data?.chapters || [], (ch) => {
       const key = this.fehlerHeatmapChapterKey(ch);
-      return this.fehlerHeatmapData?.matrix?.[key]?.[typ]?.count;
-    });
+      return data?.matrix?.[key]?.[typ]?.count;
+    }));
   },
 
   // Welche Zell-Variante (→ CSS-Klasse) und welche CSS-Variablen. Split,
@@ -274,10 +298,17 @@ export const fehlerHeatmapMethods = {
     return formatNumber(cell.count, Alpine.store('shell').uiLocale, 0);
   },
 
+  // Eine Zelle ohne Befunde hat kein Detail-Panel — sie darf weder
+  // Klick-Cursor noch Tastatur-Fokus anbieten. SSoT fuer die :class-Bindung
+  // und den Handler darunter, damit die Optik nicht mehr verspricht als der
+  // Klick einloest.
+  fehlerHeatmapCellClickable(chapterKey, typ) {
+    return this.fehlerHeatmapCellCount(chapterKey, typ) > 0;
+  },
+
   toggleFehlerHeatmapDetail(chapterKey, typ) {
     const key = `${chapterKey}:${typ}`;
-    const cell = this.fehlerHeatmapData?.matrix?.[chapterKey]?.[typ];
-    if (!cell || !cell.count) return;
+    if (!this.fehlerHeatmapCellClickable(chapterKey, typ)) return;
     this.activeFehlerDetailKey = (this.activeFehlerDetailKey === key) ? null : key;
   },
 

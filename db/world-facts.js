@@ -86,7 +86,97 @@ function saveFaktenToDb(bookId, chapterFakten, userEmail, chNameToId = null) {
   })();
 }
 
+// ── Lesepfad ────────────────────────────────────────────────────────────────
+
+/** Welt-Fakten eines Buchs mit ihren Kapitelnamen (JOIN zur Lesezeit, kein
+ *  Snapshot). `kategorien` filtert optional auf eine Whitelist-Teilmenge —
+ *  Konsumenten, die nur die Weltgesetze brauchen, reichen ['regel','technik']
+ *  herein, statt alles zu laden und im Speicher zu sieben.
+ *
+ *  Gemeinsamer Lesepfad fuer alle Konsumenten, die Kapitelnamen brauchen: der
+ *  Namens-JOIN gehoert nach `db/` (Content-Store-Facade-Regel), nicht in einen
+ *  Route- oder Job-Handler.
+ *
+ *  @returns {Array<{id,kategorie,subjekt,fakt,seite,kapitel:string[],updated_at}>}
+ */
+function listWorldFacts(bookId, userEmail, { kategorien = null } = {}) {
+  const bookIdInt = parseInt(bookId);
+  if (!bookIdInt) return [];
+  const email = userEmail || null;
+  const kats = Array.isArray(kategorien)
+    ? kategorien.map(k => String(k || '').toLowerCase()).filter(k => FAKT_KATEGORIE_WL.has(k))
+    : null;
+  // Eine leere (aber uebergebene) Kategorienliste heisst „nichts davon" — nicht „alles".
+  if (kats && !kats.length) return [];
+  const katCond = kats ? ` AND wf.kategorie IN (${kats.map(() => '?').join(',')})` : '';
+  const rows = db.prepare(`
+    SELECT wf.id, wf.kategorie, wf.subjekt, wf.fakt, wf.seite_label, wf.updated_at,
+           c.chapter_name
+      FROM world_facts wf
+      LEFT JOIN world_fact_chapters wfc ON wfc.fact_id = wf.id
+      LEFT JOIN chapters c ON c.chapter_id = wfc.chapter_id
+     WHERE wf.book_id = ? AND wf.user_email IS ?${katCond}
+     ORDER BY wf.sort_order, wf.id, c.position
+  `).all(bookIdInt, email, ...(kats || []));
+
+  // Bridge-Zeilen (eine je Kapitel) zu einem Fakt zusammenfassen.
+  const byId = new Map();
+  for (const r of rows) {
+    let e = byId.get(r.id);
+    if (!e) {
+      e = {
+        id: r.id,
+        kategorie: r.kategorie,
+        subjekt: r.subjekt || null,
+        fakt: r.fakt,
+        seite: r.seite_label || null,
+        kapitel: [],
+        updated_at: r.updated_at || null,
+      };
+      byId.set(r.id, e);
+    }
+    if (r.chapter_name && !e.kapitel.includes(r.chapter_name)) e.kapitel.push(r.chapter_name);
+  }
+  return [...byId.values()];
+}
+
+/** Ist der Fakten-Index dieses Buchs je erhoben worden?
+ *
+ *  **Leer heisst „nie analysiert", nicht „keine Weltfakten"** — dasselbe Muster wie
+ *  `scanned: false` bei `motif_occurrences` und `anchorMap === null` im Plot-Check.
+ *  Ohne diese Unterscheidung behauptet ein nie gelaufener Lauf, das Buch habe keine
+ *  Welt: die Bewertung liest 0 Fakten als weltarm, die Consistency-Pruefung meldet
+ *  „verletzt keine Weltregel", und die Karte fordert eine Analyse, die schon lief.
+ *
+ *  `world_facts` fuehrt bewusst KEINE Scan-Marker-Tabelle (Full-Replace pro Lauf,
+ *  kein Delta-Cache) — die Frage wird darum aus zwei Signalen beantwortet:
+ *  vorhandene Fakten (deckt auch importierte Buecher ab, die nie einen Job gesehen
+ *  haben) ODER ein abgeschlossener `komplett-analyse`-Lauf in `job_runs` (nie geprunt).
+ *  Grenzfall mit Absicht in Kauf genommen: faellt allein der Fakten-Pass eines
+ *  sonst erfolgreichen Laufs aus (`job.warn.faktenFailed`), gilt das Buch als
+ *  gescannt — die Warnung stand im Job-Ergebnis.
+ *
+ *  @returns {{scanned: boolean, count: number}}
+ */
+function worldFactsScanState(bookId, userEmail) {
+  const bookIdInt = parseInt(bookId);
+  if (!bookIdInt) return { scanned: false, count: 0 };
+  const email = userEmail || null;
+  const { n } = db.prepare(
+    'SELECT COUNT(*) AS n FROM world_facts WHERE book_id = ? AND user_email IS ?'
+  ).get(bookIdInt, email);
+  if (n > 0) return { scanned: true, count: n };
+  const run = db.prepare(`
+    SELECT 1 FROM job_runs
+     WHERE type = 'komplett-analyse' AND status = 'done'
+       AND book_id = ? AND user_email IS ? LIMIT 1
+  `).get(bookIdInt, email);
+  return { scanned: !!run, count: 0 };
+}
+
 module.exports = {
   saveFaktenToDb,
+  listWorldFacts,
+  worldFactsScanState,
   FAKT_KATEGORIE_WL,
 };

@@ -1,26 +1,13 @@
-// Strukturierte Event-Sortierung: COALESCE-Logik in JS-Mirror der
-// ORDER-BY-Klausel (routes/figures.js#GET /zeitstrahl). Events ohne Jahr ans
-// Ende ("unbekannt"-Bucket), Tiebreaker via sort_order. Pure-Function-Test.
+// Strukturierte Event-Sortierung: JS-Spiegel der ORDER-BY-Klausel von
+// GET /figures/zeitstrahl/:book_id (routes/figures/zeitstrahl.js). Events ohne
+// Jahr ans Ende ("unbekannt"-Bucket), Tiebreaker sort_order, dann id.
+//
+// Getestet wird die ECHTE Implementierung (cards/ereignisse/model.js) — eine
+// Kopie der Vergleichsfunktion im Testfile prueft nur sich selbst und bleibt
+// gruen, waehrend die Karte anders sortiert.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-
-function _sortKey(ev) {
-  return [
-    ev.datum_year  ?? 9999,
-    ev.datum_month ?? 99,
-    ev.datum_day   ?? 99,
-    ev.story_tag   ?? 99999,
-    ev.sort_order  ?? 0,
-  ];
-}
-function _cmp(a, b) {
-  const ka = _sortKey(a), kb = _sortKey(b);
-  for (let i = 0; i < ka.length; i++) if (ka[i] !== kb[i]) return ka[i] - kb[i];
-  return 0;
-}
-function sortEvents(arr) {
-  return [...arr].sort(_cmp);
-}
+import { sortEvents } from '../../public/js/cards/ereignisse/model.js';
 
 test('sortiert nach Jahr aufsteigend', () => {
   const events = [
@@ -97,4 +84,19 @@ test('null vs. undefined sind beide „unbekannt“', () => {
   ];
   const sorted = sortEvents(events);
   assert.equal(sorted[0].ereignis, 'has-year');
+});
+
+test('id ist letzter Tiebreaker (deckungsgleich mit dem ORDER BY des Servers)', () => {
+  const events = [
+    { id: 9, ereignis: 'b', datum_year: 1900, sort_order: 0 },
+    { id: 2, ereignis: 'a', datum_year: 1900, sort_order: 0 },
+  ];
+  assert.deepEqual(sortEvents(events).map(e => e.ereignis), ['a', 'b']);
+});
+
+test('sortEvents mutiert die Quelle nicht (Alpine-Store-Array)', () => {
+  const events = [{ datum_year: 2000 }, { datum_year: 1900 }];
+  const sorted = sortEvents(events);
+  assert.equal(events[0].datum_year, 2000);
+  assert.equal(sorted[0].datum_year, 1900);
 });

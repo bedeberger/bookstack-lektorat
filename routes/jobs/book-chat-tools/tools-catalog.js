@@ -3,7 +3,7 @@
 // Ideen, Buch-Settings, Revisionen). Reines DB-Aggregat, kein BookStack-
 // Roundtrip. Temporal-Tools (Kontinuitaet/Zeitstrahl) liegen in tools-timeline.js.
 
-const { db, getBookSettings } = require('../../../db/schema');
+const { db, getBookSettings, worldFactsScanState } = require('../../../db/schema');
 const { inClause } = require('../../../lib/validate');
 const { narrativeLabels } = require('../narrative-labels');
 const pageRevisions = require('../../../db/page-revisions');
@@ -661,6 +661,10 @@ function tool_list_revisions(input, ctx) {
 // Deklaratives Buch-Wissen (Weltregeln/Fakten) aus der Komplettanalyse.
 // Optionale Filter: kategorie (exakt), subjekt (Teilstring). Kapitelname per JOIN
 // zur Lesezeit (kein Snapshot).
+//
+// Leerer Index heisst „nie analysiert", nicht „das Buch hat keine Weltregeln":
+// `scanned` trennt beides, damit der Agent aus einer leeren Antwort nicht
+// schliesst, es gebe nichts, und die Aussage als Fakt weitergibt.
 function tool_list_world_facts(input, ctx) {
   const userEmail = ctx.userEmail || null;
   const kategorie = typeof input?.kategorie === 'string' && input.kategorie.trim() ? input.kategorie.trim().toLowerCase() : null;
@@ -677,7 +681,13 @@ function tool_list_world_facts(input, ctx) {
 
   const rows = db.prepare(sql).all(...params);
   if (!rows.length) {
-    return { fakten: [], hint: 'Keine Welt-Fakten vorhanden. Komplettanalyse ausführen.' };
+    const { scanned } = worldFactsScanState(ctx.bookId, userEmail);
+    const hint = !scanned
+      ? 'Der Welt-Fakten-Index ist NICHT erhoben (Komplettanalyse nie gelaufen). Das ist keine Aussage über das Buch — sage nicht, es gebe keine Weltregeln, sondern nutze andere Werkzeuge oder benenne die Lücke.'
+      : (kategorie !== null || subjekt !== null)
+        ? 'Index erhoben, aber zu diesem Filter kein Fakt. Ohne kategorie/subjekt erneut fragen, bevor du „nicht etabliert" schliesst.'
+        : 'Index erhoben, enthält aber keinen einzigen Welt-Fakt.';
+    return { fakten: [], scanned, hint };
   }
 
   const factIds = rows.map(r => r.id);
@@ -704,6 +714,7 @@ function tool_list_world_facts(input, ctx) {
       kapitel:      chByFact.get(r.id) || [],
     })),
     total: rows.length,
+    scanned: true,
   });
 }
 

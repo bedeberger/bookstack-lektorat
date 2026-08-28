@@ -15,8 +15,8 @@
 // Gespreadet in cards/figuren-card.js; Root-Zugriffe via window.__app.
 
 import { fetchJson, dateTimeFormat } from '../utils.js';
-
-const TYP_ORDER = { hauptfigur: 0, antagonist: 1, mentor: 2, nebenfigur: 3, randfigur: 4, andere: 5 };
+import { startPoll } from '../cards/job-helpers.js';
+import { typRank, byTypDannName } from './figur-typen.js';
 
 /** Pure Verbindung von Katalog und Alters-Index + Filter + Sortierung.
  *  Ausserhalb von Alpine testbar. `ages` = Map fig_id → Index-Zeile. */
@@ -64,11 +64,7 @@ export function computeAlterRows(figuren, ages, { suche = '', typ = '', nur = ''
     if (nur === 'beleg' && !row.belege.length) continue;
     rows.push(row);
   }
-  return rows.sort((a, b) => {
-    const at = TYP_ORDER[a.typ] ?? 99, bt = TYP_ORDER[b.typ] ?? 99;
-    if (at !== bt) return at - bt;
-    return (a.name || '').localeCompare(b.name || '', 'de');
-  });
+  return rows.sort(byTypDannName);
 }
 
 export const figurenAlterMethods = {
@@ -83,7 +79,7 @@ export const figurenAlterMethods = {
     } catch (e) {
       if (e?.name === 'AbortError') return;
       this.figurenAlterData = null;
-      this.figurenAlterStatus = window.__app?.t?.('figuren.alter.loadError') || '';
+      this.figurenAlterStatus = this._t('figuren.alter.loadError');
     }
   },
 
@@ -103,7 +99,7 @@ export const figurenAlterMethods = {
     if (!bookId || this.figurenAlterLoading) return;
     this.figurenAlterLoading = true;
     this.figurenAlterProgress = 0;
-    this.figurenAlterStatus = window.__app?.t?.('figuren.alter.running') || '';
+    this.figurenAlterStatus = this._t('figuren.alter.running');
     try {
       const j = await fetchJson('/jobs/figur-alter', {
         method: 'POST',
@@ -114,36 +110,36 @@ export const figurenAlterMethods = {
       this._pollFigurenAlter(j.jobId);
     } catch (e) {
       this.figurenAlterLoading = false;
-      this.figurenAlterStatus = window.__app?.t?.('figuren.alter.error') || 'Fehler';
+      this.figurenAlterStatus = this._t('figuren.alter.error');
     }
   },
 
+  // Geteilter Poller statt Eigenbau (cards/job-helpers.js). Drei Dinge, die ein
+  // handgeschriebener setTimeout-Zyklus hier nicht hatte: den 404-Zweig (ein
+  // Job, den der Server nach einem Neustart nicht mehr kennt, wurde sonst bis
+  // zum Kartenabbau weiter abgefragt), `syncJobQueueItem` (sonst driften
+  // Footer-Fortschritt und Karten-Bar auseinander) und den Job-Toast am Ende.
   _pollFigurenAlter(jobId) {
-    const tick = async () => {
-      try {
-        const j = await fetchJson('/jobs/' + encodeURIComponent(jobId));
-        if (j.status === 'done') {
-          this.figurenAlterLoading = false;
-          this.figurenAlterProgress = 0;
-          this.figurenAlterStatus = '';
-          await this.loadFigurenAlter();
-          return;
-        }
-        if (j.status === 'error' || j.status === 'cancelled') {
-          this.figurenAlterLoading = false;
-          this.figurenAlterProgress = 0;
-          this.figurenAlterStatus = j.error
-            ? window.__app.t(j.error, j.errorParams)
-            : (window.__app?.t?.('figuren.alter.error') || 'Fehler');
-          return;
-        }
-        this.figurenAlterProgress = j.progress || 0;
-        this._figurenAlterPollTimer = setTimeout(tick, 1200);
-      } catch {
-        this._figurenAlterPollTimer = setTimeout(tick, 2500);
-      }
+    const finish = (status) => {
+      this.figurenAlterLoading = false;
+      this.figurenAlterProgress = 0;
+      this.figurenAlterStatus = status;
     };
-    tick();
+    startPoll(this, {
+      timerProp: '_figurenAlterPollTimer',
+      jobId,
+      progressProp: 'figurenAlterProgress',
+      intervalMs: 1200,
+      onDone: async () => {
+        finish('');
+        await this.loadFigurenAlter();
+      },
+      // Deckt error UND cancelled ab (startPoll ruft onError fuer beide).
+      onError: (job) => finish(job?.error
+        ? this._t(job.error, job.errorParams)
+        : this._t('figuren.alter.error')),
+      onNotFound: () => finish(this._t('figuren.alter.error')),
+    });
   },
 
   // ── Tabelle ───────────────────────────────────────────────────────────────
@@ -164,7 +160,7 @@ export const figurenAlterMethods = {
     return this._memo('alterTypen', [figuren], () => {
       const seen = new Set();
       for (const f of (figuren || [])) if (!f.stale && f.typ) seen.add(f.typ);
-      return [...seen].sort((a, b) => (TYP_ORDER[a] ?? 99) - (TYP_ORDER[b] ?? 99));
+      return [...seen].sort((a, b) => typRank(a) - typRank(b));
     });
   },
 
@@ -186,14 +182,13 @@ export const figurenAlterMethods = {
   // Aussage: die Figur ist im Buch nicht zwölf, sie wird zwischen zwölf und
   // neunzehn Jahre alt.
   figurenAlterLabel(row) {
-    const t = window.__app?.t?.bind(window.__app);
     if (row.alter_von != null) {
       return row.alter_bis != null && row.alter_bis !== row.alter_von
         ? `${row.alter_von}–${row.alter_bis}`
         : String(row.alter_von);
     }
     if (row.alter_abgeleitet != null) return String(row.alter_abgeleitet);
-    return t ? t('figuren.alter.unknown') : '–';
+    return this._t('figuren.alter.unknown');
   },
 
   // Bezugsjahr nur, wenn es ueberhaupt ein Alter gibt. Eine Jahreszahl neben
@@ -211,9 +206,8 @@ export const figurenAlterMethods = {
   },
 
   figurenAlterQuelleLabel(row) {
-    const t = window.__app?.t?.bind(window.__app);
-    if (!t || !row.quelle) return '';
-    return t('figuren.alter.quelle.' + row.quelle);
+    if (!row.quelle) return '';
+    return this._t('figuren.alter.quelle.' + row.quelle);
   },
 
   // Konfidenz als drei Stufen statt als Kommazahl: die Zahl suggeriert eine
@@ -228,7 +222,7 @@ export const figurenAlterMethods = {
   figurenAlterKonfidenzLabel(row) {
     const stufe = this.figurenAlterKonfidenzStufe(row);
     if (stufe === 'none') return '';
-    return window.__app?.t?.('figuren.alter.konfidenz.' + stufe) || '';
+    return this._t('figuren.alter.konfidenz.' + stufe);
   },
 
   // Die Sicherheit steht als Ton an der Herkunfts-Plakette, ihr Wort im Tooltip —
@@ -236,13 +230,12 @@ export const figurenAlterMethods = {
   figurenAlterKonfidenzTip(row) {
     const label = this.figurenAlterKonfidenzLabel(row);
     if (!label) return '';
-    return window.__app?.t?.('figuren.alter.konfidenzTip', { level: label }) || label;
+    return this._t('figuren.alter.konfidenzTip', { level: label }) || label;
   },
 
   figurenAlterWiderspruchText(w) {
-    const t = window.__app?.t?.bind(window.__app);
-    if (!t || !w) return '';
-    return t('figuren.alter.widerspruch.' + w.typ, { a: w.a, b: w.b });
+    if (!w) return '';
+    return this._t('figuren.alter.widerspruch.' + w.typ, { a: w.a, b: w.b });
   },
 
   figurenAlterWiderspruchTip(row) {
@@ -261,7 +254,7 @@ export const figurenAlterMethods = {
     // Datums-Anzeige ausschliesslich ueber den geteilten Formatter (harte Regel
     // „Frontend-Datums-Display: nur via tzOpts") — dateTimeFormat merged es.
     const date = dateTimeFormat(window.__app?.uiLocale, { dateStyle: 'medium', timeStyle: 'short' }).format(d);
-    return window.__app?.t?.('common.asOf', { date }) || '';
+    return this._t('common.asOf', { date });
   },
 
   // Belege einer Zeile auf-/zuklappen. Ein offener Beleg-Block pro Tabelle —

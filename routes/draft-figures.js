@@ -5,11 +5,13 @@
 
 const express = require('express');
 const {
-  listDraftFigures, getDraftFigure, getDraftFigureBySource,
+  listDraftFigures, getDraftFigureBySource,
   createDraftFigure, updateDraftFigure, deleteDraftFigure,
-  listWerkstattRuns, getWerkstattRun, deleteWerkstattRun,
-  getFigureWithDetails, db,
+  listImportableFigures, listWerkstattRuns, deleteWerkstattRun,
+  getFigureWithDetails,
 } = require('../db/schema');
+const { scopedDraft, scopedRun } = require('./draft-figures-acl');
+const { buildMindmapFromFigure, mapArchetype } = require('../lib/draft-mindmap-builder');
 const { toIntId } = require('../lib/validate');
 const { aclParamGuard, sessionEmail } = require('../lib/acl');
 const logger = require('../logger');
@@ -18,6 +20,11 @@ const router = express.Router();
 // ACL: jede :book_id-Route erfordert mind. viewer-Rolle (drafts user-scoped,
 // aber Anlage auf fremden Büchern sonst möglich → IDOR). Setzt zugleich den
 // ALS-Logging-Context (book) + req.bookId/req.bookRole.
+//
+// Weil der Guard hier haengt, sind Login UND Buch-Id in jedem :book_id-Handler
+// bereits geprueft: dort steht deshalb KEIN zweites sessionEmail()+401 und kein
+// eigenes toIntId(req.params.book_id) — das waere toter Code mit einem zweiten
+// error_code fuer dieselbe Lage. Die Buch-Id kommt als `req.bookId`.
 router.param('book_id', aclParamGuard('viewer'));
 const jsonBody = express.json({ limit: '1mb' });
 
@@ -74,55 +81,33 @@ function _validateMindmap(obj) {
 // Liste ohne result_json (spart bei vielen Einträgen); Detail liefert vollen
 // JSON. Owner-Check via user_email auf draft (List) bzw. run (Get/Delete).
 router.get('/by-id/:id/runs', (req, res) => {
-  const userEmail = sessionEmail(req);
-  const id = toIntId(req.params.id);
-  if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
-  if (!id)        return res.status(400).json({ error_code: 'INVALID_ID' });
-  const draft = getDraftFigure(id);
-  if (!draft) return res.status(404).json({ error_code: 'NOT_FOUND' });
-  if (draft.user_email !== userEmail) return res.status(403).json({ error_code: 'FORBIDDEN' });
-  res.json(listWerkstattRuns(id, userEmail));
+  const draft = scopedDraft(req, res, req.params.id);
+  if (!draft) return;
+  res.json(listWerkstattRuns(draft.id, draft.user_email));
 });
 
 router.get('/runs/:run_id', (req, res) => {
-  const userEmail = sessionEmail(req);
-  const id = toIntId(req.params.run_id);
-  if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
-  if (!id)        return res.status(400).json({ error_code: 'INVALID_ID' });
-  const run = getWerkstattRun(id);
-  if (!run) return res.status(404).json({ error_code: 'NOT_FOUND' });
-  if (run.user_email !== userEmail) return res.status(403).json({ error_code: 'FORBIDDEN' });
+  const run = scopedRun(req, res, req.params.run_id);
+  if (!run) return;
   res.json(run);
 });
 
 router.delete('/runs/:run_id', (req, res) => {
-  const userEmail = sessionEmail(req);
-  const id = toIntId(req.params.run_id);
-  if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
-  if (!id)        return res.status(400).json({ error_code: 'INVALID_ID' });
-  const changes = deleteWerkstattRun(id, userEmail);
-  if (!changes) return res.status(404).json({ error_code: 'NOT_FOUND' });
+  const run = scopedRun(req, res, req.params.run_id);
+  if (!run) return;
+  deleteWerkstattRun(run.id, run.user_email);
   res.json({ ok: true });
 });
 
 // Liste aller Werkstatt-Figuren eines Buchs (per User).
 router.get('/:book_id', (req, res) => {
-  const userEmail = sessionEmail(req);
-  const bookId = toIntId(req.params.book_id);
-  if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
-  if (!bookId)    return res.status(400).json({ error_code: 'INVALID_ID' });
-  res.json(listDraftFigures(bookId, userEmail));
+  res.json(listDraftFigures(req.bookId, sessionEmail(req)));
 });
 
 // Einzelne Werkstatt-Figur per id.
 router.get('/by-id/:id', (req, res) => {
-  const userEmail = sessionEmail(req);
-  const id = toIntId(req.params.id);
-  if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
-  if (!id)        return res.status(400).json({ error_code: 'INVALID_ID' });
-  const draft = getDraftFigure(id);
-  if (!draft) return res.status(404).json({ error_code: 'NOT_FOUND' });
-  if (draft.user_email !== userEmail) return res.status(403).json({ error_code: 'FORBIDDEN' });
+  const draft = scopedDraft(req, res, req.params.id);
+  if (!draft) return;
   res.json(draft);
 });
 
@@ -130,9 +115,7 @@ router.get('/by-id/:id', (req, res) => {
 // Ohne mindmap → Default-Tree (Steckbrief + Stimme + Subtext + Eigene Aspekte).
 router.post('/:book_id', jsonBody, (req, res) => {
   const userEmail = sessionEmail(req);
-  const bookId = toIntId(req.params.book_id);
-  if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
-  if (!bookId)    return res.status(400).json({ error_code: 'INVALID_ID' });
+  const bookId = req.bookId;
 
   const name = (req.body?.name || '').toString().trim();
   if (!name) return res.status(400).json({ error_code: 'NAME_REQ' });
@@ -150,13 +133,8 @@ router.post('/:book_id', jsonBody, (req, res) => {
 
 // Update. Body: { name?, archetype?, mindmap?, notes? }.
 router.put('/:id', jsonBody, (req, res) => {
-  const userEmail = sessionEmail(req);
-  const id = toIntId(req.params.id);
-  if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
-  if (!id)        return res.status(400).json({ error_code: 'INVALID_ID' });
-  const draft = getDraftFigure(id);
-  if (!draft) return res.status(404).json({ error_code: 'NOT_FOUND' });
-  if (draft.user_email !== userEmail) return res.status(403).json({ error_code: 'FORBIDDEN' });
+  const draft = scopedDraft(req, res, req.params.id);
+  if (!draft) return;
 
   const name = req.body?.name != null
     ? String(req.body.name).trim()
@@ -173,64 +151,16 @@ router.put('/:id', jsonBody, (req, res) => {
   const mindmap = req.body?.mindmap != null ? req.body.mindmap : draft.mindmap;
   if (!_validateMindmap(mindmap)) return res.status(400).json({ error_code: 'MINDMAP_INVALID' });
 
-  const updated = updateDraftFigure(id, { name, archetype, mindmap, notes });
+  const updated = updateDraftFigure(draft.id, { name, archetype, mindmap, notes });
   res.json(updated);
 });
 
-// Liste der figures eines Buchs, die noch nicht importiert wurden.
-// Ausgeschlossen: figures, für die der User bereits einen Werkstatt-Draft hat
-// (per source_figure_id). Genutzt vom Import-Picker im Frontend.
-//
-// Pro Figur kommt Kontext mit (Hauptkapitel = häufigster Auftritt, Beruf,
-// Geburtstag/Jahrgang), den der Picker als Zweitzeile anzeigt.
-//
-// Dedupe pro Name: der figures-Katalog kann durch Komplettanalyse-Merge-
-// Kollisionen (fig_id `__2`-Suffix) zwei Rows mit demselben Namen enthalten.
-// Im Picker pro Name nur die inhaltsreichste Row anbieten (meiste Auftritte,
-// Tie-Break längere Beschreibung, dann höchste id = neuere Extraktion), damit
-// dieselbe Figur nicht doppelt erscheint.
+// Liste der figures eines Buchs, die noch nicht importiert wurden (per User,
+// dedupliziert pro Name, mit Kontext-Zweitzeile). Abfrage samt Dedupe-Regel:
+// db/draft-figures.js#listImportableFigures.
 router.get('/:book_id/importable', (req, res) => {
-  const userEmail = sessionEmail(req);
-  const bookId = toIntId(req.params.book_id);
-  if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
-  if (!bookId)    return res.status(400).json({ error_code: 'INVALID_ID' });
-  const rows = db.prepare(`
-    SELECT f.id, f.name, f.kurzname, f.typ, f.beschreibung, f.beruf, f.geburtstag,
-           (SELECT c.chapter_name
-              FROM figure_appearances fa
-              JOIN chapters c ON c.chapter_id = fa.chapter_id
-             WHERE fa.figure_id = f.id
-             ORDER BY fa.haeufigkeit DESC, c.position
-             LIMIT 1) AS hauptkapitel,
-           (SELECT COALESCE(SUM(fa.haeufigkeit), 0)
-              FROM figure_appearances fa
-             WHERE fa.figure_id = f.id) AS auftritte
-      FROM figures f
-      LEFT JOIN draft_figures d
-        ON d.source_figure_id = f.id AND d.user_email = ?
-     WHERE f.book_id = ? AND f.user_email IS ? AND d.id IS NULL
-     ORDER BY f.sort_order, f.id
-  `).all(userEmail, bookId, userEmail);
-
-  const byName = new Map();
-  for (const r of rows) {
-    const key = r.name.trim().toLowerCase();
-    const prev = byName.get(key);
-    if (!prev || _figureRicher(r, prev)) byName.set(key, r);
-  }
-  const deduped = [...byName.values()]
-    .sort((a, b) => (a.sort_order - b.sort_order) || (a.id - b.id))
-    .map(({ auftritte, ...rest }) => rest);
-  res.json(deduped);
+  res.json(listImportableFigures(req.bookId, sessionEmail(req)));
 });
-
-// Welche von zwei gleichnamigen figures-Rows ist im Import-Picker zu bevorzugen?
-function _figureRicher(a, b) {
-  if ((a.auftritte || 0) !== (b.auftritte || 0)) return (a.auftritte || 0) > (b.auftritte || 0);
-  const al = (a.beschreibung || '').length, bl = (b.beschreibung || '').length;
-  if (al !== bl) return al > bl;
-  return a.id > b.id;
-}
 
 // Werkstatt-Figur aus bestehender figures-Row importieren. Body: { figureId }.
 // Idempotent gegenüber doppelten Klicks: bestehender Draft mit gleicher
@@ -238,11 +168,9 @@ function _figureRicher(a, b) {
 // navigieren kann statt einen zweiten Draft anzulegen.
 router.post('/:book_id/import', jsonBody, (req, res) => {
   const userEmail = sessionEmail(req);
-  const bookId = toIntId(req.params.book_id);
+  const bookId = req.bookId;
   const figureId = toIntId(req.body?.figureId);
-  if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
-  if (!bookId)    return res.status(400).json({ error_code: 'INVALID_ID' });
-  if (!figureId)  return res.status(400).json({ error_code: 'FIGURE_ID_REQ' });
+  if (!figureId) return res.status(400).json({ error_code: 'FIGURE_ID_REQ' });
 
   const fig = getFigureWithDetails(figureId);
   if (!fig) return res.status(404).json({ error_code: 'FIGURE_NOT_FOUND' });
@@ -258,7 +186,6 @@ router.post('/:book_id/import', jsonBody, (req, res) => {
     return res.status(409).json({ error_code: 'ALREADY_IMPORTED', existingDraftId: existing.id });
   }
 
-  const { buildMindmapFromFigure, mapArchetype } = require('../lib/draft-mindmap-builder');
   const mindmap = buildMindmapFromFigure(fig);
   if (!_validateMindmap(mindmap)) return res.status(500).json({ error_code: 'MINDMAP_INVALID' });
   const archetype = mapArchetype(fig.typ);
@@ -277,15 +204,10 @@ router.post('/:book_id/import', jsonBody, (req, res) => {
 });
 
 router.delete('/:id', (req, res) => {
-  const userEmail = sessionEmail(req);
-  const id = toIntId(req.params.id);
-  if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
-  if (!id)        return res.status(400).json({ error_code: 'INVALID_ID' });
-  const draft = getDraftFigure(id);
-  if (!draft) return res.status(404).json({ error_code: 'NOT_FOUND' });
-  if (draft.user_email !== userEmail) return res.status(403).json({ error_code: 'FORBIDDEN' });
-  deleteDraftFigure(id);
-  logger.info(`[werkstatt] delete id=${id}`);
+  const draft = scopedDraft(req, res, req.params.id);
+  if (!draft) return;
+  deleteDraftFigure(draft.id);
+  logger.info(`[werkstatt] delete id=${draft.id}`);
   res.json({ ok: true });
 });
 

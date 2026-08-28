@@ -1,4 +1,4 @@
-// Satzrhythmus-Band: die reinen Compute-Funktionen aus public/js/book/stil-rhythmus.js.
+// Satzrhythmus-Band: die reinen Compute-Funktionen aus lib/stil-rhythmus.js.
 // Getestet wird, was ein Aggregat NICHT leisten kann — dass die Reihenfolge in
 // den Wert eingeht — plus die Aggregation der Satzanfänge über Seiten hinweg.
 
@@ -9,7 +9,7 @@ import {
   computeSequenceStats,
   computeRhythmBands,
   computeOpeners,
-} from '../../public/js/book/stil-rhythmus.js';
+} from '../../lib/stil-rhythmus.js';
 
 test('computeSequenceStats: leere Sequenz liefert null statt 0', () => {
   const s = computeSequenceStats([]);

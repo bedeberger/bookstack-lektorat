@@ -46,6 +46,9 @@ export function registerWorldFactsCard() {
     fakten: [],
     wfUpdatedAt: null,
     wfLoading: false,
+    // Lief die Komplettanalyse schon? Trennt „nie analysiert" von „analysiert,
+    // nichts gefunden" — sonst fordert der Leer-Zustand einen Lauf, der lief.
+    wfScanned: false,
     wfFilters: { suche: '', kategorie: '', seite: '' },
     wfOpenGroups: {},
     _lifecycle: null,
@@ -56,7 +59,7 @@ export function registerWorldFactsCard() {
       this._lifecycle = setupCardLifecycle(this, {
         name: 'weltfakten',
         showFlag: 'showWorldFactsCard',
-        resetState: { fakten: [], wfUpdatedAt: null, wfLoading: false, wfOpenGroups: {} },
+        resetState: { fakten: [], wfUpdatedAt: null, wfLoading: false, wfScanned: false, wfOpenGroups: {} },
         filterScopes: WF_FILTER_SCOPES,
         load: () => this.loadWorldFacts(),
       });
@@ -74,6 +77,7 @@ export function registerWorldFactsCard() {
         const data = await fetchJson('/world-facts/' + bookId);
         this.fakten = data?.fakten || [];
         this.wfUpdatedAt = data?.updated_at || null;
+        this.wfScanned = !!data?.scanned;
         this._memos = {};
         // Glossar startet aufgeklappt — reine Nachschlage-Ansicht, alle Gruppen offen.
         const open = {};

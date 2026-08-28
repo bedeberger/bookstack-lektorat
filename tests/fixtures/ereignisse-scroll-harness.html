@@ -27,7 +27,7 @@
         <div class="gz-band-track">
           <template x-for="m in bandModel().markers" :key="m.kind + m.id">
             <button type="button" class="gz-band-marker"
-                    :style="bandMarkerStyle(m)" :data-ev-id="m.id"
+                    :style="bandMarkerStyle(m)" :data-ev-index="m.id"
                     @click="onBandMarkerClick(m.id)"></button>
           </template>
         </div>

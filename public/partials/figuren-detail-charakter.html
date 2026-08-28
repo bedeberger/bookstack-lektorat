@@ -1,0 +1,65 @@
+<!-- Figur-Detail: Charakter (Innenleben + Entwicklung)
+     Fragment der Figurenübersicht — eingebunden via `<!-- @include figuren-detail-charakter -->`
+     in figuren-detail.html. String-seitiger Include statt DOM-Placeholder, weil
+     der Block INNERHALB des `x-for` über die Figuren steht (querySelector steigt
+     nicht in Template-Content ab). Scope ist damit `figurenCard` + die
+     Schleifenvariable `f`; Root-Zugriffe laufen über `$app`.
+-->
+<!-- ===== Gruppe: Charakter (Innenleben + Entwicklung) ===== -->
+<section class="figur-group" x-show="f.motivation || f.konflikt || f.hintergrund || (f.arc && (f.arc.anfang || f.arc.ende || f.arc.wendepunkte?.length)) || (!f.arc && f.entwicklung) || f.eigenschaften?.length || f.schluesselzitate?.length">
+  <h4 class="figur-group-title" x-text="$app.t('figuren.group.charakter')"></h4>
+  <div x-show="f.motivation" class="figur-detail-row">
+    <span class="bewertung-section-title bewertung-section-title--inline" x-text="$app.t('figuren.field.motivation') + ' '"></span>
+    <span class="figur-detail-value" x-text="f.motivation"></span>
+  </div>
+  <div x-show="f.konflikt" class="figur-detail-row">
+    <span class="bewertung-section-title bewertung-section-title--inline" x-text="$app.t('figuren.field.konflikt') + ' '"></span>
+    <span class="figur-detail-value" x-text="f.konflikt"></span>
+  </div>
+  <div x-show="f.hintergrund" class="figur-detail-row">
+    <span class="bewertung-section-title bewertung-section-title--inline" x-text="$app.t('figuren.field.hintergrund') + ' '"></span>
+    <span class="figur-detail-value" x-text="f.hintergrund"></span>
+  </div>
+  <!-- Entwicklungsbogen (strukturiert); Fallback flacher entwicklung-String -->
+  <div x-show="(f.arc && (f.arc.anfang || f.arc.ende || f.arc.wendepunkte?.length)) || (!f.arc && f.entwicklung)" class="figur-arc">
+    <div class="bewertung-section-title" x-text="$app.t('figuren.field.arc')"></div>
+    <template x-if="f.arc && (f.arc.anfang || f.arc.ende || f.arc.wendepunkte?.length)">
+      <div class="figur-arc-body">
+        <div x-show="f.arc.anfang" class="figur-kerninfo-row">
+          <span class="bewertung-section-title bewertung-section-title--inline" x-text="$app.t('figuren.field.arcAnfang') + ' '"></span>
+          <span class="figur-detail-value" x-text="f.arc.anfang"></span>
+        </div>
+        <ol x-show="f.arc.wendepunkte?.length" class="figur-arc-stations">
+          <template x-for="(w, wi) in (f.arc.wendepunkte || [])" :key="wi">
+            <li x-text="w"></li>
+          </template>
+        </ol>
+        <div x-show="f.arc.ende" class="figur-kerninfo-row">
+          <span class="bewertung-section-title bewertung-section-title--inline" x-text="$app.t('figuren.field.arcEnde') + ' '"></span>
+          <span class="figur-detail-value" x-text="f.arc.ende"></span>
+        </div>
+      </div>
+    </template>
+    <template x-if="!f.arc && f.entwicklung">
+      <span class="figur-detail-value" x-text="f.entwicklung"></span>
+    </template>
+  </div>
+  <!-- Eigenschaften -->
+  <div x-show="f.eigenschaften?.length">
+    <div class="bewertung-section-title" x-text="$app.t('figuren.field.eigenschaften')"></div>
+    <ul class="bullet-list figur-eigenschaften-list">
+      <template x-for="(e, i) in (f.eigenschaften || [])" :key="i">
+        <li x-text="e"></li>
+      </template>
+    </ul>
+  </div>
+  <!-- Schluesselzitate -->
+  <div x-show="f.schluesselzitate?.length">
+    <div class="bewertung-section-title" x-text="$app.t('figuren.field.schluesselzitate')"></div>
+    <ul class="bullet-list figur-zitate-list">
+      <template x-for="(z, i) in (f.schluesselzitate || [])" :key="i">
+        <li class="figur-zitat" x-text="'«' + z + '»'"></li>
+      </template>
+    </ul>
+  </div>
+</section>

@@ -1,10 +1,18 @@
-// Shared Math fuer Tages-Schreibziel.
+// Shared Math fuer Tages-Schreibziel und Tagesbilanzen eines Buchs.
 // Konsumenten:
-//   - Buch-Overview-Karte: overviewTodayRing (r=28) + _charsTodayDelta
-//   - Header-Donut links neben Avatar: headerTodayRing (r=14)
+//   - Header-Donut links neben Avatar: headerTodayRing (r=14), headerWeekBars,
+//     headerStreak (app-view/bookscope.js)
+//   - Buch-Overview-Karte: overviewTodayRing (r=28), overviewLast7Days
+//     und die Streak-Heatmap (book-overview/stats.js)
 //
-// Live-Delta = Σ-chars aus tokEsts − letzter Snapshot strikt vor heute.
-// Negativ wird auf 0 geklemmt (Lösch-Edits zählen nicht zurück). Fehlt
+// `makeDayDelta` ist die SSoT der Frage „wie viele Zeichen entfallen auf diesen
+// Kalendertag". Jede Oberflaeche, die Tagesbalken, eine Schreib-Serie oder eine
+// Heatmap zeichnet, geht durch sie — sonst zeigen Header-Popover und
+// Uebersichts-Kachel fuer denselben Tag verschiedene Zahlen, obwohl beide
+// dieselbe /history/book-stats-Antwort und dasselbe tokEsts lesen.
+//
+// Live-Delta fuer heute = Σ-chars aus tokEsts − letzter Snapshot strikt vor
+// heute. Negativ wird auf 0 geklemmt (Lösch-Edits zählen nicht zurück). Fehlt
 // einer der beiden Werte (z.B. neues Buch ohne Vortagssnapshot), wird 0
 // geliefert — Donut bleibt leer statt falsch optimistisch zu fuellen.
 import { aggregateLiveBookStats, localIsoDate, CHARS_PER_NORMSEITE } from './utils.js';
@@ -45,21 +53,15 @@ function isoMinusDays(iso, n) {
 }
 
 // Kumulativ-Zeichen am letzten Snapshot <= iso (Snapshots sind kumulative
-// Tagesstaende; fehlt ein Tag, gilt der letzte davor).
+// Tagesstaende; fehlt ein Tag, gilt der letzte davor). Dieses Nachziehen ist
+// der Grund, warum ein ausgefallener Cron-Lauf nur den Tag selbst als Nulltag
+// zeigt und nicht zusaetzlich den FOLGETAG verschluckt: dessen Vortagswert
+// waere ohne Nachziehen unbekannt, und die an dem Tag geschriebenen Zeichen
+// fielen aus jeder Bilanz.
 function cumOnOrBefore(sortedIsos, cumByIso, iso) {
   let val = null;
   for (const k of sortedIsos) { if (k <= iso) val = cumByIso.get(k); else break; }
   return val;
-}
-
-// Zeichen, die an einem Kalendertag geschrieben wurden: heute live (gleiche
-// Quelle wie der Donut), sonst Snapshot-Delta gegen den Vortag.
-function dayChars(iso, todayIso, sortedIsos, cumByIso, stats, tokEsts) {
-  if (iso === todayIso) return computeCharsTodayDelta(stats, tokEsts);
-  const cur = cumOnOrBefore(sortedIsos, cumByIso, iso);
-  const prev = cumOnOrBefore(sortedIsos, cumByIso, isoMinusDays(iso, 1));
-  if (cur == null || prev == null) return 0;
-  return Math.max(0, cur - prev);
 }
 
 function buildCumMap(stats) {
@@ -70,15 +72,54 @@ function buildCumMap(stats) {
   return { cumByIso, sortedIsos: [...cumByIso.keys()].sort() };
 }
 
+/**
+ * Tagesbilanz-Funktion fuer ein Buch: `iso` → Zeichen dieses Kalendertags.
+ *
+ * `null` heisst „keine Datenlage" (der Tag liegt vor dem ersten Snapshot) und
+ * ist bewusst von `0` („gemessen, nichts geschrieben") unterschieden: die
+ * Streak-Heatmap zeichnet das eine als leere Zelle und das andere als Nulltag,
+ * und die Zell-Tooltips sagen Verschiedenes.
+ *
+ * Der Wert ist VORZEICHENBEHAFTET — ein Loesch-Edit ergibt ein negatives Delta.
+ * Oberflaechen mit Ziel-Semantik (Donut, Fortschrittsbalken) klemmen selbst auf
+ * 0; die Netto-Bilanz der Uebersicht zeigt das Minus bewusst an.
+ *
+ * @param {object} opts
+ * @param {Array}  opts.stats     /history/book-stats-Rows { recorded_at, chars }.
+ * @param {object} opts.tokEsts   Live-Zeichenstand pro Seite.
+ * @param {string} [opts.todayIso] Heutiger Kalendertag (TZ-aware).
+ * @returns {(iso: string) => number|null}
+ */
+export function makeDayDelta({ stats = [], tokEsts = {}, todayIso = localIsoDate() } = {}) {
+  const { cumByIso, sortedIsos } = buildCumMap(stats);
+  const todayDelta = computeCharsTodayDelta(stats, tokEsts);
+  return (iso) => {
+    // Heute zaehlt der Live-Stand, sobald er etwas hergibt — er ist frischer
+    // als jeder Cron-Snapshot. Sonst faellt der Tag auf den Snapshot-Vergleich
+    // zurueck (Buch heute noch nicht geoeffnet, tokEsts leer).
+    if (iso === todayIso && todayDelta > 0) return todayDelta;
+    const cur = cumOnOrBefore(sortedIsos, cumByIso, iso);
+    if (cur == null) return null;
+    const prev = cumOnOrBefore(sortedIsos, cumByIso, isoMinusDays(iso, 1));
+    if (prev == null) return null;
+    return cur - prev;
+  };
+}
+
+// Ziel-Semantik: unbekannt und negativ sind beide „heute nichts geschafft".
+function clampDay(dayDelta, iso) {
+  return Math.max(0, dayDelta(iso) ?? 0);
+}
+
 // Letzte `days` Kalendertage (aeltester zuerst) als Balken-Daten fuer das
 // Header-Popover. Heute-Balken = Live-Delta, deckt sich mit dem Donut.
 export function computeWeekBars({ stats = [], tokEsts = {}, days = 7, goalChars = CHARS_PER_NORMSEITE, todayIso = localIsoDate() } = {}) {
   const goal = Math.max(1, Number(goalChars) || CHARS_PER_NORMSEITE);
-  const { cumByIso, sortedIsos } = buildCumMap(stats);
+  const dayDelta = makeDayDelta({ stats, tokEsts, todayIso });
   const out = [];
   for (let i = days - 1; i >= 0; i--) {
     const iso = isoMinusDays(todayIso, i);
-    const chars = dayChars(iso, todayIso, sortedIsos, cumByIso, stats, tokEsts);
+    const chars = clampDay(dayDelta, iso);
     out.push({
       iso,
       chars,
@@ -94,12 +135,12 @@ export function computeWeekBars({ stats = [], tokEsts = {}, days = 7, goalChars 
 // ab heute. Ist heute noch 0 geschrieben, bricht das die Serie nicht sofort
 // (Kulanz) — gezaehlt wird dann ab gestern.
 export function computeWritingStreak({ stats = [], tokEsts = {}, maxLookback = 400, todayIso = localIsoDate() } = {}) {
-  const { cumByIso, sortedIsos } = buildCumMap(stats);
-  const todayChars = dayChars(todayIso, todayIso, sortedIsos, cumByIso, stats, tokEsts);
+  const dayDelta = makeDayDelta({ stats, tokEsts, todayIso });
+  const todayChars = clampDay(dayDelta, todayIso);
   let streak = 0;
   for (let i = (todayChars === 0 ? 1 : 0); i < maxLookback; i++) {
     const iso = isoMinusDays(todayIso, i);
-    if (dayChars(iso, todayIso, sortedIsos, cumByIso, stats, tokEsts) > 0) streak++;
+    if (clampDay(dayDelta, iso) > 0) streak++;
     else break;
   }
   return streak;

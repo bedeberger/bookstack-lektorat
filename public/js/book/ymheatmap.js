@@ -6,9 +6,11 @@
 import { localIsoDate } from '../utils.js';
 
 // Quartil-Bucketing über positive Zählwerte → `levelFor(n)` ∈ {0..4}.
-// Level 0 = keine Einträge; 1..4 = Quartile der positiven Monats-Eintragszahlen
-// (analog overviewStreakHeatmap). Bei nur einer Datenlage kollabieren Stufen —
-// das ist gewollt (wenig Varianz = wenig Farbabstufung).
+// Level 0 = keine Einträge; 1..4 = Quartile der positiven Zählwerte. Bei nur
+// einer Datenlage kollabieren Stufen — das ist gewollt (wenig Varianz = wenig
+// Farbabstufung). Dritter Konsument neben den beiden Jahr×Monat-Heatmaps ist
+// das Wochen-Raster [public/js/streak-grid.js] — die Einfärbungs-Regel gilt für
+// beide Heatmap-Formen und existiert nur hier.
 export function quartileLevelFor(counts) {
   const sorted = [...counts].filter((c) => c > 0).sort((a, b) => a - b);
   const q = (p) => (sorted.length === 0 ? 0 : sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))]);

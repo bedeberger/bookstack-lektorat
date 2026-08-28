@@ -105,7 +105,12 @@
   background: var(--color-card-bg);
   border-left: 0.5px solid var(--color-border);
 }
-.mybooks-actions {
+/* Der Knopf-Streifen liegt in einem eigenen Kasten IN der Zelle. Ein
+   `display: flex` auf dem <td> selbst nimmt der Zelle ihre Tabellenzellen-
+   Rolle (der Browser schiebt eine anonyme Zelle darum): Rahmen, Hintergrund
+   und Hoehe der Aktions-Spalte laufen dann nicht mehr mit der Zeile mit,
+   sondern nur noch mit den Knoepfen. */
+.mybooks-actions-row {
   display: flex;
   gap: var(--space-2xs);
   justify-content: flex-end;

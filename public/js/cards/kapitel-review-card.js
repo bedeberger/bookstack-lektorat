@@ -474,7 +474,9 @@ export function registerKapitelReviewCard() {
           chapterItem.pages = [...chapterItem.pages, newPage];
           chapterItem.open = true;
         }
-        root.tokEsts[newPage.id] = { tok: 0, words: 0, chars: 0 };
+        // Reassignment statt Index-Assign: der `tokTotals`-Memo haengt an der
+        // Identitaet von `tokEsts` (app/app-root-getters.js).
+        root.tokEsts = { ...root.tokEsts, [newPage.id]: { tok: 0, words: 0, chars: 0 } };
         await root.selectPage(newPage);
       } catch (e) {
         console.error('[createKapitelPage]', e);

@@ -50,6 +50,11 @@ export const crudMethods = {
     }
   },
 
+  // Vollstaendiger Karten-Reset (Buchwechsel, view:reset). Verdrahtet in
+  // figur-werkstatt-card.js als onBookChanged/onViewReset — NICHT als
+  // resetState-Literal: ein Object.assign kann die jsMind-Instanz nicht
+  // abraeumen, die Poll-Timer nicht stoppen und das Vollbild nicht verlassen.
+  // Wer hier ein Feld ergaenzt, ergaenzt es an genau dieser Stelle.
   resetDrafts() {
     this._destroyMindmap();
     this._clearJobs();
@@ -79,7 +84,17 @@ export const crudMethods = {
     this.plotUsage = null;
     this.selectedRunId = null;
     this.selectedKonfliktIdx = null;
+    this.runsLoading = false;
+    this.importablesLoading = false;
+    this.werkstattMenuOpen = false;
+    this.contextMenuNodeId = null;
+    this.loading = false;
     this._mindmapDirty = false;
+    this._runsLoadDraftId = null;
+    // Geparkte Permalink-Ziele gehoeren zum alten Buch — sonst springt die
+    // Karte nach dem Wechsel auf eine Figur, die es hier nicht gibt.
+    this._pendingDraftId = null;
+    this._pendingKnotenId = null;
   },
 
   async selectDraft(id) {

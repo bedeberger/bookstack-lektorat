@@ -206,6 +206,9 @@ export const settingsMethods = {
         progress.dailyProgressDailyGoalChars = Number.isFinite(Number(this.bookSettingsDailyGoalChars))
           ? Number(this.bookSettingsDailyGoalChars) : null;
       }
+      // Der rohe /booksettings-Stand im geteilten Store (Buchtyp, Schreibziel,
+      // Deadline, Zitierstil) ist nach dem Speichern ueberholt.
+      window.__app?.invalidateBookSettingsCache?.();
       if (this._savedAtTimer) clearTimeout(this._savedAtTimer);
       this._savedAtTimer = setTimeout(() => { this.bookSettingsSaved = false; this._savedAtTimer = null; }, 2500);
     } catch (e) {

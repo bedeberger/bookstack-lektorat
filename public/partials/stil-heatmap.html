@@ -9,7 +9,7 @@
     <div class="card-header-titlebar">
       <span class="card-eyebrow" x-text="$app.selectedBookName"></span>
       <span class="card-title" x-text="$app.t('stil.title')"></span>
-      <div class="card-subline" x-show="stilData?.last_updated && !stilSyncing && !stilLoading">
+      <div class="card-subline" x-show="stilData?.lastUpdated && !stilSyncing && !stilLoading">
         <span class="card-timestamp" x-text="stilLastUpdatedLabel()"></span>
       </div>
     </div>
@@ -26,10 +26,10 @@
 
   <div x-show="stilStatus" class="card-status" x-html="stilStatus"></div>
 
-  <div x-show="!stilLoading && !stilSyncing && (!stilData?.pages || stilData.pages.length === 0)"
+  <div x-show="!stilLoading && !stilSyncing && !stilHasData()"
        class="muted-msg muted-msg--spaced" x-text="$app.t('stil.emptyState')"></div>
 
-  <template x-if="stilData?.pages?.length > 0">
+  <template x-if="stilHasData()">
     <div class="heatmap-wrap">
       <div class="heatmap-legend" x-text="$app.t('stil.legend')"></div>
 
@@ -47,28 +47,22 @@
             </tr>
           </thead>
           <tbody>
-            <template x-for="c in stilChaptersAggregated()" :key="c.key">
+            <template x-for="c in stilRows()" :key="c.key">
               <tr>
                 <th class="heatmap-rowhead" scope="row">
                   <span class="heatmap-rowhead-main"
                         :class="{ 'internal-link': c.key !== '__uncat__' }"
                         @click="c.key !== '__uncat__' && stilJumpToChapter(c.key)"
-                        x-text="c.name"></span>
+                        x-text="stilChapterName(c.name)"></span>
                   <span class="heatmap-rowhead-sub" x-text="$app.t('stil.pagesCount', { n: c.pageCount })"></span>
                 </th>
-                <td class="heatmap-numcol" x-text="(c.words || 0).toLocaleString($store.shell.uiLocale === 'en' ? 'en-US' : 'de-CH')"></td>
+                <td class="heatmap-numcol" x-text="c.wordsLabel"></td>
                 <template x-for="m in stilMetricDefs" :key="m.key">
                   <td class="heatmap-cell"
-                      :class="[
-                        ('heatmap-cell--' + stilCellKind(c[m.key], m.key, stilChaptersAggregated())),
-                        {
-                          'heatmap-cell--clickable': stilIsClickableMetric(m.key) && (c[m.key] || 0) > 0,
-                          'heatmap-cell--active': activeStilDetailKey === (c.key + ':' + m.key),
-                        }
-                      ]"
-                      :style="stilCellVars(c[m.key], m.key, stilChaptersAggregated())"
-                      @click="stilIsClickableMetric(m.key) && (c[m.key] || 0) > 0 && toggleStilDetail(c.key, m.key)"
-                      x-text="stilFormat(c[m.key], m.key)">
+                      :class="[c.cells[m.key].cls, { 'heatmap-cell--active': activeStilDetailKey === c.cells[m.key].detailKey }]"
+                      :style="c.cells[m.key].vars"
+                      @click="c.cells[m.key].clickable && toggleStilDetail(c.key, m.key)"
+                      x-text="c.cells[m.key].text">
                   </td>
                 </template>
               </tr>
@@ -77,24 +71,31 @@
         </table>
       </div>
 
-      <!-- Detail-Panel: Treffer-Beispiele für die angeklickte Zelle -->
-      <template x-if="stilActiveDetail()">
+      <!-- Detail-Panel: Treffer-Beispiele für die angeklickte Zelle.
+           Werden pro Zelle nachgeladen (/history/style-samples) — siehe
+           public/js/book/stil-heatmap.js#toggleStilDetail. -->
+      <template x-if="stilDetailLoading">
+        <div class="heatmap-detail">
+          <div class="muted-msg"><span class="spinner"></span><span x-text="$app.t('stil.detail.loading')"></span></div>
+        </div>
+      </template>
+      <template x-if="stilDetail && !stilDetailLoading">
         <div class="heatmap-detail">
           <div class="card-section-head card-section-head--baseline">
             <span class="heatmap-detail-title"
                   x-text="$app.t('stil.detail.title', {
-                    metric: stilActiveDetail().metricLabel,
-                    chapter: stilActiveDetail().chapterName,
+                    metric: stilDetail.metricLabel,
+                    chapter: stilDetail.chapterName,
                   })"></span>
             <button type="button" class="heatmap-detail-close"
-                    @click="activeStilDetailKey = null"
+                    @click="closeStilDetail()"
                     :data-tip="$app.t('common.close')" :aria-label="$app.t('common.close')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#x"/></svg></button>
           </div>
           <div class="heatmap-detail-list">
-            <template x-if="stilActiveDetail().entries.length === 0">
+            <template x-if="stilDetail.entries.length === 0">
               <div class="muted-msg" x-text="$app.t('stil.detail.empty')"></div>
             </template>
-            <template x-for="page in stilActiveDetail().entries" :key="page.page_id">
+            <template x-for="page in stilDetail.entries" :key="page.page_id">
               <div class="heatmap-detail-page">
                 <div class="heatmap-detail-page-header">
                   <span class="tag internal-link"
@@ -102,9 +103,9 @@
                         x-text="page.page_name"></span>
                   <span class="heatmap-detail-page-count" x-text="$app.t('fehlerHeatmap.detail.countLabel', { n: page.count })"></span>
                 </div>
-                <template x-if="page.samples">
+                <template x-if="page.tokens">
                   <div class="heatmap-detail-token-groups">
-                    <template x-for="(g, i) in stilGroupSamplesByToken(page.samples)" :key="i">
+                    <template x-for="(g, i) in page.tokens" :key="i">
                       <div class="heatmap-detail-token-group">
                         <span class="tag stil-repetition-word heatmap-detail-token" x-text="g.token"></span>
                         <div class="heatmap-detail-token-sentences">
@@ -136,9 +137,10 @@
     Teil, den die Heatmap oben nicht zeigen kann: dort steht ein Mittelwert, und
     derselbe Mittelwert entsteht aus lauter gleich langen Sätzen wie aus dem
     ständigen Wechsel kurz/lang. Der Unterschied ist der Rhythmus.
-    Berechnung: public/js/book/stil-rhythmus.js.
+    Berechnung: lib/stil-rhythmus.js (serverseitig), Anzeige:
+    public/js/book/stil-rhythmus.js.
   -->
-  <template x-if="stilData?.pages?.length > 0 && stilHasRhythm()">
+  <template x-if="stilHasData() && stilHasRhythm()">
     <div class="stil-rhythm">
       <div class="stil-rhythm-head">
         <h3 class="stil-rhythm-title" x-text="$app.t('stil.rhythm.title')"></h3>
@@ -153,14 +155,14 @@
               <span class="stil-rhythm-name"
                     :class="{ 'internal-link': r.key !== '__uncat__' }"
                     @click="r.key !== '__uncat__' && stilJumpToChapter(r.key)"
-                    x-text="r.name"></span>
+                    x-text="stilChapterName(r.name)"></span>
               <span class="stil-rhythm-meta"
                     x-text="$app.t('stil.rhythm.meta', { n: r.count, avg: stilNum(r.mean), p90: r.p90 })"></span>
             </div>
 
             <svg class="stil-rhythm-band" :viewBox="stilRhythmData().viewBox"
                  preserveAspectRatio="none" role="img"
-                 :aria-label="$app.t('stil.rhythm.bandAria', { chapter: r.name, avg: stilNum(r.mean), longest: r.longest })">
+                 :aria-label="$app.t('stil.rhythm.bandAria', { chapter: stilChapterName(r.name), avg: stilNum(r.mean), longest: r.longest })">
               <polygon class="stil-rhythm-area" :points="r.points"></polygon>
             </svg>
 
@@ -210,6 +212,6 @@
 
   <!-- Seiten da, aber noch keine Sequenz-Felder (Seiten auf älterer metrics_version). -->
   <div class="muted-msg muted-msg--spaced"
-       x-show="stilData?.pages?.length > 0 && !stilHasRhythm() && !stilSyncing && !stilLoading"
+       x-show="stilHasData() && !stilHasRhythm() && !stilSyncing && !stilLoading"
        x-text="$app.t('stil.rhythm.pending')"></div>
 </div>

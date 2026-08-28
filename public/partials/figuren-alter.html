@@ -109,7 +109,7 @@
                      aus. -->
                 <span class="history-chevron"
                       :class="{ open: figurenAlterOpenId === row.id, 'figur-alter-chevron--empty': !row.belege.length }"
-                      aria-hidden="true">›</span>
+                      aria-hidden="true"></span>
                 <span class="figur-typ-dot" :class="'figur-typ-dot--' + row.typ"></span>
                 <span class="internal-link" @click.stop="$app.openFigurById(row.id)"
                       :data-tip="$app.t('figuren.alter.openFigur')" x-text="row.name"></span>

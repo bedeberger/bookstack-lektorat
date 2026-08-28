@@ -1,95 +1,9 @@
 @layer components {
-/* === Figuren: Knoten-Legende === */
-.figur-legend-dot--hauptfigur  { --fig-hue: var(--palette-blue); }
-.figur-legend-dot--antagonist  { --fig-hue: var(--palette-red); }
-.figur-legend-dot--mentor      { --fig-hue: var(--palette-green); }
-.figur-legend-dot--nebenfigur  { --fig-hue: var(--palette-gray); }
-.figur-legend-dot--randfigur   { --fig-hue: var(--palette-gray-light); }
-.figur-legend-dot--andere      { --fig-hue: var(--color-accent); }
-
-/* Sozialschicht-Legende (Soziogramm-Modus, Schweiz Mittelland 90er–2010er) */
-.figur-legend-dot--wirtschaftselite     { --fig-hue: var(--palette-amber); }
-.figur-legend-dot--gehobenes_buergertum { --fig-hue: var(--palette-blue); }
-.figur-legend-dot--mittelschicht        { --fig-hue: var(--palette-green); }
-.figur-legend-dot--arbeiterschicht      { --fig-hue: var(--palette-brown); }
-.figur-legend-dot--migrantenmilieu      { --fig-hue: var(--palette-orange); }
-.figur-legend-dot--prekariat            { --fig-hue: var(--palette-wine); }
-/* Unterwelt: invertierte Darstellung (dunkler Hintergrund, helle Linie) – braucht starken Mix */
-.figur-legend-dot--unterwelt            { --fig-hue: var(--palette-dark); --figpal-bg-mix: 95%; border-color: var(--color-border-contrast); }
-:root[data-theme="dark"] .figur-legend-dot--unterwelt {
-  --fig-hue: var(--palette-gray-light);
-  border-color: var(--palette-dark);
-}
-
-/* === Figuren: Kanten-Legende === */
-.figur-legend--soziogramm { flex-wrap: wrap; row-gap: var(--space-xs); }
-
-.figur-legend-entry {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-}
-
-/* === Figuren: kollabierbare Legende ===
-   Die Legende steht zwischen der Modus-Tab-Reihe und der Graph-Toolbar und
-   muss ihren Abstand nach BEIDEN Seiten selbst mitbringen: die Tab-Reihe hat
-   keine Bottom-Margin, sonst klebt die Caps-Zeile an deren Unterkante.
-   Nach unten faellt der Wert etwas kleiner aus als nach oben — die Legende
-   gehoert zum Graphen, den sie erklaert, nicht zur Tab-Reihe darueber.
-   Achtung beim Nachjustieren: `.figuren-graph-toolbar` bringt 8px Top-Margin
-   mit, die durch die randlose `.figuren-graph-wrap` nach aussen durchschlaegt
-   und mit der Bottom-Margin hier kollabiert (wirksam ist der groessere Wert). */
-.figur-legend-wrap {
-  margin-top: var(--space-md);
-  margin-bottom: var(--space-10);
-}
-.figur-legend-body {
-  margin-top: var(--space-sm);
-}
-.figur-legend-body .figur-soziogramm-hint {
-  margin: var(--space-xs) 0 0;
-}
-.figur-legend-sep {
-  display: inline-block;
-  width: 1px;
-  height: 10px;
-  background: var(--color-border);
-  margin: 0 var(--space-2xs);
-}
-
-.figur-edge-line {
-  display: inline-block;
-  width: 18px;
-  height: 2px;
-}
-.figur-edge-line--eltern          { --edge-hue: var(--palette-gray);   background: var(--edge-hue); }
-.figur-edge-line--geschwister     { --edge-hue: var(--palette-blue);   background: var(--edge-hue); border-top: 2px dashed var(--edge-hue); }
-.figur-edge-line--freund          { --edge-hue: var(--palette-green);  background: var(--edge-hue); border-top: 2px dashed var(--edge-hue); }
-.figur-edge-line--feind           { --edge-hue: var(--palette-red);    background: var(--edge-hue); border-top: 2px dashed var(--edge-hue); }
-.figur-edge-line--liebesbeziehung { --edge-hue: var(--palette-pink);   background: var(--edge-hue); border-top: 2px dashed var(--edge-hue); }
-.figur-edge-line--patronage       { --edge-hue: var(--palette-purple); background: var(--edge-hue); height: 3px; }
-.figur-edge-line--geschaeft       { --edge-hue: var(--palette-amber);  background: var(--edge-hue); border-top: 2px dashed var(--edge-hue); }
-
-/* === Figuren: Soziogramm-Hint + Actions === */
-.soziogramm-placeholder {
-  display: block;
-  padding: var(--space-2xl) var(--space-20);
-  text-align: center;
-  line-height: 1.6;
-}
-
-.figur-soziogramm-hint {
-  font-size: var(--font-size-xs);
-  color: var(--color-muted);
-  margin: var(--space-xs) 0 var(--space-sm);
-}
-.figur-soziogramm-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-10);
-  margin-bottom: var(--space-6);
-}
 /* === Figuren: Sozialschicht- + Präsenz-Badge ===
+   Die Schicht-Toene spiegeln die Sozialschicht-Legende des Soziogramms
+   (`.figur-legend-dot--<schicht>` in figuren-graph.css). Beim Aendern beide
+   anfassen — die Plakette fuellt die Flaeche, der Legendenpunkt zeichnet nur
+   die Kontur, darum zwei Custom-Properties statt einer.
    Gemeinsames Pattern (vgl. .palette-badge in utilities.css). Setzt
    --badge-hue lokal pro Modifier; Hintergrund + Text werden via color-mix
    abgeleitet. */
@@ -262,12 +176,6 @@
   color: var(--color-muted);
 }
 
-/* === Figuren: Graph-Bereich === */
-.figur-graph-section { margin-top: var(--space-14); position: relative; }
-
-/* Der Hover-Tooltip über dem Graph ist die geteilte Komponente `.graph-tooltip`
-   ([components/graph-tooltip.css](../components/graph-tooltip.css)). */
-
 /* === Figuren: Listen-Bereich === */
 /* Verhindert Scroll-Anchoring im Listen-Bereich: wenn figur-detail aufklappt,
    soll kein figur-item als Anchor gewählt und die Scroll-Position nicht
@@ -293,38 +201,6 @@
   margin-bottom: 0;
 }
 
-/* === Figurengraph: Kapitel-Filter === */
-.figuren-graph-filter {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-5);
-  align-items: center;
-}
-.figuren-graph-filter-btn {
-  padding: var(--space-2xs) 9px;
-  font-size: var(--font-size-sm);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-bg);
-  color: var(--color-muted);
-  cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
-  white-space: nowrap;
-}
-.figuren-graph-filter-btn:hover:not(.figuren-graph-filter-btn--active) {
-  background: var(--color-hover);
-  color: var(--color-text);
-}
-.figuren-graph-filter-btn--active {
-  background: var(--color-primary);
-  color: var(--color-surface);
-  border-color: var(--color-primary);
-  font-weight: var(--fw-bold);
-}
-.figuren-graph-filter-btn--active:hover {
-  background: var(--color-primary);
-  color: var(--color-surface);
-}
 
 .figur-beschreibung {
   font-size: var(--font-size-base);
@@ -514,6 +390,121 @@
   .figur-presence-table td.figur-presence-cell { width: 16px; min-width: 16px; height: 20px; }
   .figur-presence-table th.figur-presence-colhead { min-width: 16px; font-size: var(--font-size-xs, 11px); }
   .figur-presence-strip-cell { width: 13px; height: 13px; }
+}
+
+
+.figur-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-10);
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-2xs);
+  cursor: pointer;
+  user-select: none;
+}
+.figur-item:hover { background: var(--color-hover); }
+
+/* Verwaiste Figur: in der letzten Komplettanalyse nicht mehr gefunden, aber
+   wegen externer Verknüpfungen (Plot/Recherche/Events) bewusst erhalten. Gedämpft
+   dargestellt, ohne aus der Liste zu verschwinden. */
+.figur-item--stale { opacity: 0.6; }
+.figur-item--stale .figur-name { font-style: italic; }
+.tag--stale {
+  background: color-mix(in srgb, var(--palette-gray) 18%, var(--color-surface));
+  color: var(--color-muted);
+}
+
+/* === Figuren: Farbton je Figurentyp — EINE Zuordnung ===
+   Gelesen vom Listenpunkt (`.figur-typ-dot`, gefuellter Kreis) und vom
+   Legendenpunkt des Graphen (`.figur-legend-dot`, Kontur-Quadrat in
+   figuren-graph.css).
+   Why zusammengelegt: die zwei standen getrennt und mit VERSCHIEDENEN Werten da
+   — hauptfigur einmal `--color-primary`, einmal `--palette-blue`; antagonist
+   `--color-err-border` gegen `--palette-red`. Die Legende erklaerte damit
+   Farben, die die Liste nicht benutzte.
+   Massgeblich ist die Palette, weil sie zugleich die des Netzes ist
+   (`--palette-blue` == TYP_COLOR.hauptfigur.border in graph/constants.js) —
+   Liste, Legende und Graph zeigen so denselben Ton.
+   Die Reihenfolge der Typen selbst: public/js/book/figur-typen.js. */
+.figur-typ-dot--hauptfigur,
+.figur-legend-dot--hauptfigur  { --fig-hue: var(--palette-blue); }
+.figur-typ-dot--antagonist,
+.figur-legend-dot--antagonist  { --fig-hue: var(--palette-red); }
+.figur-typ-dot--mentor,
+.figur-legend-dot--mentor      { --fig-hue: var(--palette-green); }
+.figur-typ-dot--nebenfigur,
+.figur-legend-dot--nebenfigur  { --fig-hue: var(--palette-gray); }
+.figur-typ-dot--randfigur,
+.figur-legend-dot--randfigur   { --fig-hue: var(--palette-gray-light); }
+.figur-typ-dot--andere,
+.figur-legend-dot--andere      { --fig-hue: var(--color-accent); }
+
+/* Ohne bekannten Typ (`figur-typ-dot--unknown`) bleibt der neutrale Rahmenton. */
+.figur-typ-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--fig-hue, var(--color-border));
+}
+
+.figur-name {
+  font-size: var(--font-size-sm);
+  font-weight: var(--fw-regular);
+  flex: 1;
+}
+
+.figur-rel-tag {
+  font-size: var(--font-size-xs);
+}
+
+.figur-beziehung-item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-6);
+  padding: var(--space-sm) 0;
+  border-bottom: 0.5px solid var(--color-border);
+  flex-wrap: wrap;
+}
+.figur-beziehung-item:last-child { border-bottom: none; }
+
+.figur-bz-typ {
+  --rel-hue: var(--palette-gray);
+  font-size: var(--font-size-xs);
+  font-weight: var(--fw-regular);
+  padding: var(--space-2xs) 7px;
+  border-radius: 0;
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--rel-hue) var(--figpal-bg-mix), var(--color-surface));
+  color:      color-mix(in srgb, var(--rel-hue) var(--figpal-text-mix), var(--color-text));
+}
+.figur-bz-freund          { --rel-hue: var(--palette-green); }
+.figur-bz-feind           { --rel-hue: var(--palette-red); }
+.figur-bz-liebesbeziehung { --rel-hue: var(--palette-pink); }
+.figur-bz-rivale          { --rel-hue: var(--palette-orange); }
+.figur-bz-kollege         { --rel-hue: var(--palette-amber); }
+.figur-bz-mentor          { --rel-hue: var(--palette-blue); }
+.figur-bz-schuetzling     { --rel-hue: var(--palette-blue); }
+.figur-bz-bekannt         { /* fällt auf Default-Grau zurück */ }
+.figur-bz-patronage       { --rel-hue: var(--palette-purple); }
+.figur-bz-geschaeft       { --rel-hue: var(--palette-amber); }
+
+.figur-bz-macht {
+  font-size: var(--font-size-xs);
+  font-weight: var(--fw-bold);
+  letter-spacing: 1px;
+  margin-left: var(--space-2xs);
+}
+.figur-bz-macht--positiv { color: var(--color-primary); }
+.figur-bz-macht--negativ { color: var(--color-err-border); }
+
+/* Die Kapitel-Plaketten selbst sind eine geteilte Komponente
+   (components/kapitel-badges.css); hier steht nur, was am Detail-Block der
+   Figur haengt. */
+@media (max-width: 480px) {
+  .figur-kapitelauftritte { display: none; }
 }
 
 }

@@ -37,7 +37,7 @@
                   @keydown.space.prevent="toggleJobRuns(row.type)"
                   :data-tip="$app.t('jobStats.expandHint')">
                 <td>
-                  <span class="history-chevron" :class="{ open: expandedJobType === row.type }">›</span>
+                  <span class="history-chevron" :class="{ open: expandedJobType === row.type }" aria-hidden="true"></span>
                   <span x-text="$app.t(row.typeLabel)"></span>
                 </td>
                 <td x-text="row.avgDurationFmt"></td>

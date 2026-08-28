@@ -7,6 +7,14 @@
   (filteredEreignisse, ereignisseKapitelListe, ereignisseSeitenListe,
   ereignisseSubtypListe, formatEventDate, eventSpanYears) leben hier in der
   Sub-Komponente.
+
+  Kanonform: jedes Event kommt durch cards/ereignisse/model.js#normalizeEvent —
+  kapitel/seiten/page_ids/figuren sind IMMER Arrays. Keine Nachnormalisierung
+  im Template.
+
+  Zwei Index-Raeume, darum zwei Namen: `data-ev-index` = Position in der
+  gefilterten Liste (Bruecke Liste ↔ Band-Marker), `data-event-id` = die
+  DB-ID des Ereignisses (Sprungziel von openEreignisById/Deep-Link).
 -->
 <div class="card card--ereignisse" x-data="ereignisseCard" x-show="$app.showEreignisseCard" x-cloak>
   <div class="card-header card-header--subline">
@@ -113,7 +121,7 @@
                   class="gz-band-marker"
                   :class="[ m.kind === 'more' ? 'gz-band-marker--more' : '', m.isRange ? 'gz-band-marker--range' : '', (selectedEventIndex === m.id && m.kind !== 'more') ? 'gz-band-marker--selected' : '' ]"
                   :style="bandMarkerStyle(m)"
-                  :data-ev-id="m.id"
+                  :data-ev-index="m.id"
                   :data-tip="m.kind === 'more' ? $app.t('events.timelineCluster', { count: m.count }) : m.content"
                   :aria-label="m.kind === 'more' ? $app.t('events.timelineCluster', { count: m.count }) : m.content"
                   @click="onBandMarkerClick(m.id)"><span x-show="m.kind === 'more'" x-text="'+' + m.count"></span></button>
@@ -127,7 +135,7 @@
     <template x-for="(ev, i) in filteredEreignisse()" :key="ev.id ?? i">
       <div class="gz-item"
            :data-ev-index="i"
-           :data-evid="ev.id ?? null"
+           :data-event-id="ev.id ?? null"
            :data-section-label="(i === firstUndatedIndex() && i > 0) ? $app.t('events.undatedSection') : null"
            :class="[
              ev.typ === 'extern' ? 'gz-item--extern' : '',
@@ -167,17 +175,17 @@
                x-text="ev.ereignis"></div>
           <!-- Meta-Zeile: Kapitel + Seite („wo") in einer fliessenden Zeile.
                Jeder Kapitel-Eintrag ist einzeln klickbar (nicht immer kapitel[0]). -->
-          <div x-show="(Array.isArray(ev.kapitel) ? ev.kapitel.length : ev.kapitel) || (Array.isArray(ev.seiten) ? ev.seiten.length : ev.seite)" class="gz-meta">
-            <div x-show="Array.isArray(ev.kapitel) ? ev.kapitel.length : ev.kapitel" class="gz-kapitel">
-              <template x-for="(kap, ki) in (Array.isArray(ev.kapitel) ? ev.kapitel : (ev.kapitel ? [ev.kapitel] : []))" :key="ki">
-                <span class="gz-kapitel-link internal-link" x-text="kap" @click="gotoEventKapitel(ev, kap, null)"></span>
+          <div x-show="ev.kapitel.length || ev.seiten.length" class="gz-meta">
+            <div x-show="ev.kapitel.length" class="gz-kapitel">
+              <template x-for="(kap, ki) in ev.kapitel" :key="ki">
+                <span class="gz-kapitel-link internal-link" x-text="kap" @click="gotoEventKapitel(kap, null)"></span>
               </template>
             </div>
-            <div x-show="Array.isArray(ev.seiten) ? ev.seiten.length : ev.seite" class="gz-seite">
-              <template x-for="(s, si) in (Array.isArray(ev.seiten) ? ev.seiten : (ev.seite ? [ev.seite] : []))" :key="si">
+            <div x-show="ev.seiten.length" class="gz-seite">
+              <template x-for="(s, si) in ev.seiten" :key="si">
                 <span>
                   <template x-if="si > 0"><span> · </span></template>
-                  <span class="internal-link" @click="gotoEventKapitel(ev, Array.isArray(ev.kapitel) ? ev.kapitel[0] : ev.kapitel, s)" x-text="s"></span>
+                  <span class="internal-link" @click="gotoEventKapitel(ev.kapitel[0], s)" x-text="s"></span>
                 </span>
               </template>
             </div>

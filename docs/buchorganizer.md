@@ -105,7 +105,7 @@ Pflichtprinzip: **kein `loadPages()` nach erfolgreicher Mutation**. `loadPages` 
 
 ### Ordnungs-Invariante (drift-kritisch)
 
-`nav.tree` ist **flach, aber depth-first**: Solo-Seiten zuerst, dann Kapitel in Lese-Reihenfolge, Sub-Kapitel direkt hinter ihrem Parent ([tree/load.js](../public/js/book/tree/load.js)#`loadPages`). Die Sidebar ([app.js](../public/js/app.js)#`filteredTree`) **filtert nur** und rendert in Array-Reihenfolge.
+`nav.tree` ist **flach, aber depth-first**: Solo-Seiten zuerst, dann Kapitel in Lese-Reihenfolge, Sub-Kapitel direkt hinter ihrem Parent ([tree/build.js](../public/js/book/tree/build.js)#`_buildTreeFromResponse`, aufgerufen aus [tree/load.js](../public/js/book/tree/load.js)#`loadPages`). Die Sidebar ([app.js](../public/js/app.js)#`filteredTree`) **filtert nur** und rendert in Array-Reihenfolge.
 
 Daraus folgt: **`nav.tree` nie global nach `priority` sortieren.** `priority` ist die Position *innerhalb des Parents*; ein globaler Sort mischt Sub-Kapitel zwischen fremde Top-Level-Kapitel. Massgeblich ist stattdessen die Depth-First-Reihenfolge des Workstates:
 

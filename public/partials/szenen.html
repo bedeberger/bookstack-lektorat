@@ -174,7 +174,7 @@
                       x-text="s.seite"></span>
               </template>
             </span>
-            <span class="history-chevron" :class="{ open: $store.catalogUi.selectedSzeneId === s.id }">›</span>
+            <span class="history-chevron" :class="{ open: $store.catalogUi.selectedSzeneId === s.id }" aria-hidden="true"></span>
           </div>
           <div x-show="$store.catalogUi.selectedSzeneId === s.id" class="entity-detail" x-cloak>
             <p x-show="s.kommentar" x-text="s.kommentar" class="entity-detail-text"></p>

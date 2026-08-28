@@ -40,7 +40,7 @@
     <!-- Modus-Toggle -->
     <div class="tabs tabs--fullwidth">
       <button type="button" class="tabs-btn" :class="{ 'tabs-btn--active': figurenGraphModus === 'figur' }" @click="setFigurenGraphModus('figur')" x-text="$app.t('figuren.modeGraph')"></button>
-      <button type="button" class="tabs-btn" :class="{ 'tabs-btn--active': figurenGraphModus === 'familie' }" :disabled="!figurenHasFamilyEdges()" @click="figurenHasFamilyEdges() && setFigurenGraphModus('familie')" x-text="$app.t('figuren.modeFamilie')"></button>
+      <button type="button" class="tabs-btn" :class="{ 'tabs-btn--active': figurenGraphModus === 'familie' }" :disabled="!figurenHasFamilyEdges()" @click="setFigurenGraphModus('familie')" x-text="$app.t('figuren.modeFamilie')"></button>
       <button type="button" class="tabs-btn" :class="{ 'tabs-btn--active': figurenGraphModus === 'soziogramm' }" @click="setFigurenGraphModus('soziogramm')" x-text="$app.t('figuren.modeSoziogramm')"></button>
       <button type="button" class="tabs-btn" :class="{ 'tabs-btn--active': figurenGraphModus === 'praesenz' }" @click="setFigurenGraphModus('praesenz')" x-text="$app.t('figuren.modePraesenz')"></button>
       <button type="button" class="tabs-btn" :class="{ 'tabs-btn--active': figurenGraphModus === 'alter' }" @click="setFigurenGraphModus('alter')" x-text="$app.t('figuren.modeAlter')"></button>
@@ -50,7 +50,7 @@
     <!-- Graph-Legende (klappbar) — nested Partial im figurenCard-Scope -->
     <div id="partial-figuren-graph-legend"></div>
 
-    <div class="figuren-graph-wrap" x-show="!['praesenz', 'alter', 'lebenslauf'].includes(figurenGraphModus)" :class="{ 'is-fullscreen': figurenGraphFullscreen }" @keydown.escape.window="figurenGraphFullscreen && toggleFigurenGraphFullscreen()">
+    <div class="figuren-graph-wrap" x-show="figurenIsGraphModus()" :class="{ 'is-fullscreen': figurenGraphFullscreen }" @keydown.escape.window="figurenGraphFullscreen && toggleFigurenGraphFullscreen()">
       <div class="figuren-graph-toolbar">
         <!-- Kapitel-Filter (alle Graph-Modi) -->
         <div x-show="figurenKapitelListe().length > 0" class="figuren-graph-filter">
@@ -134,218 +134,9 @@
               </template>
             </span>
           </template>
-          <span class="history-chevron" :class="{ open: $store.catalogUi.selectedFigurId === f.id }">›</span>
+          <span class="history-chevron" :class="{ open: $store.catalogUi.selectedFigurId === f.id }" aria-hidden="true"></span>
         </div>
-        <div x-show="$store.catalogUi.selectedFigurId === f.id" class="figur-detail">
-          <p x-show="f.beschreibung" x-text="f.beschreibung" class="figur-beschreibung"></p>
-          <button type="button" class="btn-compact figur-detail-actions" x-show="$store.config.semanticSearchEnabled" @click.stop="$app.findSimilar('figure', f.id, f.name)" x-text="$app.t('search.semantic.similarEntity')"></button>
-
-          <!-- ===== Gruppe: Steckbrief (objektive Fakten) ===== -->
-          <section class="figur-group" x-show="$app.figurJahrLabel(f) || f.geburtsjahr != null || f.rolle || f.beruf || (f.sozialschicht && f.sozialschicht !== 'andere') || f.praesenz || f.wohnadresse || f.erste_erwaehnung || f.aeusseres || f.stimme">
-            <h4 class="figur-group-title" x-text="$app.t('figuren.group.steckbrief')"></h4>
-            <dl class="figur-steckbrief-grid">
-              <template x-if="$app.figurJahrLabel(f)">
-                <div class="figur-fact">
-                  <dt x-text="$app.t('figuren.field.jahrAlter')"></dt>
-                  <dd>
-                    <span x-text="$app.figurJahrLabel(f)"></span>
-                    <span x-show="$app.figurJahrAnchor(f)" class="figur-jahr-anchor" x-text="' — ' + $app.figurJahrAnchor(f)"></span>
-                  </dd>
-                </div>
-              </template>
-              <template x-if="f.geburtsjahr != null">
-                <div class="figur-fact"><dt x-text="$app.t('figuren.field.geburtsjahr')"></dt><dd x-text="f.geburtsjahr"></dd></div>
-              </template>
-              <template x-if="f.rolle">
-                <div class="figur-fact"><dt x-text="$app.t('figuren.field.rolle')"></dt><dd x-text="f.rolle"></dd></div>
-              </template>
-              <template x-if="f.beruf">
-                <div class="figur-fact"><dt x-text="$app.t('figuren.field.beruf')"></dt><dd x-text="f.beruf"></dd></div>
-              </template>
-              <template x-if="f.sozialschicht && f.sozialschicht !== 'andere'">
-                <div class="figur-fact">
-                  <dt x-text="$app.t('figuren.field.sozialschicht')"></dt>
-                  <dd><span class="tag figur-sozialschicht-badge" :class="'figur-schicht-' + f.sozialschicht" x-text="$app.t('figuren.schicht.' + f.sozialschicht)"></span></dd>
-                </div>
-              </template>
-              <template x-if="f.praesenz">
-                <div class="figur-fact">
-                  <dt x-text="$app.t('figuren.field.praesenz')"></dt>
-                  <dd><span class="tag figur-praesenz-badge" :class="'figur-praesenz-' + f.praesenz" x-text="$app.t('figuren.praesenz.' + f.praesenz)"></span></dd>
-                </div>
-              </template>
-              <template x-if="f.wohnadresse">
-                <div class="figur-fact"><dt x-text="$app.t('figuren.field.wohnadresse')"></dt><dd x-text="f.wohnadresse"></dd></div>
-              </template>
-              <template x-if="f.erste_erwaehnung">
-                <div class="figur-fact">
-                  <dt x-text="$app.t('figuren.field.ersteErwaehnung')"></dt>
-                  <dd>
-                    <template x-if="f.erste_erwaehnung_page_id">
-                      <span class="internal-link" @click.stop="$app.gotoPageById(f.erste_erwaehnung_page_id)" x-text="f.erste_erwaehnung"></span>
-                    </template>
-                    <template x-if="!f.erste_erwaehnung_page_id">
-                      <span x-text="f.erste_erwaehnung"></span>
-                    </template>
-                  </dd>
-                </div>
-              </template>
-            </dl>
-            <!-- Beschreibende Fakten (volle Breite) -->
-            <div x-show="f.aeusseres" class="figur-detail-row">
-              <span class="bewertung-section-title bewertung-section-title--inline" x-text="$app.t('figuren.field.aeusseres') + ' '"></span>
-              <span class="figur-detail-value" x-text="f.aeusseres"></span>
-            </div>
-            <div x-show="f.stimme" class="figur-detail-row">
-              <span class="bewertung-section-title bewertung-section-title--inline" x-text="$app.t('figuren.field.stimme') + ' '"></span>
-              <span class="figur-detail-value" x-text="f.stimme"></span>
-            </div>
-          </section>
-
-          <!-- ===== Gruppe: Charakter (Innenleben + Entwicklung) ===== -->
-          <section class="figur-group" x-show="f.motivation || f.konflikt || f.hintergrund || (f.arc && (f.arc.anfang || f.arc.ende || f.arc.wendepunkte?.length)) || (!f.arc && f.entwicklung) || f.eigenschaften?.length || f.schluesselzitate?.length">
-            <h4 class="figur-group-title" x-text="$app.t('figuren.group.charakter')"></h4>
-            <div x-show="f.motivation" class="figur-detail-row">
-              <span class="bewertung-section-title bewertung-section-title--inline" x-text="$app.t('figuren.field.motivation') + ' '"></span>
-              <span class="figur-detail-value" x-text="f.motivation"></span>
-            </div>
-            <div x-show="f.konflikt" class="figur-detail-row">
-              <span class="bewertung-section-title bewertung-section-title--inline" x-text="$app.t('figuren.field.konflikt') + ' '"></span>
-              <span class="figur-detail-value" x-text="f.konflikt"></span>
-            </div>
-            <div x-show="f.hintergrund" class="figur-detail-row">
-              <span class="bewertung-section-title bewertung-section-title--inline" x-text="$app.t('figuren.field.hintergrund') + ' '"></span>
-              <span class="figur-detail-value" x-text="f.hintergrund"></span>
-            </div>
-            <!-- Entwicklungsbogen (strukturiert); Fallback flacher entwicklung-String -->
-            <div x-show="(f.arc && (f.arc.anfang || f.arc.ende || f.arc.wendepunkte?.length)) || (!f.arc && f.entwicklung)" class="figur-arc">
-              <div class="bewertung-section-title" x-text="$app.t('figuren.field.arc')"></div>
-              <template x-if="f.arc && (f.arc.anfang || f.arc.ende || f.arc.wendepunkte?.length)">
-                <div class="figur-arc-body">
-                  <div x-show="f.arc.anfang" class="figur-kerninfo-row">
-                    <span class="bewertung-section-title bewertung-section-title--inline" x-text="$app.t('figuren.field.arcAnfang') + ' '"></span>
-                    <span class="figur-detail-value" x-text="f.arc.anfang"></span>
-                  </div>
-                  <ol x-show="f.arc.wendepunkte?.length" class="figur-arc-stations">
-                    <template x-for="(w, wi) in (f.arc.wendepunkte || [])" :key="wi">
-                      <li x-text="w"></li>
-                    </template>
-                  </ol>
-                  <div x-show="f.arc.ende" class="figur-kerninfo-row">
-                    <span class="bewertung-section-title bewertung-section-title--inline" x-text="$app.t('figuren.field.arcEnde') + ' '"></span>
-                    <span class="figur-detail-value" x-text="f.arc.ende"></span>
-                  </div>
-                </div>
-              </template>
-              <template x-if="!f.arc && f.entwicklung">
-                <span class="figur-detail-value" x-text="f.entwicklung"></span>
-              </template>
-            </div>
-            <!-- Eigenschaften -->
-            <div x-show="f.eigenschaften?.length">
-              <div class="bewertung-section-title" x-text="$app.t('figuren.field.eigenschaften')"></div>
-              <ul class="bullet-list figur-eigenschaften-list">
-                <template x-for="(e, i) in (f.eigenschaften || [])" :key="i">
-                  <li x-text="e"></li>
-                </template>
-              </ul>
-            </div>
-            <!-- Schluesselzitate -->
-            <div x-show="f.schluesselzitate?.length">
-              <div class="bewertung-section-title" x-text="$app.t('figuren.field.schluesselzitate')"></div>
-              <ul class="bullet-list figur-zitate-list">
-                <template x-for="(z, i) in (f.schluesselzitate || [])" :key="i">
-                  <li class="figur-zitat" x-text="'«' + z + '»'"></li>
-                </template>
-              </ul>
-            </div>
-          </section>
-
-          <!-- ===== Gruppe: Im Buch (Auftritte, Beziehungen, Zeitstrahl) ===== -->
-          <section class="figur-group" x-show="f.kapitel?.length > 1 || $app.songsByFigurId.get(f.id)?.length || f.eltern_ids?.length || f.geschwister_ids?.length || f.beziehungen?.length || f.lebensereignisse?.length">
-            <h4 class="figur-group-title" x-text="$app.t('figuren.group.imBuch')"></h4>
-            <!-- Kapitelauftritte -->
-            <div class="figur-kapitelauftritte" x-show="f.kapitel?.length > 1">
-              <div class="bewertung-section-title" x-text="$app.t('figuren.field.kapitelauftritte')"></div>
-              <div class="figur-tags-row">
-                <template x-for="(k, ki) in (f.kapitel || [])" :key="ki">
-                  <span class="tag internal-link" @click="$store.catalogUi.figurenFilters.kapitel = k.name; $store.catalogUi.figurenFilters.seite = ''" x-text="ki === 0 ? k.name : k.name + (k.haeufigkeit > 1 ? ' ×' + k.haeufigkeit : '')"></span>
-                </template>
-              </div>
-            </div>
-            <!-- Präsenz-Streifen dieser Figur (Auftritte je Kapitel + Wendepunkt-Marker) -->
-            <!-- @include figuren-presence-strip -->
-            <!-- Musikgeschmack — abgeleitet aus song_figures-Rollup -->
-            <div x-show="$app.songsByFigurId.get(f.id)?.length" class="figur-musikgeschmack">
-              <div class="bewertung-section-title" x-text="$app.t('figuren.field.musikgeschmack')"></div>
-              <div class="figur-tags-row">
-                <template x-for="s in ($app.songsByFigurId.get(f.id) || [])" :key="s.id">
-                  <span class="tag internal-link" @click.stop="$app.openSongById(s.id)" x-text="(s.titel || '') + (s.interpret ? ' — ' + s.interpret : '')"></span>
-                </template>
-              </div>
-            </div>
-            <!-- Familie -->
-            <div x-show="f.eltern_ids?.length || f.geschwister_ids?.length">
-              <div class="bewertung-section-title" x-text="$app.t('figuren.field.familie')"></div>
-              <div class="figur-tags-row">
-                <template x-for="pid in (f.eltern_ids || [])" :key="'e'+pid">
-                  <span class="tag figur-rel-tag internal-link" :data-tip="$app.t('figuren.rel.parent')" @click.stop="$app.openFigurById(pid)" x-text="'↑ ' + ($app.figurenById.get(pid)?.name || pid)"></span>
-                </template>
-                <template x-for="sid in (f.geschwister_ids || [])" :key="'s'+sid">
-                  <span class="tag figur-rel-tag internal-link" :data-tip="$app.t('figuren.rel.sibling')" @click.stop="$app.openFigurById(sid)" x-text="'⇔ ' + ($app.figurenById.get(sid)?.name || sid)"></span>
-                </template>
-              </div>
-            </div>
-            <!-- Beziehungen -->
-            <div x-show="f.beziehungen?.length">
-              <div class="bewertung-section-title" x-text="$app.t('figuren.field.beziehungen')"></div>
-              <div class="figur-bz-list">
-                <template x-for="(bz, i) in (f.beziehungen || [])" :key="i">
-                  <div class="figur-beziehung-item">
-                    <span class="figur-bz-typ" :class="'figur-bz-' + bz.typ" x-text="bz.typ"></span>
-                    <span class="figur-bz-name internal-link" @click.stop="$app.openFigurById(bz.figur_id)" x-text="$app.figurenById.get(bz.figur_id)?.name || bz.figur_id"></span>
-                    <span x-show="bz.machtverhaltnis && bz.machtverhaltnis !== 0" class="figur-bz-macht" :class="bz.machtverhaltnis > 0 ? 'figur-bz-macht--positiv' : 'figur-bz-macht--negativ'" x-text="bz.machtverhaltnis > 0 ? '↑'.repeat(Math.abs(bz.machtverhaltnis)) : '↓'.repeat(Math.abs(bz.machtverhaltnis))"></span>
-                    <span x-show="bz.beschreibung" class="card-hint card-hint--sm" x-text="'– ' + bz.beschreibung"></span>
-                    <template x-if="bz.belege?.length">
-                      <span class="figur-bz-belege">
-                        <template x-for="(bg, bi) in (bz.belege || [])" :key="bi">
-                          <span class="figur-bz-beleg internal-link" @click.stop="bg.page_id ? $app.gotoPageById(bg.page_id) : (bg.chapter_id ? $app.gotoChapterById(bg.chapter_id) : $app.gotoStelle(bg.kapitel, bg.seite))" x-text="bg.seite || bg.kapitel" :data-tip="(bg.kapitel || '') + (bg.seite ? ' · ' + bg.seite : '')"></span>
-                        </template>
-                      </span>
-                    </template>
-                  </div>
-                </template>
-              </div>
-            </div>
-            <!-- Lebensereignisse / Zeitstrahl -->
-            <div x-show="f.lebensereignisse?.length">
-              <div class="bewertung-section-title" x-text="$app.t('figuren.field.zeitstrahl')"></div>
-              <div class="global-zeitstrahl-body">
-                <template x-for="(ev, i) in (f.lebensereignisse || [])" :key="i">
-                  <div class="gz-item" :class="ev.typ === 'extern' ? 'gz-item--extern' : ''">
-                    <div class="gz-marker" :class="ev.typ === 'extern' ? 'gz-marker--extern' : ''"></div>
-                    <div class="gz-content">
-                      <div class="gz-datum-row">
-                        <span class="gz-datum" x-text="ev.datum"></span>
-                        <template x-if="ev.typ === 'extern'">
-                          <span class="gz-extern-badge" x-text="$app.t('figuren.external')"></span>
-                        </template>
-                      </div>
-                      <div class="gz-ereignis internal-link" @click="$app.openEreignisseMitFigur(f.id)" x-text="ev.ereignis"></div>
-                      <div x-show="ev.kapitel" class="gz-kapitel">
-                        <span class="gz-kapitel-link internal-link" @click="$app.gotoStelle(ev.kapitel, null)" x-text="ev.kapitel"></span>
-                      </div>
-                      <div x-show="ev.seite" class="gz-seite">
-                        <span class="internal-link" @click="$app.gotoStelle(ev.kapitel, ev.seite)" x-text="ev.seite"></span>
-                      </div>
-                      <div x-show="ev.bedeutung" class="gz-bedeutung" x-text="ev.bedeutung"></div>
-                    </div>
-                  </div>
-                </template>
-              </div>
-            </div>
-          </section>
-        </div>
+        <!-- @include figuren-detail -->
       </div>
     </template>
   </div>

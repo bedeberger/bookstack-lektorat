@@ -21,6 +21,10 @@ export function registerFehlerHeatmapCard() {
     fehlerHeatmapMode: 'open',
     activeFehlerDetailKey: null,
     fehlerTrendData: [],
+    // Memo-Speicher fuer fehlerHeatmapRange (siehe book/fehler-heatmap.js#_memo).
+    // Explizit deklariert statt lazy — CLAUDE.md "State explizit deklariert".
+    // Reset ueber this._memos = {} im Lade-Pfad und bei jedem State-Reset.
+    _memos: {},
     _lifecycle: null,
 
     init() {
@@ -30,19 +34,24 @@ export function registerFehlerHeatmapCard() {
           await this.loadFehlerHeatmap();
           await this.loadFehlerTrend();
         },
-        resetStateView: {
+        // Factory, nicht Objekt-Literal: applyReset macht `Object.assign(ctx, state)`
+        // und wuerde sonst bei JEDEM Reset dieselbe `_memos`-/`fehlerTrendData`-
+        // Referenz einhaengen — ein geteilter Cache ueber alle Resets hinweg.
+        resetStateView: () => ({
           fehlerHeatmapData: null,
           fehlerHeatmapStatus: '',
           fehlerHeatmapLoading: false,
           activeFehlerDetailKey: null,
           fehlerTrendData: [],
-        },
+          _memos: {},
+        }),
         onViewReset: (e, ctx) => {
           ctx.fehlerHeatmapData = null;
           ctx.fehlerHeatmapStatus = '';
           ctx.fehlerHeatmapLoading = false;
           ctx.activeFehlerDetailKey = null;
           ctx.fehlerTrendData = [];
+          ctx._memos = {};
           _destroyFehlerTrendChart();
         },
       });

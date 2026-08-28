@@ -1,12 +1,10 @@
 const express = require('express');
-const { db, saveFigurenToDb, saveZeitstrahlEvents, getChapterFigures, getBookSettings } = require('../db/schema');
-const { ensureTree } = require('../db/book-order');
-const { mergeFigures, mergeScenes } = require('../db/entity-merge');
+const { db, saveFigurenToDb, getChapterFigures, listFigurenWithDetails } = require('../db/schema');
+const { mergeFigures } = require('../db/entity-merge');
 const { recomputeBookFigureMentions } = require('../lib/page-index');
-const { toIntId, inClause } = require('../lib/validate');
+const { toIntId } = require('../lib/validate');
 const { aclParamGuard, sessionEmail } = require('../lib/acl');
 const { bookParamHandler } = require('../lib/log-context');
-const { parseDatum } = require('../lib/datum-parse');
 const { computeFigureYears } = require('../lib/figure-years');
 const searchIndex = require('../lib/search');
 const semanticChunks = require('../db/semantic-chunks');
@@ -19,237 +17,13 @@ router.param('book_id', aclParamGuard('editor'));
 router.param('book_id', bookParamHandler);
 const jsonBody = express.json();
 
-// Lese-Reihenfolge: globaler Ordinalwert je Kapitel/Seite aus dem book_order-Tree
-// (Depth-First). Brücke, um zu einer Event-Referenz (chapter_id/page_id) die
-// Position im Manuskript zu bestimmen.
-function _readingOrdinalMap(bookId) {
-  const order = ensureTree(bookId);
-  const map = new Map();
-  let i = 0;
-  (function walk(nodes) {
-    for (const n of (nodes || [])) {
-      if (n.type === 'chapter') { map.set('c' + n.id, i++); walk(n.children); }
-      else if (n.type === 'page') { map.set('p' + n.id, i++); }
-    }
-  })(order?.tree || []);
-  return map;
-}
-
-// "In welchem Jahr spielt der Roman?" — abgeleitet aus den sicher datierten
-// Zeitstrahl-Events (datum_unsicher === false, datum_year gesetzt).
-//   minYear/maxYear  → Jahres-Spektrum des Romans (Start inkl. Spannen-Ende)
-//   endYear          → spätestes Story-Jahr des Romans (= maxYear)
-//   chapters         → Story-Jahr je Kapitel in Lese-Reihenfolge:
-//                      [{ chapter_id, name, minYear, maxYear }]. Ein Kapitel
-//                      bündelt die sicher datierten Events, die es verlinken.
-// null, wenn es keine sicher datierten Events gibt. Abgeleitete Jahre
-// (datum_unsicher) fliessen bewusst NICHT ein.
-function _computeChronology(bookId, events) {
-  const secure = (events || []).filter(e => !e.datum_unsicher && e.datum_year != null);
-  if (!secure.length) return null;
-  let minYear = Infinity, maxYear = -Infinity;
-  for (const e of secure) {
-    if (e.datum_year < minYear) minYear = e.datum_year;
-    const end = e.datum_ende_year != null ? e.datum_ende_year : e.datum_year;
-    if (end > maxYear) maxYear = end;
-  }
-  // Pro-Kapitel: Story-Jahr(e), in denen das Kapitel spielt. kapitel[i] gehört
-  // zu chapter_ids[i] (gleiche Push-Reihenfolge in der /zeitstrahl-Route).
-  const byChapter = new Map(); // chapter_id → { chapter_id, name, min, max }
-  for (const e of secure) {
-    const end = e.datum_ende_year != null ? e.datum_ende_year : e.datum_year;
-    const ids = e.chapter_ids || [], names = e.kapitel || [];
-    ids.forEach((cid, i) => {
-      if (cid == null) return;
-      const c = byChapter.get(cid);
-      if (!c) { byChapter.set(cid, { chapter_id: cid, name: names[i] || null, min: e.datum_year, max: end }); }
-      else {
-        if (e.datum_year < c.min) c.min = e.datum_year;
-        if (end > c.max) c.max = end;
-        if (!c.name && names[i]) c.name = names[i];
-      }
-    });
-  }
-  const ordinal = _readingOrdinalMap(bookId);
-  const chapters = [...byChapter.values()]
-    .filter(c => c.name) // ohne Namen nicht anzeigbar (z.B. gelöschtes Kapitel)
-    .sort((a, b) => (ordinal.get('c' + a.chapter_id) ?? Infinity) - (ordinal.get('c' + b.chapter_id) ?? Infinity))
-    .map(c => ({ chapter_id: c.chapter_id, name: c.name, minYear: c.min, maxYear: c.max }));
-  return { minYear, maxYear, endYear: maxYear, chapters };
-}
-
-
-// Konsolidierten Zeitstrahl eines Buchs laden (vor /:book_id definiert um Konflikte zu vermeiden)
-router.get('/zeitstrahl/:book_id', (req, res) => {
-  const bookId = toIntId(req.params.book_id);
-  if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const userEmail = sessionEmail(req);
-  // ORDER BY: strukturierte Datums-Felder zuerst (Year/Month/Day), Events ohne
-  // Jahr ans Ende ("unbekannt"-Bucket via COALESCE-Sentinel 9999/99). sort_order
-  // dient nur noch als Tiebreaker bei Datums-Gleichstand.
-  const rows = db.prepare(`
-    SELECT id, datum, datum_label, datum_year, datum_month, datum_day,
-           datum_ende_year, datum_ende_month, datum_ende_day,
-           story_tag, datum_unsicher, ereignis, typ, subtyp, bedeutung,
-           storyline_id, manually_edited, sort_order
-    FROM zeitstrahl_events
-    WHERE book_id = ? AND user_email = ?
-    ORDER BY
-      COALESCE(datum_year,  9999),
-      COALESCE(datum_month, 99),
-      COALESCE(datum_day,   99),
-      COALESCE(story_tag,   99999),
-      sort_order, id
-  `).all(bookId, userEmail || '');
-  if (!rows.length) return res.json({ ereignisse: null });
-
-  // Lazy-Parser-Fallback: Events mit Label aber ohne strukturierte Felder
-  // (z.B. nachträglich verbesserter Parser oder manuelle Legacy-Strings)
-  // beim Read erneut durchschleusen — füllt nur In-Memory, kein DB-Write.
-  for (const r of rows) {
-    if (r.datum_label && r.datum_year == null && r.datum_month == null
-        && r.datum_day == null && r.story_tag == null) {
-      const p = parseDatum(r.datum_label);
-      if (p.year  != null) r.datum_year  = p.year;
-      if (p.month != null) r.datum_month = p.month;
-      if (p.day   != null) r.datum_day   = p.day;
-      if (p.story_tag != null) r.story_tag = p.story_tag;
-    }
-  }
-
-  const eventIds = rows.map(r => r.id);
-  const { sql: idSql, values: idVals } = inClause(eventIds);
-
-  const chRows = db.prepare(`
-    SELECT zec.event_id, zec.chapter_id, c.chapter_name
-    FROM zeitstrahl_event_chapters zec
-    LEFT JOIN chapters c ON c.chapter_id = zec.chapter_id
-    WHERE zec.event_id IN ${idSql}
-    ORDER BY zec.event_id, zec.sort_order
-  `).all(...idVals);
-  const pgRows = db.prepare(`
-    SELECT zep.event_id, zep.page_id, p.page_name
-    FROM zeitstrahl_event_pages zep
-    LEFT JOIN pages p ON p.page_id = zep.page_id
-    WHERE zep.event_id IN ${idSql}
-    ORDER BY zep.event_id, zep.sort_order
-  `).all(...idVals);
-  const fgRows = db.prepare(`
-    SELECT zef.event_id, f.fig_id, COALESCE(f.name, zef.figur_name) AS name, f.typ
-    FROM zeitstrahl_event_figures zef
-    LEFT JOIN figures f ON f.id = zef.figure_id
-    WHERE zef.event_id IN ${idSql}
-    ORDER BY zef.event_id, zef.sort_order
-  `).all(...idVals);
-
-  const chByEvt = new Map();
-  for (const r of chRows) {
-    if (!chByEvt.has(r.event_id)) chByEvt.set(r.event_id, { kapitel: [], chapter_ids: [] });
-    const b = chByEvt.get(r.event_id);
-    if (r.chapter_name) b.kapitel.push(r.chapter_name);
-    if (r.chapter_id != null) b.chapter_ids.push(r.chapter_id);
-  }
-  const pgByEvt = new Map();
-  for (const r of pgRows) {
-    if (!pgByEvt.has(r.event_id)) pgByEvt.set(r.event_id, { seiten: [], page_ids: [] });
-    const b = pgByEvt.get(r.event_id);
-    if (r.page_name) b.seiten.push(r.page_name);
-    if (r.page_id != null) b.page_ids.push(r.page_id);
-  }
-  const fgByEvt = new Map();
-  for (const r of fgRows) {
-    if (!fgByEvt.has(r.event_id)) fgByEvt.set(r.event_id, []);
-    if (!r.name) continue;
-    const out = { name: r.name };
-    if (r.fig_id) out.id = r.fig_id;
-    if (r.typ) out.typ = r.typ;
-    fgByEvt.get(r.event_id).push(out);
-  }
-
-  const ereignisse = rows.map(r => ({
-    id:               r.id,
-    datum:            r.datum,
-    datum_label:      r.datum_label || r.datum || '',
-    datum_year:       r.datum_year,
-    datum_month:      r.datum_month,
-    datum_day:        r.datum_day,
-    datum_ende_year:  r.datum_ende_year,
-    datum_ende_month: r.datum_ende_month,
-    datum_ende_day:   r.datum_ende_day,
-    story_tag:        r.story_tag,
-    datum_unsicher:   !!r.datum_unsicher,
-    ereignis:         r.ereignis,
-    typ:              r.typ || 'persoenlich',
-    subtyp:           r.subtyp || 'sonstiges',
-    bedeutung:        r.bedeutung || '',
-    storyline_id:     r.storyline_id,
-    manually_edited:  !!r.manually_edited,
-    sort_order:       r.sort_order ?? 0,
-    kapitel:          chByEvt.get(r.id)?.kapitel     || [],
-    chapter_ids:      chByEvt.get(r.id)?.chapter_ids || [],
-    seiten:           pgByEvt.get(r.id)?.seiten      || [],
-    page_ids:         pgByEvt.get(r.id)?.page_ids    || [],
-    figuren:          fgByEvt.get(r.id) || [],
-  }));
-
-  // Jahres-Anzeige nur bei Romanen mit "echter Zeitlinie" (book_settings.zeitlinie_real).
-  const { zeitlinie_real } = getBookSettings(bookId, userEmail);
-  const chronology = zeitlinie_real ? _computeChronology(bookId, ereignisse) : null;
-  res.json({ ereignisse, chronology });
-});
-
-// Szenen eines Buchs laden (vor /:book_id definiert um Konflikte zu vermeiden)
-router.get('/scenes/:book_id', (req, res) => {
-  const bookId = toIntId(req.params.book_id);
-  if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const userEmail = sessionEmail(req);
-
-  const rows = db.prepare(`
-    SELECT fs.id, c.chapter_name AS kapitel, p.page_name AS seite,
-           fs.titel, fs.wertung, fs.kommentar, fs.chapter_id, fs.page_id, fs.stale, fs.updated_at
-    FROM figure_scenes fs
-    LEFT JOIN chapters c ON c.chapter_id = fs.chapter_id
-    LEFT JOIN pages    p ON p.page_id    = fs.page_id
-    WHERE fs.book_id = ? AND fs.user_email = ?
-    ORDER BY fs.sort_order
-  `).all(bookId, userEmail);
-
-  const sceneIds = rows.map(r => r.id);
-  const { sql: sceneSql, values: sceneVals } = inClause(sceneIds);
-  const sfRows = sceneIds.length
-    ? db.prepare(`
-        SELECT sf.scene_id, f.fig_id
-        FROM scene_figures sf
-        JOIN figures f ON f.id = sf.figure_id
-        WHERE sf.scene_id IN ${sceneSql}
-      `).all(...sceneVals)
-    : [];
-  const sfMap = {};
-  for (const sf of sfRows) (sfMap[sf.scene_id] ??= []).push(sf.fig_id);
-
-  const slRows = sceneIds.length
-    ? db.prepare(`SELECT sl.scene_id, l.loc_id FROM scene_locations sl JOIN locations l ON sl.location_id = l.id WHERE sl.scene_id IN ${sceneSql}`).all(...sceneVals)
-    : [];
-  const slMap = {};
-  for (const sl of slRows) (slMap[sl.scene_id] ??= []).push(sl.loc_id);
-
-  const szenen = rows.map(s => ({
-    id:         s.id,
-    stale:      !!s.stale,
-    kapitel:    s.kapitel,
-    seite:      s.seite,
-    titel:      s.titel,
-    wertung:    s.wertung,
-    kommentar:  s.kommentar,
-    chapter_id: s.chapter_id,
-    page_id:    s.page_id,
-    fig_ids:    sfMap[s.id] || [],
-    ort_ids:    slMap[s.id] || [],
-  }));
-
-  const updated_at = rows.length ? rows[0].updated_at : null;
-  res.json({ szenen, updated_at });
-});
+// Der Zeitstrahl haengt am selben Prefix und damit am selben ACL-/Log-Guard,
+// ist aber ein eigenes Thema (zeitstrahl_events statt figures) — Submodul auf
+// demselben Router, Muster wie routes/history/. Muss VOR `/:book_id` stehen,
+// sonst schluckt die Buch-Route den Pfad `/zeitstrahl/:book_id`.
+require('./figures/zeitstrahl').register(router);
+// Szenen ebenso: eigenes Thema (figure_scenes), gleicher Prefix und Guard.
+require('./figures/scenes').register(router);
 
 // Figuren eines Kapitels laden (für Kontext-Panel im Editor)
 router.get('/chapter/:book_id/:chapter_id', (req, res) => {
@@ -274,158 +48,13 @@ router.get('/chapter/:book_id/:chapter_id', (req, res) => {
   res.json({ figuren });
 });
 
-// Gespeicherte Figuren eines Buchs laden
+// Gespeicherte Figuren eines Buchs laden. Die Aufloesung selbst (sechs
+// Abfragen, darunter Namens-JOINs auf chapters/pages) liegt in
+// db/figures/queries.js — CLAUDE.md, harte Regel „Content-Store-Facade als
+// einziger Eintrittspunkt": ein Namens-JOIN gehoert in das db-Modul der
+// abgeleiteten Tabelle, nicht in den Handler.
 router.get('/:book_id', (req, res) => {
-  const bookId = toIntId(req.params.book_id);
-  if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const userEmail = sessionEmail(req);
-
-  const figs = db.prepare(`
-    SELECT * FROM figures
-    WHERE book_id = ? AND user_email = ?
-    ORDER BY sort_order, id
-  `).all(bookId, userEmail);
-  if (!figs.length) return res.json(null);
-
-  const tags = db.prepare(`
-    SELECT ft.figure_id, ft.tag FROM figure_tags ft
-    JOIN figures f ON f.id = ft.figure_id
-    WHERE f.book_id = ? AND f.user_email = ?`).all(bookId, userEmail);
-  const apps = db.prepare(`
-    SELECT fa.figure_id, fa.chapter_id, c.chapter_name, fa.haeufigkeit
-    FROM figure_appearances fa
-    JOIN figures f ON f.id = fa.figure_id
-    LEFT JOIN chapters c ON c.chapter_id = fa.chapter_id
-    WHERE f.book_id = ? AND f.user_email = ?`).all(bookId, userEmail);
-  const evts = db.prepare(`
-    SELECT fe.figure_id, fe.datum, fe.ereignis, fe.bedeutung, fe.typ, fe.subtyp,
-           fe.chapter_id, fe.page_id,
-           c.chapter_name AS kapitel, p.page_name AS seite
-    FROM figure_events fe
-    JOIN figures f ON f.id = fe.figure_id
-    LEFT JOIN chapters c ON c.chapter_id = fe.chapter_id
-    LEFT JOIN pages    p ON p.page_id    = fe.page_id
-    WHERE f.book_id = ? AND f.user_email = ?
-    ORDER BY fe.figure_id, fe.sort_order`).all(bookId, userEmail);
-  const rels = db.prepare(`
-    SELECT ff.fig_id AS from_fig_id, ft.fig_id AS to_fig_id,
-           r.typ, r.beschreibung, r.machtverhaltnis, r.belege
-    FROM figure_relations r
-    JOIN figures ff ON ff.id = r.from_fig_id
-    JOIN figures ft ON ft.id = r.to_fig_id
-    WHERE r.book_id = ? AND r.user_email = ?
-  `).all(bookId, userEmail);
-
-  const tagMap = {};
-  for (const t of tags) (tagMap[t.figure_id] ??= []).push(t.tag);
-  // Kapitel-Auftritte: alleinige Quelle figure_appearances (KI). Die KI erkennt die
-  // Figur im Kontext und unterscheidet sie von gleichnamigen, im Text nur erwähnten
-  // realen Personen (z.B. Figur „Pamela" vs. „Pamela Anderson"). Reine Namensnennungen
-  // (page_figure_mentions) zählen hier bewusst nicht mit. Sortierung: Häufigkeit DESC.
-  // Erst nach einer Komplettanalyse befüllt.
-  const kapMap = {};
-  for (const a of apps) {
-    if (a.chapter_id == null) continue;
-    (kapMap[a.figure_id] ??= new Map()).set(a.chapter_id, {
-      chapter_id: a.chapter_id, name: a.chapter_name, haeufigkeit: a.haeufigkeit || 1,
-    });
-  }
-  const kapitelFor = (figId) => {
-    const m = kapMap[figId];
-    if (!m) return [];
-    return [...m.values()].sort((a, b) =>
-      (b.haeufigkeit || 0) - (a.haeufigkeit || 0) || a.chapter_id - b.chapter_id);
-  };
-  const evtMap = {};
-  for (const e of evts) (evtMap[e.figure_id] ??= []).push({
-    datum: e.datum, ereignis: e.ereignis, bedeutung: e.bedeutung,
-    typ: e.typ || 'persoenlich', subtyp: e.subtyp || 'sonstiges',
-    chapter_id: e.chapter_id ?? null, page_id: e.page_id ?? null,
-    kapitel: e.kapitel || null, seite: e.seite || null,
-  });
-  const relMap = {};
-  for (const r of rels) {
-    let belege = [];
-    if (r.belege) { try { belege = JSON.parse(r.belege) || []; } catch { belege = []; } }
-    (relMap[r.from_fig_id] ??= []).push({
-      figur_id: r.to_fig_id,
-      typ: r.typ,
-      beschreibung: r.beschreibung,
-      machtverhaltnis: r.machtverhaltnis ?? null,
-      belege: Array.isArray(belege) ? belege : [],
-    });
-  }
-
-  const sceneFigRows = db.prepare(`
-    SELECT c.chapter_name AS kapitel, p.page_name AS seite, f.fig_id
-    FROM figure_scenes fs
-    JOIN scene_figures sf ON sf.scene_id = fs.id
-    JOIN figures f ON f.id = sf.figure_id
-    LEFT JOIN chapters c ON c.chapter_id = fs.chapter_id
-    LEFT JOIN pages    p ON p.page_id    = fs.page_id
-    WHERE fs.book_id = ? AND fs.user_email = ?
-  `).all(bookId, userEmail);
-  const seitenMap = {};
-  for (const sc of sceneFigRows) {
-    if (!seitenMap[sc.fig_id]) seitenMap[sc.fig_id] = [];
-    const key = sc.kapitel + '::' + (sc.seite || '');
-    if (!seitenMap[sc.fig_id].some(x => x.kapitel + '::' + x.seite === key)) {
-      seitenMap[sc.fig_id].push({ kapitel: sc.kapitel, seite: sc.seite || '' });
-    }
-  }
-
-  const yearMap = computeFigureYears(bookId, userEmail);
-
-  const figuren = figs.map(f => {
-    let zitate = [];
-    if (f.schluesselzitate) {
-      try { zitate = JSON.parse(f.schluesselzitate) || []; } catch { zitate = []; }
-    }
-    const fy = yearMap?.get(f.id) || null;
-    let arc = null;
-    if (f.arc) {
-      try { arc = JSON.parse(f.arc); } catch { arc = null; }
-      // Alt-Daten / Fehlparse: arc-Spalte hielt einen Flachstring statt JSON.
-      if (arc === null && typeof f.arc === 'string') arc = { typ: '', anfang: '', wendepunkte: [], ende: f.arc };
-    }
-    return {
-      id: f.fig_id,
-      stale: !!f.stale,
-      name: f.name,
-      kurzname: f.kurzname,
-      typ: f.typ,
-      geburtstag: f.geburtstag,
-      geschlecht: f.geschlecht,
-      beruf: f.beruf,
-      wohnadresse: f.wohnadresse || null,
-      aeusseres: f.aeusseres || null,
-      stimme: f.stimme || null,
-      hintergrund: f.hintergrund || null,
-      beschreibung: f.beschreibung,
-      sozialschicht: f.sozialschicht || null,
-      praesenz: f.praesenz || null,
-      rolle: f.rolle || null,
-      motivation: f.motivation || null,
-      konflikt: f.konflikt || null,
-      entwicklung: f.entwicklung || null,
-      arc: (arc && (arc.anfang || arc.ende || (Array.isArray(arc.wendepunkte) && arc.wendepunkte.length) || arc.typ)) ? arc : null,
-      erste_erwaehnung: f.erste_erwaehnung || null,
-      erste_erwaehnung_page_id: f.erste_erwaehnung_page_id || null,
-      schluesselzitate: Array.isArray(zitate) ? zitate : [],
-      eigenschaften: tagMap[f.id] || [],
-      kapitel: kapitelFor(f.id),
-      seiten: seitenMap[f.fig_id] || [],
-      lebensereignisse: evtMap[f.id] || [],
-      beziehungen: relMap[f.fig_id] || [],
-      jahr_im_roman:   fy ? fy.jahr_im_roman   : null,
-      geburtsjahr:     fy ? fy.geburtsjahr     : null,
-      alter_im_roman:  fy ? fy.alter_im_roman  : null,
-      anchor_ereignis: fy ? fy.anchor_ereignis : null,
-      anchor_kapitel:  fy ? fy.anchor_kapitel  : null,
-    };
-  });
-
-  res.json({ figuren, updated_at: figs[0]?.updated_at || null });
+  res.json(listFigurenWithDetails(req.bookId, sessionEmail(req)));
 });
 
 // Figuren eines Buchs speichern (überschreibt)
@@ -441,7 +70,10 @@ router.put('/:book_id', jsonBody, (req, res) => {
   // (>500 Seiten × >50 Figuren) braucht der Regex-Scan mehrere Sekunden.
   res.json({ ok: true });
   // FTS-Index nachziehen: saveFigurenToDb ist Full-Replace pro Buch — daher
-  // kind/book droppen und neu indexieren.
+  // kind/book droppen und neu indexieren. Beides bewusst OHNE user_email:
+  // `removeKindForBook` loescht buchweit, also muss auch buchweit neu geschrieben
+  // werden — eine user-skopierte Auswahl hier liesse die Figuren der uebrigen
+  // Mitarbeitenden desselben Buchs geloescht und unindiziert zurueck.
   searchIndex.removeKindForBook('figure', bookId);
   const figRows = db.prepare('SELECT id FROM figures WHERE book_id = ?').all(bookId);
   for (const r of figRows) searchIndex.upsertFigure(r.id);
@@ -498,51 +130,6 @@ router.post('/:book_id/merge', jsonBody, (req, res) => {
   });
 });
 
-// Zwei Szenen zusammenführen (Pendant zum Figuren-Merge). `source_id`/`target_id`
-// sind INTEGER `figure_scenes.id` — Szenen führen ihre PK öffentlich.
-router.post('/scenes/:book_id/merge', jsonBody, (req, res) => {
-  const bookId = toIntId(req.params.book_id);
-  const srcId = toIntId(req.body?.source_id);
-  const tgtId = toIntId(req.body?.target_id);
-  if (!bookId || !srcId || !tgtId) return res.status(400).json({ error_code: 'INVALID_ID' });
-  if (srcId === tgtId) return res.status(409).json({ error_code: 'SAME_ENTITY' });
-  const userEmail = sessionEmail(req);
-  const emailCond = userEmail ? 'user_email = ?' : 'user_email IS NULL';
-  const emailVal = userEmail ? [userEmail] : [];
-  const get = db.prepare(`SELECT id FROM figure_scenes WHERE id = ? AND book_id = ? AND ${emailCond}`);
-  if (!get.get(srcId, bookId, ...emailVal)) return res.status(404).json({ error_code: 'NOT_FOUND', side: 'source' });
-  if (!get.get(tgtId, bookId, ...emailVal)) return res.status(404).json({ error_code: 'NOT_FOUND', side: 'target' });
-
-  const result = mergeScenes(bookId, userEmail, srcId, tgtId);
-  searchIndex.remove('scene', srcId);
-  semanticChunks.remove('scene', srcId);
-  searchIndex.upsertScene(tgtId);
-  logger.info(`Szenen-Merge: «${result.sourceName}» → «${result.targetName}» (Buch ${bookId}).`);
-  res.json({ ok: true, ...result });
-});
-
-// Bulk-Cleanup: alle STALE Szenen eines Buchs auf einmal löschen (Danger-Zone). Pendant
-// zum Einzel-Delete '/scenes/:book_id/:id'. Der Reconcile markiert nicht mehr im Text
-// vorkommende Szenen als stale=1 statt sie zu löschen (FK-Refs überleben); dieser Endpunkt
-// räumt die aufgelaufenen Altlasten. Nur stale wird angefasst. CASCADE räumt die Bridges mit.
-// Muss VOR '/scenes/:book_id/:id' stehen, sonst matcht 'stale' als :id.
-router.delete('/scenes/:book_id/stale', (req, res) => {
-  const bookId = toIntId(req.params.book_id);
-  if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const userEmail = sessionEmail(req);
-  const emailCond = userEmail ? 'user_email = ?' : 'user_email IS NULL';
-  const emailVal = userEmail ? [userEmail] : [];
-  const ids = db.prepare(
-    `SELECT id FROM figure_scenes WHERE book_id = ? AND ${emailCond} AND stale = 1`
-  ).all(bookId, ...emailVal).map(r => r.id);
-  db.transaction(() => {
-    const del = db.prepare('DELETE FROM figure_scenes WHERE id = ?');
-    for (const id of ids) del.run(id);
-  })();
-  for (const id of ids) { searchIndex.remove('scene', id); semanticChunks.remove('scene', id); }
-  res.json({ ok: true, deleted: { scenes: ids.length } });
-});
-
 // Bulk-Cleanup: alle STALE Figuren eines Buchs auf einmal löschen (Danger-Zone). Pendant
 // zum Einzel-Delete '/:book_id/:id'. Nur stale wird angefasst — aktive Figuren bleiben
 // unberührt. CASCADE räumt die Bridges mit.
@@ -562,26 +149,6 @@ router.delete('/:book_id/stale', (req, res) => {
   })();
   for (const id of ids) { searchIndex.remove('figure', id); semanticChunks.remove('figure', id); }
   res.json({ ok: true, deleted: { figures: ids.length } });
-});
-
-// Einzelne STALE-Szene endgültig löschen (GUI-Button auf "nicht mehr im Text"-Zeilen).
-// Nur stale erlaubt. CASCADE räumt scene_figures/scene_locations/song_scenes +
-// research_item_links mit.
-router.delete('/scenes/:book_id/:id', (req, res) => {
-  const bookId = toIntId(req.params.book_id);
-  const id = toIntId(req.params.id);
-  if (!bookId || !id) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const userEmail = sessionEmail(req);
-  const emailCond = userEmail ? 'user_email = ?' : 'user_email IS NULL';
-  const row = db.prepare(
-    `SELECT stale FROM figure_scenes WHERE id = ? AND book_id = ? AND ${emailCond}`
-  ).get(id, bookId, ...(userEmail ? [userEmail] : []));
-  if (!row) return res.status(404).json({ error_code: 'NOT_FOUND' });
-  if (!row.stale) return res.status(409).json({ error_code: 'NOT_STALE' });
-  db.prepare('DELETE FROM figure_scenes WHERE id = ?').run(id);
-  searchIndex.remove('scene', id);
-  semanticChunks.remove('scene', id);
-  res.json({ ok: true });
 });
 
 // Einzelne STALE-Figur endgültig löschen (GUI-Button auf "nicht mehr im Text"-Zeilen).

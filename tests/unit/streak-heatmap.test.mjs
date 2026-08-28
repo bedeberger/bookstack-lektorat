@@ -16,7 +16,8 @@ const { bookOverviewMethods } = await import('../../public/js/book-overview.js')
 // Tests verwenden den gleichen Helper wie Production-Code (lokales Datum,
 // kein UTC). Sentinel gegen das alte UTC-Datum-Problem in
 // tests/unit/local-date.test.mjs.
-import { localIsoDaysAgo } from '../../public/js/utils.js';
+import { localIsoDaysAgo, localIsoDate } from '../../public/js/utils.js';
+import { computeWeekBars } from '../../public/js/today-ring.js';
 function isoDaysAgo(n) { return localIsoDaysAgo(n); }
 
 function makeCtx(stats = [], tokEsts = null) {
@@ -221,16 +222,17 @@ test('Konsistenz: Donut == 7-Tage-Bar today (User löscht nach Sync)', () => {
   assert.equal(donut, 1212);
 });
 
-test('Konsistenz: Donut == _charsTodayDelta()', () => {
-  // Single source of truth.
+test('Konsistenz: Donut == Tagesbilanz von heute (makeDayDelta)', () => {
+  // Single source of truth: der Ring und jede Tages-Kachel lesen dieselbe
+  // Tagesbilanz-Funktion aus today-ring.js.
   const stats = [
     { recorded_at: isoDaysAgo(2), chars: 1000 },
     { recorded_at: isoDaysAgo(0), chars: 1500 },
   ];
   const ctx = makeCtx(stats, {});
   const donut = ctx.overviewTodayRing(1500).chars;
-  const helper = ctx._charsTodayDelta();
-  assert.equal(donut, helper);
+  const viaDayDelta = ctx._dayDelta()(localIsoDate());
+  assert.equal(donut, viaDayDelta);
   assert.equal(donut, 500);
 });
 
@@ -271,4 +273,46 @@ test('Streak: heute-Cell colored auch wenn nur Live-tokEsts (kein heutiger Snaps
   let coloredCells = 0;
   for (const w of out.weeks) for (const c of w) if (c?.level > 0) coloredCells++;
   assert.ok(coloredCells >= 1, 'mindestens eine Cell colored');
+});
+
+test('Ausgefallener Cron-Tag verschluckt den Folgetag nicht (Carry-Forward)', () => {
+  // Regressions-Sentinel: Snapshots fuer d-4 und d-2, d-3 fehlt (Cron lief
+  // nicht). Ohne Nachziehen des letzten Standes war der Vortagswert von d-2
+  // unbekannt und die an dem Tag geschriebenen 2000 Zeichen fielen aus jeder
+  // Bilanz — waehrend das Header-Popover sie zeigte.
+  const stats = [
+    { recorded_at: isoDaysAgo(4), chars: 1000 },
+    { recorded_at: isoDaysAgo(2), chars: 3000 },
+  ];
+  const ctx = makeCtx(stats, {});
+  const byIso = new Map(ctx.overviewLast7Days().map(d => [d.iso, d.delta]));
+  assert.equal(byIso.get(isoDaysAgo(3)), 0, 'Lueckentag: gemessener Nulltag');
+  assert.equal(byIso.get(isoDaysAgo(2)), 2000, 'Folgetag behaelt seine Zeichen');
+});
+
+test('Konsistenz: 7-Tage-Kachel == Header-Popover-Balken (gleiche Datenquelle)', () => {
+  // Beide lesen dieselbe /history/book-stats-Antwort und dasselbe tokEsts.
+  // Der Header klemmt auf 0 (Ziel-Semantik), die Kachel behaelt das Vorzeichen
+  // (Netto-Bilanz) — abgesehen davon MUESSEN sie Tag fuer Tag uebereinstimmen.
+  const stats = [
+    { recorded_at: isoDaysAgo(6), chars: 500 },
+    { recorded_at: isoDaysAgo(5), chars: 1800 },
+    { recorded_at: isoDaysAgo(3), chars: 4000 },
+    { recorded_at: isoDaysAgo(2), chars: 3200 },
+    { recorded_at: isoDaysAgo(1), chars: 5000 },
+  ];
+  const tokEsts = { 1: { chars: 6400 } };
+  const ctx = makeCtx(stats, tokEsts);
+  const tile = ctx.overviewLast7Days();
+  const header = computeWeekBars({ stats, tokEsts, days: 7 });
+  assert.equal(tile.length, header.length);
+  for (let i = 0; i < tile.length; i++) {
+    assert.equal(tile[i].iso, header[i].iso, `Tag ${i}: gleicher Kalendertag`);
+    assert.equal(Math.max(0, tile[i].delta), header[i].chars,
+      `Tag ${tile[i].iso}: Kachel ${tile[i].delta} vs. Header ${header[i].chars}`);
+  }
+  // Der Loesch-Tag ist in der Kachel negativ und im Header 0 — genau der
+  // beabsichtigte Unterschied, nicht Drift.
+  const del = tile.find(d => d.iso === isoDaysAgo(2));
+  assert.equal(del.delta, -800);
 });

@@ -518,6 +518,11 @@ export const BOOK_CHAT_SLIM_TOOL_NAMES = [
   'get_timeline',
   'list_scenes',
   'list_locations',
+  // Welt-Fakten sind der billigste Weg zu etabliertem Buch-Wissen: schon verdichtete
+  // Aussagen statt Passagen, die erst gelesen werden muessen — genau Stufe 2 der
+  // Kosten-Leiter. Fehlte das Werkzeug, eskalierte ein kleines Modell fuer «welche
+  // Regel gilt hier» auf get_chapter_text.
+  'list_world_facts',
   'get_reviews',
   'generate_image',
   'final_answer',

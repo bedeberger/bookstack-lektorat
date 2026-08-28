@@ -262,6 +262,21 @@ function _szenenLines(szenen) {
     .join('\n');
 }
 
+// Weltgesetze (world_facts, Kategorien regel/technik): die etablierten Regeln der
+// Buchwelt. Anders als Szenen/Textbelege sagen sie nicht, WAS geschrieben ist,
+// sondern was in dieser Welt GILT — der einzige Kontext, an dem sich ein geplanter
+// Beat als unmoeglich erweisen kann.
+function _weltgesetzeLines(weltgesetze) {
+  return (weltgesetze || []).slice(0, 90)
+    .filter(w => w && w.fakt)
+    .map(w => {
+      const subj = w.subjekt ? `${w.subjekt}: ` : '';
+      const kap = (w.kapitel || []).length ? ` (etabliert in ${w.kapitel.slice(0, 3).join(', ')})` : '';
+      return `- [${w.kategorie || 'regel'}] ${subj}${String(w.fakt).trim()}${kap}`;
+    })
+    .join('\n');
+}
+
 // ── System-Prompt ────────────────────────────────────────────────────────────
 // Self-contained (keine Locale-Config-Abhängigkeit): Rolle + JSON-Only-Pflicht.
 
@@ -343,7 +358,7 @@ export const SCHEMA_PLOT_BRAINSTORM = _obj({
 // Prüft den geplanten Plot gegen die Buchrealität: extrahierte Szenen + Kapitel +
 // Figuren. Findet Brüche, Lücken und „geplant vs. schon geschrieben"-Drift.
 
-export function buildPlotConsistencyPrompt(acts, beats, kapitel = [], szenen = [], figuren = [], buchKontext = '', werkstattFiguren = [], threads = [], orte = [], zeitstrahl = [], kontinuitaet = [], recherche = [], anchorMap = null, anchorInfo = {}, relations = []) {
+export function buildPlotConsistencyPrompt(acts, beats, kapitel = [], szenen = [], figuren = [], buchKontext = '', werkstattFiguren = [], threads = [], orte = [], zeitstrahl = [], kontinuitaet = [], recherche = [], anchorMap = null, anchorInfo = {}, relations = [], weltgesetze = []) {
   const ctxSeg = (buchKontext || '').trim() ? `\nBUCH-KONTEXT:\n${buchKontext}\n` : '';
   const kapLines = _kapitelLines(kapitel);
   const kapSeg = kapLines ? `\nKAPITEL DES BUCHS (chronologisch):\n${kapLines}\n` : '';
@@ -378,6 +393,17 @@ export function buildPlotConsistencyPrompt(acts, beats, kapitel = [], szenen = [
     : '';
   const hybridNote = _hasOwnActs(acts)
     ? '\nHYBRID-AKTE: Manche Stränge haben eine EIGENE Aktstruktur (im Board als „eigener Akt von Strang …" gekennzeichnet), andere teilen sich die geteilten Akte. Ein Strang mit eigenen Akten plant absichtlich unabhängig — beanstande NICHT, dass er die geteilten Akte „überspringt". Prüfe seinen dramaturgischen Bogen INNERHALB seiner eigenen Akte.\n'
+    : '';
+  // Weltgesetz-Segment: fehlt es, wird NICHT behauptet, die Welt habe keine Regeln —
+  // der Block entfaellt schlicht (ein nie gelaufener Fakten-Index ist „unbekannt",
+  // nicht „regelfrei"; gleiches Muster wie das Textbeleg-Segment).
+  const weltLines = _weltgesetzeLines(weltgesetze);
+  const weltSeg = weltLines
+    ? `\nETABLIERTE WELTGESETZE (aus der Buchanalyse extrahierte Regeln + Technik-Stand dieser Welt — was hier GILT, unabhaengig davon, was schon geschrieben ist):\n${weltLines}\n`
+    : '';
+  const weltChecks = weltLines
+    ? `
+- Verstoss gegen ein Weltgesetz: Setzt ein geplanter Beat etwas voraus, das nach den oben gelisteten Regeln/dem Technik-Stand dieser Welt NICHT moeglich ist (eine Regel wird gebrochen, ohne dass der Beat das als Bruch ausweist)? Nenne die verletzte Regel woertlich im "problem". Ein bewusst gesetzter Regelbruch, den der Beat selbst als Wendepunkt benennt, ist KEIN Fehler — beanstande nur den unbemerkten Widerspruch. Die Regeln sind extrahiert, nicht von der Autorin kuratiert: passt eine Regel erkennbar nicht, urteile nicht dagegen.`
     : '';
   const relLines = _relationsLines(relations);
   const relSeg = relLines
@@ -421,7 +447,7 @@ Der Marker ist Ähnlichkeit, kein Beweis — urteile am Beleg-Ausschnitt, nicht 
 
 GEPLANTES BEAT-BOARD:
 ${_boardOutline(acts, beats, _threadInfoMap(threads), anchorMap)}
-${anchorSeg}${ctxSeg}${kapSeg}${szSeg}${figSeg}${wfSeg}${orteSeg}${zeitSeg}${kontiSeg}${rechSeg}${strSeg}${hybridNote}${archNote}${relSeg}
+${anchorSeg}${ctxSeg}${kapSeg}${szSeg}${figSeg}${wfSeg}${orteSeg}${zeitSeg}${weltSeg}${kontiSeg}${rechSeg}${strSeg}${hybridNote}${archNote}${relSeg}
 Status-Legende der Beats: geplant (Idee, noch nicht eingearbeitet) · im Buch (laut Plan schon geschrieben). Zusätzlich kann ein Beat als "verworfen" markiert sein (ausgemustert, soll nicht mehr ins Buch).
 
 Prüfe auf:
@@ -430,7 +456,7 @@ Prüfe auf:
 - Chronologie-Brüche: die Reihenfolge der Beats (Akte → Beats) passt nicht zur Reihenfolge der verknüpften Kapitel
 - Logische Brüche / Widersprüche innerhalb der Handlung (Kausalität, Motivation, Figurenlogik)
 - Lücken: Kapitel mit Szenen, für die es keinen Beat gibt — oder dramaturgische Leerstellen (fehlender Wendepunkt, fehlende Auflösung eines Konflikts)
-- Verworfene Beats, deren Inhalt trotzdem noch im Buch auftaucht${zeitChecks}${strChecks}${rechChecks}${relChecks}
+- Verworfene Beats, deren Inhalt trotzdem noch im Buch auftaucht${zeitChecks}${weltChecks}${strChecks}${rechChecks}${relChecks}
 
 Schwere-Skala:
 - "kritisch": logischer Bruch oder Plan-Realität-Widerspruch, der die Handlung zerstört

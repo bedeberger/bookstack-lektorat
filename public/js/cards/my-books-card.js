@@ -146,6 +146,13 @@ export function registerMyBooksCard() {
         if (!r.ok) throw new Error('HTTP ' + r.status);
         const next = await r.json();
         row.is_finished = !!next.is_finished;
+        // Zweiter Schreibpfad auf /booksettings neben dem Einstellungs-Formular:
+        // den geteilten Rohstand ebenso verwerfen, sonst zeigt die Uebersicht
+        // des Buchs weiter „nicht abgeschlossen".
+        if (String(window.__app.$store.nav.selectedBookId) === String(row.book_id)) {
+          window.__app.invalidateBookSettingsCache?.();
+          window.__app.$store.progress.dailyProgressIsFinished = row.is_finished;
+        }
         // Der 0→1-Uebergang haelt serverseitig eine Fassung fest; die Zahl in
         // der Spalte stimmt danach nicht mehr. Ehrlicher als eine geschaetzte
         // Erhoehung: einmal frisch laden.

@@ -18,7 +18,7 @@ const { db } = require('../../db/connection');
 const plotDb = require('../../db/plot');
 const draftFiguresDb = require('../../db/draft-figures');
 const { extractPsychologie } = require('../../lib/draft-mindmap-extract');
-const { getLatestContinuityCheck } = require('../../db/schema');
+const { getLatestContinuityCheck, listWorldFacts, worldFactsScanState } = require('../../db/schema');
 
 const plotRouter = express.Router();
 
@@ -190,12 +190,12 @@ function _ctxLimits(userEmail) {
     budgetChars = getContextConfigFor(resolveProvider({ userEmail })).inputBudgetChars || budgetChars;
   } catch { /* Default = grosszügig */ }
   if (budgetChars < 80000) {
-    return { figuren: 25, relPerFig: 4, evtPerFig: 0, kapitel: 40, szenen: 30, orte: 15, zeitstrahl: 0, kontinuitaet: 8, recherche: 8 };
+    return { figuren: 25, relPerFig: 4, evtPerFig: 0, kapitel: 40, szenen: 30, orte: 15, zeitstrahl: 0, kontinuitaet: 8, recherche: 8, weltgesetze: 15 };
   }
   if (budgetChars < 250000) {
-    return { figuren: 45, relPerFig: 6, evtPerFig: 4, kapitel: 80, szenen: 70, orte: 30, zeitstrahl: 60, kontinuitaet: 15, recherche: 25 };
+    return { figuren: 45, relPerFig: 6, evtPerFig: 4, kapitel: 80, szenen: 70, orte: 30, zeitstrahl: 60, kontinuitaet: 15, recherche: 25, weltgesetze: 40 };
   }
-  return { figuren: 120, relPerFig: 12, evtPerFig: 10, kapitel: 200, szenen: 150, orte: 60, zeitstrahl: 200, kontinuitaet: 40, recherche: 60 };
+  return { figuren: 120, relPerFig: 12, evtPerFig: 10, kapitel: 200, szenen: 150, orte: 60, zeitstrahl: 200, kontinuitaet: 40, recherche: 60, weltgesetze: 90 };
 }
 
 // Wendet die Figuren-Limits an: Figurenzahl kappen, Beziehungen/Ereignisse pro
@@ -311,6 +311,34 @@ function _anchorContext(bookId, userEmail) {
   }
 }
 
+// Weltgesetze als Consistency-Kontext: die etablierten Regeln der Buchwelt aus
+// `world_facts` (Komplettanalyse). NUR die Kategorien `regel` + `technik` — sie sind
+// das, wogegen ein geplanter Beat VERSTOSSEN kann; die uebrigen Kategorien sind
+// Aussagen ueber die Welt, keine Gesetze, an die sich der Plan halten muss (und
+// Fakt-gegen-Fakt prueft ohnehin der Kontinuitaets-Check).
+//
+// Der Plan wurde bisher gegen Szenen, Kapitel und Textbelege geprueft — also gegen
+// das, was GESCHRIEBEN ist. Ein Beat, der gegen ein etabliertes Weltgesetz verstoesst
+// («die Tote erscheint», «er telefoniert 1890»), war damit strukturell unentdeckbar.
+//
+// Leerer Index heisst „nie analysiert", nicht „diese Welt hat keine Regeln" (gleiches
+// Muster wie `anchorMap === null`): ohne Fakten faellt der Block WEG statt zu behaupten,
+// es gaebe keine. Best-effort — ein Fehler hier darf den Check nicht failen.
+function _weltgesetzeContext(bookId, userEmail, limits) {
+  return _loadCtx('weltgesetze', () => {
+    try {
+      const { scanned } = worldFactsScanState(bookId, userEmail);
+      if (!scanned) return [];
+      return listWorldFacts(bookId, userEmail, { kategorien: ['regel', 'technik'] })
+        .slice(0, limits.weltgesetze)
+        .map(f => ({ kategorie: f.kategorie, subjekt: f.subjekt, fakt: f.fakt, kapitel: f.kapitel }));
+    } catch (e) {
+      require('../../logger').warn(`[plot-consistency] Weltgesetz-Kontext übersprungen: ${e.message}`);
+      return [];
+    }
+  });
+}
+
 // Gemeinsamer Kontext-Block beider Jobs (Brainstorm + Consistency): Buch-Kontext,
 // Kontext-Budget und die grundierenden Listen (Figuren, Werkstatt-Figuren, Kapitel,
 // Orte, Zeitstrahl, Stränge), bereits auf `limits` gekappt. Recherche bleibt
@@ -382,7 +410,7 @@ async function runPlotBrainstormJob(jobId, bookId, actId, threadId, userEmail) {
         runId = plotDb.insertPlotBrainstormRun({
           bookId, userEmail, actId, threadId: threadId ?? null,
           vorschlagCount: vorschlaege.length,
-          result: { vorschlaege }, model: _modelName(),
+          result: { vorschlaege }, model: _modelName(resolveProvider({ userEmail })),
         });
       } catch (e) {
         logger.warn(`Plot-Brainstorm-Run-Insert fehlgeschlagen book=${bookId}: ${e.message}`);
@@ -425,8 +453,12 @@ async function runPlotConsistencyJob(jobId, bookId, userEmail) {
     // damit die KI Setup/Payoff und Kausalketten strukturell prüfen kann statt sie
     // nur aus der Prosa zu raten. Best-effort — leere Liste ist kein Fehler.
     const relations = _loadCtx('relations', () => plotDb.listBeatRelations(bookId, userEmail));
+    // Weltgesetze (world_facts, Kategorien regel/technik): der Pruefstein, den weder
+    // Szenen-Index noch Textbelege liefern — verstoesst ein geplanter Beat gegen eine
+    // etablierte Regel der Buchwelt?
+    const weltgesetze = _weltgesetzeContext(bookId, userEmail, limits);
 
-    logger.info(`Plot-Consistency Start: book=${bookId} beats=${beats.length} szenen=${szenen.length} kapitel=${kapitel.length} orte=${orte.length} zeitstrahl=${zeitstrahl.length} kontinuitaet=${kontinuitaet.length} werkstatt=${werkstattFiguren.length} straenge=${threads.length} recherche=${recherche.length} relationen=${relations.length} textbelege=${anchorMap ? Object.keys(anchorMap).length : 'aus'}`);
+    logger.info(`Plot-Consistency Start: book=${bookId} beats=${beats.length} szenen=${szenen.length} kapitel=${kapitel.length} orte=${orte.length} zeitstrahl=${zeitstrahl.length} kontinuitaet=${kontinuitaet.length} werkstatt=${werkstattFiguren.length} straenge=${threads.length} recherche=${recherche.length} relationen=${relations.length} textbelege=${anchorMap ? Object.keys(anchorMap).length : 'aus'} weltgesetze=${weltgesetze.length}`);
     updateJob(jobId, { statusText: 'job.plot.consistency.aiReply', progress: 10 });
 
     // maxTokens grosszuegig: ein schonungsloser Check ueber alle Beats/Szenen/
@@ -434,7 +466,7 @@ async function runPlotConsistencyJob(jobId, bookId, userEmail) {
     // 3000 schnitt die JSON-Antwort regelmaessig mitten im Array ab → Truncation.
     const tok = { in: 0, out: 0, ms: 0 };
     const result = await aiCall(jobId, tok,
-      buildPlotConsistencyPrompt(acts, beats, kapitel, szenen, figuren, BUCH_KONTEXT, werkstattFiguren, threads, orte, zeitstrahl, kontinuitaet, recherche, anchorMap, anchorInfo, relations),
+      buildPlotConsistencyPrompt(acts, beats, kapitel, szenen, figuren, BUCH_KONTEXT, werkstattFiguren, threads, orte, zeitstrahl, kontinuitaet, recherche, anchorMap, anchorInfo, relations, weltgesetze),
       buildPlotSystemPrompt(),
       10, 95, 6000, 0.3, 12000, undefined, SCHEMA_PLOT_CONSISTENCY,
     );
@@ -487,7 +519,7 @@ async function runPlotConsistencyJob(jobId, bookId, userEmail) {
     try {
       runId = plotDb.insertPlotConsistencyRun({
         bookId, userEmail, konfliktCount: konflikte.length,
-        result: { konflikte, fazit }, model: _modelName(),
+        result: { konflikte, fazit }, model: _modelName(resolveProvider({ userEmail })),
       });
     } catch (e) {
       logger.warn(`Plot-Consistency-Run-Insert fehlgeschlagen book=${bookId}: ${e.message}`);

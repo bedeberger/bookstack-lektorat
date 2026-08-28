@@ -1,12 +1,20 @@
-// Stil-Heatmap: deterministische Stil-Metriken pro Kapitel (kein KI-Call).
-// Greift auf page_stats zu (gefüllt vom Sync-Job über lib/page-index.js).
-// Methoden werden in Alpine.data('stilCard') gespreadet; Root-Zugriffe via window.__app.
+// Stil-Heatmap: Anzeige des Kapitel-Rasters, das der Server liefert (kein KI-Call).
+// Gerechnet wird in lib/stil-heatmap.js — hier entstehen nur noch Beschriftung,
+// Farbskala und der Drilldown. Methoden werden in Alpine.data('stilCard')
+// gespreadet; Root-Zugriffe via window.__app.
+//
+// Warum die Zell-Darstellung EINMAL pro Datenstand vorberechnet wird (`stilRows`)
+// und nicht pro Zelle im Template: Alpine memoisiert Methodenaufrufe in Bindings
+// nicht. Ein Aufruf in `:class`/`:style` laeuft bei jedem Render erneut — bei
+// Kapiteln x 9 Metriken x 2 Bindings sind das tausende Durchlaeufe, und wenn
+// darin die Min/Max-Skala ueber alle Kapitel steckt, wird daraus O(Kapitel^2).
+// Das Template liest darum ausschliesslich fertige Eigenschaften.
 
 import { fetchJson, formatNumber, heatmapCellVars, localeTag, minMaxBy, tzOpts } from '../utils.js';
 
 // Metrik-Schlüssel → i18n-Label. Reihenfolge = Spaltenreihenfolge in der Heatmap.
-// sampleBucket: Schlüssel im pro-Seite `style_samples`-Objekt bzw. 'repetition'
-// für die Top-Wörter aus repetition_data. null → keine Drilldown-Beispiele.
+// sampleBucket: Eimer im Drilldown-Endpunkt (/history/style-samples) bzw.
+// 'repetition' für die Top-Wörter. null → keine Drilldown-Beispiele.
 const STIL_METRICS = [
   { key: 'filler_per1k',     label: 'stil.metric.filler',     decimals: 1, higherIsWorse: true,  sampleBucket: 'filler'     },
   { key: 'passive_per1k',    label: 'stil.metric.passive',    decimals: 1, higherIsWorse: true,  sampleBucket: 'passive'    },
@@ -19,22 +27,102 @@ const STIL_METRICS = [
   { key: 'flesch_de',        label: 'stil.metric.flesch',     decimals: 1, higherIsWorse: false, sampleBucket: null         },
 ];
 
-// Pro-Seite-Zählung, die für die Sortierung der Drilldown-Treffer dient.
-const STIL_COUNT_FIELD = { filler: 'filler_count', passive: 'passive_count', adverb: 'adverb_count' };
+// Lookup statt linearem Scan — die Metrik-Definition wird pro Zelle gebraucht.
+const STIL_METRIC_BY_KEY = new Map(STIL_METRICS.map(m => [m.key, m]));
 
-// Erwartete METRICS_VERSION aus lib/page-index.js. Muss mitgepflegt werden, damit
-// _stilNeedsSync bei einem Backend-Bump auto-resynct. Gleichlauf ist durch
-// tests/unit/metrics-version-drift.test.mjs gegated.
-const EXPECTED_METRICS_VERSION = 7;
+/** Zelltyp (→ CSS-Klasse) für einen Wert. Getrennt vom Variablen-Style, damit
+ *  keine Inline-Style-Strings im DOM landen. Varianten: 'neutral' (kein Tint),
+ *  'primary' (primary-fade über --heatmap-t), 'tinted' (grün→rot über --heatmap-t). */
+function _cellKind(value, def, range) {
+  if (typeof value !== 'number' || !isFinite(value)) return 'neutral';
+  if (!def || range.max === range.min) return 'neutral';
+  return def.higherIsWorse === null ? 'primary' : 'tinted';
+}
+
+/** CSS-Custom-Properties für eine Zelle: 0..1 normalisiert, Richtung je nach
+ *  higherIsWorse. null → neutrale Skala (blasser bis kräftiger Primary-Ton),
+ *  true → hohe Werte rot, false → umgekehrt. */
+function _cellVars(value, def, range) {
+  if (typeof value !== 'number' || !isFinite(value)) return {};
+  if (!def || range.max === range.min) return {};
+  let t = (value - range.min) / (range.max - range.min);
+  if (def.higherIsWorse === false) t = 1 - t;
+  if (def.higherIsWorse === null) {
+    const alpha = 0.12 + (0.55 * t);
+    return { '--heatmap-t': Math.round(alpha * 100) + '%' };
+  }
+  return heatmapCellVars(t);
+}
+
+/** Baut die render-fertigen Zeilen aus dem Kapitel-Raster des Servers.
+ *  Ein Durchlauf für die Min/Max-Skala je Metrik, einer für die Zellen — statt
+ *  einer Skala-Berechnung pro Zelle. Pure Funktion (kein `this`), damit sie ohne
+ *  Alpine testbar ist. */
+export function buildStilRows(chapters, uiLocale) {
+  const rows = [];
+  if (!Array.isArray(chapters) || !chapters.length) return rows;
+
+  const ranges = new Map();
+  for (const m of STIL_METRICS) ranges.set(m.key, minMaxBy(chapters, (c) => c[m.key]));
+
+  for (const c of chapters) {
+    const cells = {};
+    for (const m of STIL_METRICS) {
+      const value = c[m.key];
+      const range = ranges.get(m.key);
+      const clickable = !!m.sampleBucket && (value || 0) > 0;
+      cells[m.key] = {
+        text: formatNumber(value, uiLocale, m.decimals ?? 1),
+        cls: `heatmap-cell--${_cellKind(value, m, range)}${clickable ? ' heatmap-cell--clickable' : ''}`,
+        vars: _cellVars(value, m, range),
+        clickable,
+        detailKey: `${c.key}:${m.key}`,
+      };
+    }
+    rows.push({ ...c, cells, wordsLabel: formatNumber(c.words || 0, uiLocale, 0) });
+  }
+  return rows;
+}
 
 export const stilMethods = {
   get stilMetricDefs() { return STIL_METRICS; },
 
+  // Einziger Memo-Helper der Karte (siehe CLAUDE.md „Memo-Pattern"). Deps werden
+  // flach per === verglichen; `_memos` wird beim Reset der Karte geleert.
+  _memo(key, deps, compute) {
+    const memos = (this._memos ||= {});
+    const hit = memos[key];
+    if (hit && hit.deps.length === deps.length && hit.deps.every((d, i) => d === deps[i])) {
+      return hit.value;
+    }
+    const value = compute();
+    memos[key] = { deps: [...deps], value };
+    return value;
+  },
+
+  // Der Server entscheidet, ob nachgerechnet werden muss — er kennt
+  // lib/page-index.js#METRICS_VERSION. Das Frontend hält bewusst keine Kopie
+  // davon (an genau so einer Kopie ist diese Karte schon einmal gedriftet).
   _stilNeedsSync() {
-    const pages = this.stilData?.pages || [];
-    if (pages.length === 0) return true;
-    // Als "unvollständig" gilt: lix leer trotz words>0, oder metrics_version < EXPECTED.
-    return pages.some(p => (p.words > 0) && (p.lix == null || (p.metrics_version ?? 0) < EXPECTED_METRICS_VERSION));
+    return this.stilData?.needsSync !== false;
+  },
+
+  stilHasData() {
+    return (this.stilData?.chapters?.length || 0) > 0;
+  },
+
+  // Kapitelname der Zeile; `null` heisst „keinem Kapitel zugeordnet" — das Label
+  // dafür ist UI-Text und kommt darum nicht aus der Antwort.
+  stilChapterName(name) {
+    return name || window.__app.t('stil.unassigned');
+  },
+
+  // Render-fertige Zeilen inkl. Zell-Klassen und -Variablen. Memoized über den
+  // Datenstand und die Anzeigesprache (beide gehen in die Zahlen ein).
+  stilRows() {
+    const chapters = this.stilData?.chapters || [];
+    const locale = Alpine.store('shell').uiLocale;
+    return this._memo('rows', [chapters, locale], () => buildStilRows(chapters, locale));
   },
 
   async loadStilStats(bookId) {
@@ -42,6 +130,8 @@ export const stilMethods = {
     try {
       const data = await fetchJson('/history/style-stats/' + bookId);
       this.stilData = data;
+      this.activeStilDetailKey = null;
+      this.stilDetail = null;
     } catch (e) {
       console.error('[loadStilStats]', e);
       this.stilStatus = window.__app.t('common.errorColon') + (e.message || '');
@@ -66,113 +156,9 @@ export const stilMethods = {
     }
   },
 
-  // Aggregiert die Seiten zu Kapiteln. Liefert Array mit pro-Kapitel-Metriken.
-  // Gewichtete Durchschnitte über die Wortzahl — dominierende Seiten zählen mehr.
-  stilChaptersAggregated() {
-    const pages = this.stilData?.pages || [];
-    if (!pages.length) return [];
-    const groups = new Map();
-    const unassignedLabel = window.__app.t('stil.unassigned');
-    for (const p of pages) {
-      const key = p.chapter_id ?? '__uncat__';
-      const name = p.chapter_name || unassignedLabel;
-      if (!groups.has(key)) groups.set(key, { key, name, pages: [] });
-      groups.get(key).pages.push(p);
-    }
-    const out = [];
-    for (const g of groups.values()) {
-      const totalWords    = g.pages.reduce((s, p) => s + (p.words || 0), 0);
-      const totalChars    = g.pages.reduce((s, p) => s + (p.chars || 0), 0);
-      const totalDialog   = g.pages.reduce((s, p) => s + (p.dialog_chars || 0), 0);
-      const fillerSum     = g.pages.reduce((s, p) => s + (p.filler_count || 0), 0);
-      const passiveSum    = g.pages.reduce((s, p) => s + (p.passive_count || 0), 0);
-      const adverbSum     = g.pages.reduce((s, p) => s + (p.adverb_count || 0), 0);
-      const wAvg = (field) => {
-        let num = 0, den = 0;
-        for (const p of g.pages) {
-          const v = p[field];
-          if (v == null || !p.words) continue;
-          num += v * p.words;
-          den += p.words;
-        }
-        return den > 0 ? Math.round((num / den) * 10) / 10 : null;
-      };
-      // Wiederholungs-Score: repetition_data.score ist pro Seite → gewichtet mitteln.
-      let repNum = 0, repDen = 0;
-      const topRepMap = new Map();
-      for (const p of g.pages) {
-        if (p.repetition_data?.score != null && p.words) {
-          repNum += p.repetition_data.score * p.words;
-          repDen += p.words;
-        }
-        for (const r of (p.repetition_data?.top || [])) {
-          topRepMap.set(r.word, (topRepMap.get(r.word) || 0) + r.count);
-        }
-      }
-      const topRepetitions = [...topRepMap.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 10)
-        .map(([word, count]) => ({ word, count }));
-      out.push({
-        key: g.key,
-        name: g.name,
-        pageCount: g.pages.length,
-        words: totalWords,
-        filler_per1k:     totalWords > 0 ? Math.round((fillerSum  / totalWords) * 1000 * 10) / 10 : 0,
-        passive_per1k:    totalWords > 0 ? Math.round((passiveSum / totalWords) * 1000 * 10) / 10 : 0,
-        adverb_per1k:     totalWords > 0 ? Math.round((adverbSum  / totalWords) * 1000 * 10) / 10 : 0,
-        avg_sentence_len: wAvg('avg_sentence_len'),
-        sentence_len_p90: (() => { const v = wAvg('sentence_len_p90'); return v != null ? Math.round(v) : null; })(),
-        dialog_ratio:     totalChars > 0 ? Math.round((totalDialog / totalChars) * 1000) / 10 : 0,
-        repetition_score: repDen > 0 ? Math.round((repNum / repDen) * 10) / 10 : 0,
-        lix:              wAvg('lix'),
-        flesch_de:        wAvg('flesch_de'),
-        topRepetitions,
-      });
-    }
-    return out;
-  },
-
-  // Pro Metrik: min/max über alle Kapitel, für Farbskala.
-  // Cached im Trägerobjekt (wird bei jedem Aufruf frisch berechnet — günstig, <100 Kapitel).
-  stilMetricRange(metricKey, chapters) {
-    return minMaxBy(chapters, (c) => c[metricKey]);
-  },
-
-  // Liefert eine CSS-Hintergrundfarbe für eine Zelle: 0..1 normalisiert, Richtung je nach higherIsWorse.
-  // higherIsWorse=null → neutrale Skala (Gradient vom blasseren zum kräftigeren Primary-Ton).
-  // higherIsWorse=true → hohe Werte rot, niedrige grün.
-  // higherIsWorse=false → umgekehrt.
-  // Zelltyp (→ CSS-Klasse) separat vom Variablen-Style, damit keine Inline-
-  // Style-Strings im DOM landen. Varianten: 'neutral' (kein Tint),
-  // 'primary' (primary-fade über --heatmap-t), 'tinted' (grün→rot über --heatmap-t).
-  stilCellKind(value, metricKey, chapters) {
-    if (typeof value !== 'number' || !isFinite(value)) return 'neutral';
-    const def = STIL_METRICS.find(m => m.key === metricKey);
-    if (!def) return 'neutral';
-    const { min, max } = this.stilMetricRange(metricKey, chapters);
-    if (max === min) return 'neutral';
-    return def.higherIsWorse === null ? 'primary' : 'tinted';
-  },
-
-  stilCellVars(value, metricKey, chapters) {
-    if (typeof value !== 'number' || !isFinite(value)) return {};
-    const def = STIL_METRICS.find(m => m.key === metricKey);
-    if (!def) return {};
-    const { min, max } = this.stilMetricRange(metricKey, chapters);
-    if (max === min) return {};
-    let t = (value - min) / (max - min);
-    if (def.higherIsWorse === false) t = 1 - t;
-    if (def.higherIsWorse === null) {
-      const alpha = 0.12 + (0.55 * t);
-      return { '--heatmap-t': Math.round(alpha * 100) + '%' };
-    }
-    return heatmapCellVars(t);
-  },
-
-  // Formatiert den last_updated-ISO-Timestamp lokalisiert (Datum + Uhrzeit ohne Sekunden).
+  // Formatiert den lastUpdated-ISO-Timestamp lokalisiert (Datum + Uhrzeit ohne Sekunden).
   stilLastUpdatedLabel() {
-    const iso = this.stilData?.last_updated;
+    const iso = this.stilData?.lastUpdated;
     if (!iso) return '';
     const d = new Date(iso);
     if (isNaN(d.getTime())) return '';
@@ -182,102 +168,61 @@ export const stilMethods = {
     return window.__app.t('stil.lastUpdated', { date, time });
   },
 
-  stilFormat(value, metricKey) {
-    const def = STIL_METRICS.find(m => m.key === metricKey);
-    return formatNumber(value, Alpine.store('shell').uiLocale, def?.decimals ?? 1);
-  },
-
-  // Drilldown: welche Metrik-Spalten zeigen Beispiele, wenn man auf die Zelle klickt.
-  stilIsClickableMetric(metricKey) {
-    const def = STIL_METRICS.find(m => m.key === metricKey);
-    return !!def?.sampleBucket;
-  },
-
-  toggleStilDetail(chapterKey, metricKey) {
-    if (!this.stilIsClickableMetric(metricKey)) return;
-    const key = `${chapterKey}:${metricKey}`;
-    this.activeStilDetailKey = (this.activeStilDetailKey === key) ? null : key;
-  },
-
   stilMetricLabel(metricKey) {
-    const def = STIL_METRICS.find(m => m.key === metricKey);
+    const def = STIL_METRIC_BY_KEY.get(metricKey);
     return def ? window.__app.t(def.label) : metricKey;
   },
 
-  // Baut das Detail-Objekt für die aktive Zelle: Seiten-Liste mit Samples bzw.
-  // Top-Wörtern (Wiederholungs-Drilldown).
-  stilActiveDetail() {
-    const key = this.activeStilDetailKey;
-    if (!key) return null;
-    const [chapterKey, metricKey] = key.split(':');
-    const def = STIL_METRICS.find(m => m.key === metricKey);
-    if (!def?.sampleBucket) return null;
-
-    const pages = this.stilData?.pages || [];
-    const inChapter = pages.filter(p => String(p.chapter_id ?? '__uncat__') === chapterKey);
-    const unassignedLabel = window.__app.t('stil.unassigned');
-    const chapterName = inChapter[0]?.chapter_name || unassignedLabel;
-
-    const entries = [];
-    if (def.sampleBucket === 'repetition') {
-      for (const p of inChapter) {
-        const top = p.repetition_data?.top || [];
-        if (!top.length) continue;
-        entries.push({
-          page_id: p.page_id,
-          page_name: p.page_name || String(p.page_id),
-          count: top.reduce((s, r) => s + (r.count || 0), 0),
-          words: top.map(r => ({ token: r.word, count: r.count })),
-        });
-      }
-    } else {
-      const bucket = def.sampleBucket;
-      const countField = STIL_COUNT_FIELD[bucket];
-      for (const p of inChapter) {
-        const samples = p.style_samples?.[bucket] || [];
-        if (!samples.length) continue;
-        entries.push({
-          page_id: p.page_id,
-          page_name: p.page_name || String(p.page_id),
-          count: (countField && p[countField]) || samples.length,
-          samples,
-        });
-      }
+  // Drilldown. Die Beispielsätze liegen NICHT im Kapitel-Raster (sie sind der
+  // grösste Posten der Rohdaten und werden immer nur für eine Zelle gebraucht) —
+  // sie werden pro aufgeklappter Zelle nachgeladen.
+  async toggleStilDetail(chapterKey, metricKey) {
+    const def = STIL_METRIC_BY_KEY.get(metricKey);
+    if (!def?.sampleBucket) return;
+    const key = `${chapterKey}:${metricKey}`;
+    if (this.activeStilDetailKey === key) {
+      this.activeStilDetailKey = null;
+      this.stilDetail = null;
+      return;
     }
-    entries.sort((a, b) => b.count - a.count);
-
-    return {
-      key,
-      chapterKey,
-      metricKey,
-      metricLabel: this.stilMetricLabel(metricKey),
-      chapterName,
-      entries,
-    };
+    this.activeStilDetailKey = key;
+    this.stilDetail = null;
+    this.stilDetailLoading = true;
+    // Re-Entry-Guard: bei schnellen Klicks darf nur die zuletzt geöffnete Zelle
+    // ihr Ergebnis setzen, sonst überholt eine ältere Antwort die neuere.
+    const seq = ++this._stilDetailSeq;
+    try {
+      const bookId = Alpine.store('nav').selectedBookId;
+      const qs = new URLSearchParams({ chapter: String(chapterKey), bucket: def.sampleBucket });
+      const data = await fetchJson(`/history/style-samples/${bookId}?${qs}`);
+      if (seq !== this._stilDetailSeq) return;
+      this.stilDetail = {
+        key,
+        metricLabel: this.stilMetricLabel(metricKey),
+        chapterName: this.stilChapterName(data.chapterName),
+        entries: data.entries || [],
+      };
+    } catch (e) {
+      if (seq !== this._stilDetailSeq) return;
+      console.error('[toggleStilDetail]', e);
+      this.stilDetail = { key, metricLabel: this.stilMetricLabel(metricKey), chapterName: '', entries: [] };
+    } finally {
+      if (seq === this._stilDetailSeq) this.stilDetailLoading = false;
+    }
   },
 
-  // Gruppiert Samples nach Token, damit im Detail-Panel jedes Token einmal als
-  // Badge erscheint und die Beispielsätze darunter eingerückt stehen.
-  stilGroupSamplesByToken(samples) {
-    const groups = [];
-    const byToken = new Map();
-    for (const s of samples || []) {
-      const token = s.token || '';
-      if (!byToken.has(token)) {
-        const group = { token, sentences: [] };
-        byToken.set(token, group);
-        groups.push(group);
-      }
-      byToken.get(token).sentences.push(s.sentence);
-    }
-    return groups;
+  closeStilDetail() {
+    this.activeStilDetailKey = null;
+    this.stilDetail = null;
+    this.stilDetailLoading = false;
+    this._stilDetailSeq++;
   },
 
   async stilJumpToPage(pageId) {
     const page = (Alpine.store('nav').pages || []).find(p => p.id === pageId);
     if (!page) return;
     window.__app.showStilCard = false;
-    this.activeStilDetailKey = null;
+    this.closeStilDetail();
     await window.__app.selectPage(page);
   },
 
@@ -285,7 +230,7 @@ export const stilMethods = {
     if (!chapterKey || chapterKey === '__uncat__') return;
     const root = window.__app;
     const opts = root.kapitelReviewChapterOptions ? root.kapitelReviewChapterOptions() : [];
-    this.activeStilDetailKey = null;
+    this.closeStilDetail();
     if (opts.some(c => String(c.id) === String(chapterKey))) {
       root.showStilCard = false;
       await root.openKapitelReviewForChapter(chapterKey);

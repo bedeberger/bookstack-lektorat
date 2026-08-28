@@ -1,0 +1,68 @@
+<!-- Figur-Detail: Steckbrief (objektive Fakten)
+     Fragment der Figurenübersicht — eingebunden via `<!-- @include figuren-detail-steckbrief -->`
+     in figuren-detail.html. String-seitiger Include statt DOM-Placeholder, weil
+     der Block INNERHALB des `x-for` über die Figuren steht (querySelector steigt
+     nicht in Template-Content ab). Scope ist damit `figurenCard` + die
+     Schleifenvariable `f`; Root-Zugriffe laufen über `$app`.
+-->
+<!-- ===== Gruppe: Steckbrief (objektive Fakten) ===== -->
+<section class="figur-group" x-show="$app.figurJahrLabel(f) || f.geburtsjahr != null || f.rolle || f.beruf || (f.sozialschicht && f.sozialschicht !== 'andere') || f.praesenz || f.wohnadresse || f.erste_erwaehnung || f.aeusseres || f.stimme">
+  <h4 class="figur-group-title" x-text="$app.t('figuren.group.steckbrief')"></h4>
+  <dl class="figur-steckbrief-grid">
+    <template x-if="$app.figurJahrLabel(f)">
+      <div class="figur-fact">
+        <dt x-text="$app.t('figuren.field.jahrAlter')"></dt>
+        <dd>
+          <span x-text="$app.figurJahrLabel(f)"></span>
+          <span x-show="$app.figurJahrAnchor(f)" class="figur-jahr-anchor" x-text="' — ' + $app.figurJahrAnchor(f)"></span>
+        </dd>
+      </div>
+    </template>
+    <template x-if="f.geburtsjahr != null">
+      <div class="figur-fact"><dt x-text="$app.t('figuren.field.geburtsjahr')"></dt><dd x-text="f.geburtsjahr"></dd></div>
+    </template>
+    <template x-if="f.rolle">
+      <div class="figur-fact"><dt x-text="$app.t('figuren.field.rolle')"></dt><dd x-text="f.rolle"></dd></div>
+    </template>
+    <template x-if="f.beruf">
+      <div class="figur-fact"><dt x-text="$app.t('figuren.field.beruf')"></dt><dd x-text="f.beruf"></dd></div>
+    </template>
+    <template x-if="f.sozialschicht && f.sozialschicht !== 'andere'">
+      <div class="figur-fact">
+        <dt x-text="$app.t('figuren.field.sozialschicht')"></dt>
+        <dd><span class="tag figur-sozialschicht-badge" :class="'figur-schicht-' + f.sozialschicht" x-text="$app.t('figuren.schicht.' + f.sozialschicht)"></span></dd>
+      </div>
+    </template>
+    <template x-if="f.praesenz">
+      <div class="figur-fact">
+        <dt x-text="$app.t('figuren.field.praesenz')"></dt>
+        <dd><span class="tag figur-praesenz-badge" :class="'figur-praesenz-' + f.praesenz" x-text="$app.t('figuren.praesenz.' + f.praesenz)"></span></dd>
+      </div>
+    </template>
+    <template x-if="f.wohnadresse">
+      <div class="figur-fact"><dt x-text="$app.t('figuren.field.wohnadresse')"></dt><dd x-text="f.wohnadresse"></dd></div>
+    </template>
+    <template x-if="f.erste_erwaehnung">
+      <div class="figur-fact">
+        <dt x-text="$app.t('figuren.field.ersteErwaehnung')"></dt>
+        <dd>
+          <template x-if="f.erste_erwaehnung_page_id">
+            <span class="internal-link" @click.stop="$app.gotoPageById(f.erste_erwaehnung_page_id)" x-text="f.erste_erwaehnung"></span>
+          </template>
+          <template x-if="!f.erste_erwaehnung_page_id">
+            <span x-text="f.erste_erwaehnung"></span>
+          </template>
+        </dd>
+      </div>
+    </template>
+  </dl>
+  <!-- Beschreibende Fakten (volle Breite) -->
+  <div x-show="f.aeusseres" class="figur-detail-row">
+    <span class="bewertung-section-title bewertung-section-title--inline" x-text="$app.t('figuren.field.aeusseres') + ' '"></span>
+    <span class="figur-detail-value" x-text="f.aeusseres"></span>
+  </div>
+  <div x-show="f.stimme" class="figur-detail-row">
+    <span class="bewertung-section-title bewertung-section-title--inline" x-text="$app.t('figuren.field.stimme') + ' '"></span>
+    <span class="figur-detail-value" x-text="f.stimme"></span>
+  </div>
+</section>

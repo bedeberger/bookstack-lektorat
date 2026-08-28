@@ -111,14 +111,23 @@ export const bookstatsMethods = {
       const now = new Date().toLocaleTimeString(localeTag, tzOpts({ hour: '2-digit', minute: '2-digit' }));
       this.bookStatsSyncStatus = window.__app.t('bookstats.syncDone', { time: now });
       await this.loadBookStats(Alpine.store('nav').selectedBookId);
-      // page_stats-Cache in tokEsts übernehmen, falls Seiten geladen
+      // page_stats-Cache in tokEsts übernehmen, falls Seiten geladen.
+      // In EINEM Rutsch reassignen statt per Index-Assign in der Schleife: der
+      // `tokTotals`-Getter (app/app-root-getters.js) cached ueber die Identitaet
+      // von `tokEsts`. Eine In-Place-Mutation laesst die Identitaet stehen → die
+      // Sidebar-Σ-Zeile bliebe auf dem Stand vor dem Sync, waehrend die
+      // Per-Seiten-Badges darunter schon die neuen Zahlen zeigen.
       if (Alpine.store('nav').pages.length) {
         const cache = await fetchJson('/history/page-stats/' + Alpine.store('nav').selectedBookId);
+        const patch = {};
         for (const p of Alpine.store('nav').pages) {
           const c = cache[p.id];
           if (c && c.updated_at === p.updated_at) {
-            window.__app.tokEsts[p.id] = { tok: c.tok, words: c.words, chars: c.chars };
+            patch[p.id] = { tok: c.tok, words: c.words, chars: c.chars };
           }
+        }
+        if (Object.keys(patch).length) {
+          window.__app.tokEsts = { ...window.__app.tokEsts, ...patch };
         }
       }
     } catch (e) {

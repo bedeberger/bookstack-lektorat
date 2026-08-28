@@ -236,8 +236,89 @@ ${parts.join('\n\n')}
 `;
 }
 
+/** Achse, auf die die Weltaufbau-Messung zielt. Wie _strukturAchse: der Befund
+ *  bekommt die Achse des Profils, die inhaltliche Stimmigkeit fuehrt — nicht eine
+ *  neue Achse. Ein zusaetzlicher Achsen-Key waere eine Persistenz-Konstante und
+ *  wuerde jedes bestehende Bewertungs-JSON um ein Pflichtfeld aermer machen. */
+function _weltAchse(axes) {
+  const keys = axes.map(a => a.key);
+  return ['thema', 'kohaerenz', 'struktur'].find(k => keys.includes(k)) || keys[0];
+}
+
+/**
+ * Baut den Block „Weltaufbau-Befunde" fuer die BUCHbewertung.
+ *
+ * Zweiter MESSENDER Block neben dem Struktur-Check: gezaehlt wird der Welt-Fakten-
+ * Index (`world_facts`) — Kategorien, Naben, Verteilung ueber den Buchbogen,
+ * Kapitel ohne einen einzigen etablierten Fakt. Im Multi-Pass ist das die einzige
+ * Aussage zum Weltaufbau, die nicht durch eine Zusammenfassung gegangen ist.
+ *
+ * Drei Rahmungen sind Pflicht — jede fangt eine Fehllesung ab, die teurer waere
+ * als der Block wert ist:
+ *  · Die Fakten sind KI-EXTRAHIERT, kein von der Autorin kuratierter Kanon. Eine
+ *    Luecke kann eine Luecke der Extraktion sein.
+ *  · Ein Kapitel ohne Fakt ist NICHT automatisch weltarm — Szenen brauchen keine
+ *    neuen Weltaussagen. Es ist ein Hinweis, kein Befund.
+ *  · Wenig Fakten sind kein Mangel: ein Kammerspiel etabliert wenig Welt, und das
+ *    ist eine Form, keine Schwaeche.
+ *
+ * @param {object|null} ctx  Ausgabe von lib/welt-summary.js
+ * @param {{achse:string}} opts Achse dieses Profils, auf die der Befund zielt
+ * @returns {string} Block oder '' (nicht erhoben / leer)
+ */
+function _buildWeltContextBlock(ctx, { achse = 'thema' } = {}) {
+  if (!ctx || !ctx.gesamt) return '';
+  const parts = [];
+  parts.push(`Etablierte Welt-Fakten: ${ctx.gesamt}`);
+
+  if (ctx.proKategorie?.length) {
+    parts.push(`Nach Kategorie: ${ctx.proKategorie.map(k => `${k.kategorie} (${k.anzahl})`).join(', ')}`);
+  }
+
+  const b = ctx.bogen || {};
+  parts.push(`Verteilung über den Buchbogen: Anfang ${b.anfang || 0} · Mitte ${b.mitte || 0} · Schluss ${b.schluss || 0}`
+    + (ctx.ohneKapitelBezug ? ` (${ctx.ohneKapitelBezug} Fakten ohne Kapitelbezug, im Bogen nicht enthalten)` : ''));
+
+  const ka = ctx.kapitelAbdeckung || {};
+  if (ka.gesamt) {
+    const rest = ka.ohneFaktenGekuerzt ? ` … und ${ka.ohneFaktenGekuerzt} weitere` : '';
+    const liste = ka.ohneFakten?.length ? `: ${ka.ohneFakten.join(', ')}${rest}` : '';
+    parts.push(`Kapitel mit mindestens einem etablierten Fakt: ${ka.mitFakten} von ${ka.gesamt}`
+      + (ka.ohneFakten?.length ? `\nOhne etablierten Fakt${liste}` : ''));
+  }
+
+  if (ctx.topSubjekte?.length) {
+    parts.push(`Naben der Welt (Subjekte mit mehreren Fakten): ${ctx.topSubjekte.map(s => `${s.subjekt} (${s.anzahl})`).join(', ')}`);
+  }
+
+  if (ctx.beispiele?.length) {
+    const lines = ctx.beispiele.map(x => `- [${x.kategorie}] ${x.subjekt ? `${x.subjekt}: ` : ''}${x.fakt}`);
+    parts.push(`Beispiele (über die Kategorien gestreut):\n${lines.join('\n')}`);
+  }
+
+  return `
+=== WELTAUFBAU-BEFUNDE (gemessen am Fakten-Index, keine Schätzung) ===
+Die Buchanalyse hat ${ctx.gesamt} etablierte Welt-Fakten extrahiert (Weltregeln, Orte,
+Technik, Kultur, Historie …). Nutze die Zahlen für die Achse "${achse}", statt die
+Dichte des Weltaufbaus zu schätzen — im Mehrfach-Pass ist das die einzige Angabe
+dazu, die nicht durch eine Zusammenfassung gegangen ist.
+DREI EINSCHRÄNKUNGEN, die du mitdenken MUSST:
+· Die Fakten sind automatisch EXTRAHIERT, kein von der Autorin kuratierter Kanon —
+  eine Lücke kann eine Lücke der Extraktion sein, nicht des Buchs.
+· Ein Kapitel ohne etablierten Fakt ist NICHT weltarm: eine Szene, die auf bereits
+  Etabliertem spielt, braucht keine neue Weltaussage. Behandle es als Hinweis auf
+  eine mögliche Leerstelle, nicht als Befund.
+· Wenige Fakten sind kein Mangel. Ein Kammerspiel etabliert wenig Welt — das ist
+  eine Form, keine Schwäche. Beurteile die WIRKUNG, nicht die Zahl.
+Verwende den Befund, zähle ihn nicht noch einmal auf.
+
+${parts.join('\n\n')}
+=== ENDE WELTAUFBAU-BEFUNDE ===
+`;
+}
+
 export {
   _buildReviewSchwerpunktBlock, _buildChapterPositionBlock,
   _buildKomplettContextBlock, _strukturAchse, _buildStrukturContextBlock,
-  _buildMotivContextBlock,
+  _buildMotivContextBlock, _weltAchse, _buildWeltContextBlock,
 };

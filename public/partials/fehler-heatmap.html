@@ -73,7 +73,7 @@
               <th class="heatmap-numcol" x-text="$app.t('fehlerHeatmap.coverage')"></th>
               <template x-for="(typ, idx) in fehlerHeatmapTypen" :key="typ">
                 <th :data-tip="$app.t('fehlerHeatmap.typ.' + typ)"
-                    :class="{ 'heatmap-cluster-start': fehlerHeatmapClusterStarts.includes(idx) }">
+                    :class="{ 'heatmap-cluster-start': fehlerHeatmapIsClusterStart(idx) }">
                   <span x-text="$app.t('fehlerHeatmap.typ.' + typ)"></span>
                 </th>
               </template>
@@ -96,11 +96,18 @@
                   </span>
                 </td>
                 <template x-for="(typ, idx) in fehlerHeatmapTypen" :key="typ">
-                  <td class="heatmap-cell heatmap-cell--clickable"
+                  <!-- `heatmap-cell--clickable` + `internal-link` haengen am
+                       Praedikat: eine Zelle ohne Befunde hat kein Detail-Panel und
+                       darf weder Klick-Cursor noch Tab-Stopp anbieten.
+                       `internal-link` macht die klickbaren Zellen ueber die globale
+                       Delegation (app/boot/internal-links.js) tastatur-erreichbar. -->
+                  <td class="heatmap-cell"
                       :class="[
                         ('heatmap-cell--' + fehlerHeatmapCellKind(fehlerHeatmapChapterKey(ch), typ, fehlerHeatmapCoveragePct(ch))),
-                        { 'heatmap-cell--active': activeFehlerDetailKey === fehlerHeatmapChapterKey(ch) + ':' + typ,
-                          'heatmap-cluster-start': fehlerHeatmapClusterStarts.includes(idx) }
+                        { 'heatmap-cell--clickable': fehlerHeatmapCellClickable(fehlerHeatmapChapterKey(ch), typ),
+                          'internal-link': fehlerHeatmapCellClickable(fehlerHeatmapChapterKey(ch), typ),
+                          'heatmap-cell--active': activeFehlerDetailKey === fehlerHeatmapChapterKey(ch) + ':' + typ,
+                          'heatmap-cluster-start': fehlerHeatmapIsClusterStart(idx) }
                       ]"
                       :style="fehlerHeatmapCellVars(fehlerHeatmapChapterKey(ch), typ, fehlerHeatmapCoveragePct(ch))"
                       :data-tip="fehlerHeatmapCellTooltip(fehlerHeatmapChapterKey(ch), typ)"

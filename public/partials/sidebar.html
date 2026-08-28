@@ -150,7 +150,7 @@
               <template x-if="tokEsts[page.id]?.words > 0">
                 <span class="tok-stats-wrap">
                   <span class="tok-badge tok-neutral"
-                    x-text="tokEsts[page.id].chars >= 1000 ? '~' + Math.round(tokEsts[page.id].chars/1000) + 'k Z' : tokEsts[page.id].chars + ' Z'"
+                    x-text="charBadge(tokEsts[page.id].chars)"
                     @mouseenter.stop="_showTokTip($el, tokEsts[page.id])"
                     @mouseleave.stop="_hideTokTip()"></span>
                 </span>
@@ -182,7 +182,7 @@
   <template x-if="!pageSearch && $store.nav.selectedBookId && $store.nav.tree.length === 0 && !treeLoading">
     <div class="sidebar-empty-book">
       <div class="muted-msg muted-msg--sm" x-text="t('sidebar.emptyBook')"></div>
-      <button type="button" @click="createChapterPrompt()" x-text="t('bookOrganizer.newChapter')"></button>
+      <button type="button" x-show="canEdit()" @click="createChapterPrompt()" x-text="t('bookOrganizer.newChapter')"></button>
     </div>
   </template>
   </div><!-- /sidebarMode !== 'calendar' -->

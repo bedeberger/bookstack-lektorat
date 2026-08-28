@@ -66,7 +66,7 @@
             class="collapsible-toggle"
             @click="toggleDiaryAnniversaryOpen()"
             :aria-expanded="diaryAnniversaryOpen">
-      <span class="history-chevron" :class="{ open: diaryAnniversaryOpen }">›</span>
+      <span class="history-chevron" :class="{ open: diaryAnniversaryOpen }" aria-hidden="true"></span>
       <span x-text="t('diary.anniversary.title')"></span>
     </button>
     <div x-show="diaryAnniversaryOpen" x-cloak>

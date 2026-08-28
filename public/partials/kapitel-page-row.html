@@ -15,7 +15,7 @@
     <template x-if="$app.tokEsts[page.id] && $app.tokEsts[page.id].words > 0">
       <span class="display-contents">
         <span class="tok-badge tok-neutral"
-          x-text="$app.tokEsts[page.id].chars >= 1000 ? '~' + Math.round($app.tokEsts[page.id].chars / 1000) + 'k Z' : $app.tokEsts[page.id].chars + ' Z'"></span>
+          x-text="$app.charBadge($app.tokEsts[page.id].chars)"></span>
         <span class="tok-badge tok-neutral"
           :data-tip="$app.t('bookstats.metric.normseiten')"
           x-text="(Math.round(($app.tokEsts[page.id].chars || 0) / 1500 * 10) / 10).toLocaleString($store.shell.uiLocale === 'en' ? 'en-US' : 'de-CH', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' ' + $app.t('bookstats.unit.ns')"></span>

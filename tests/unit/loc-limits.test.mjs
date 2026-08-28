@@ -68,7 +68,6 @@ const CATEGORIES = [
     allow: {
       'public/partials/admin-usage.html': 452,
       'public/partials/figur-werkstatt.html': 406,
-      'public/partials/figuren.html': 377,
       'public/partials/book-editor.html': 358,
       'public/partials/admin-users.html': 351,
       'public/partials/epub-export.html': 321,
@@ -108,8 +107,7 @@ const CATEGORIES = [
       'lib/content-store/backends/localdb.js': 635,
       'lib/mailer-templates.js': 626,
       'routes/jobs/komplett/phases/extraktion.js': 932,
-      'routes/jobs/book-chat-tools/tools-catalog.js': 721,
-      'routes/figures.js': 611,
+      'routes/jobs/book-chat-tools/tools-catalog.js': 732,
       'routes/snapshots.js': 655,
       'routes/usersettings.js': 641,
       'routes/jobs/book-chat-tools/tools-text.js': 646,

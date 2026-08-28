@@ -198,18 +198,19 @@ export const referenceContextMethods = {
    *  der Namensvergleich bleibt nur als Rueckfall fuer Eintraege ganz ohne
    *  IDs — er ist die Regel, die dieser Reiter gerade losgeworden ist. */
   _evtInChapter(ev, chapterId, chapterName) {
-    const ids = Array.isArray(ev?.chapter_ids) ? ev.chapter_ids : [];
+    // Anker sind Listen — die Kanonform stellt cards/ereignisse/model.js an den
+    // beiden Schreibstellen des Stores her (book/ereignisse.js).
+    const ids = ev?.chapter_ids || [];
     if (ids.length) return hasId(ids, chapterId);
     if (!chapterName) return false;
-    const kap = Array.isArray(ev?.kapitel) ? ev.kapitel : (ev?.kapitel ? [ev.kapitel] : []);
     const cl = String(chapterName).toLowerCase();
-    return kap.some(k => String(k).toLowerCase() === cl);
+    return (ev?.kapitel || []).some(k => String(k).toLowerCase() === cl);
   },
 
   /** Seiten, an denen ein Kapitel-Ereignis sonst noch haengt (ohne die offene).
    *  Leer, wenn es gar keinen Seitenanker hat — dann ist es kapitelweit. */
   _evtOtherPageNames(ev, pageId, pages) {
-    const ids = (Array.isArray(ev?.page_ids) ? ev.page_ids : [])
+    const ids = (ev?.page_ids || [])
       .filter(x => x != null && Number(x) !== Number(pageId));
     if (!ids.length) return '';
     return ids.map(id => this._pageName(id, pages)).filter(Boolean).join(', ');

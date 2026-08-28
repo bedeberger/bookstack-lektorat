@@ -44,13 +44,21 @@
         <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#download"/></svg>
         <span x-text="t('pagetreeCtx.export')"></span>
       </button>
-      <div class="context-menu-sep" role="separator"></div>
-      <button type="button" role="menuitem" class="context-menu-item context-menu-item--icon"
-              @click="pagetreeCtxNewChapter()">
-        <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#folder-plus"/></svg>
-        <span x-text="t('pagetreeCtx.newChapter')"></span>
-      </button>
-      <template x-if="pageTreeMenuTarget.kind === 'chapter'">
+      <!-- Schreibende Eintraege nur mit Schreibrecht. Ein viewer/lektor sah sie
+           bisher und lief in den Server-403; das Loeschen war als einziges
+           gegated. Die Methoden pruefen `canEdit()` zusaetzlich selbst — die
+           Sichtbarkeit hier ist UX, der Guard dort die Absicherung des Pfads. -->
+      <template x-if="canEdit()">
+        <div>
+          <div class="context-menu-sep" role="separator"></div>
+          <button type="button" role="menuitem" class="context-menu-item context-menu-item--icon"
+                  @click="pagetreeCtxNewChapter()">
+            <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#folder-plus"/></svg>
+            <span x-text="t('pagetreeCtx.newChapter')"></span>
+          </button>
+        </div>
+      </template>
+      <template x-if="pageTreeMenuTarget.kind === 'chapter' && canEdit()">
         <div>
           <div class="context-menu-sep" role="separator"></div>
           <button type="button" role="menuitem" class="context-menu-item context-menu-item--icon"

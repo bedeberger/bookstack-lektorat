@@ -356,7 +356,8 @@ export const PROVIDERS = [
         if (ev.id == null) continue;
         const m = fuzzyMatch(q, ev.ereignis || '');
         if (!m) continue;
-        const kapitel = Array.isArray(ev.kapitel) ? ev.kapitel[0] : ev.kapitel;
+        // Kanonform: `kapitel` ist immer eine Liste (cards/ereignisse/model.js).
+        const kapitel = ev.kapitel?.[0];
         out.push({
           key: 'ereignis:' + ev.id,
           providerKey: 'ereignisse',

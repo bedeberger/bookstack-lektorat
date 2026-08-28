@@ -9,7 +9,7 @@ const { planFigurenMatch, saveFigurenToDb } = require('./figures/save');
 const { updateFigurenEvents, updateFigurenSoziogramm, addFigurenBeziehungen } = require('./figures/events');
 const { cleanupDuplicateFiguren } = require('./figures/cleanup');
 const {
-  getChapterFigures, rebuildFigureAppearances,
+  listFigurenWithDetails, getChapterFigures, rebuildFigureAppearances,
   getChapterFigureRelations, getFigureWithDetails,
 } = require('./figures/queries');
 
@@ -23,6 +23,7 @@ module.exports = {
   updateFigurenSoziogramm,
   addFigurenBeziehungen,
   cleanupDuplicateFiguren,
+  listFigurenWithDetails,
   getChapterFigures,
   getChapterFigureRelations,
   getFigureWithDetails,

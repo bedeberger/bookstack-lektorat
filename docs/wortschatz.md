@@ -24,7 +24,7 @@ Masse ist aus Pro-Seiten-Zahlen rekonstruierbar. Darum liest der Job die Seiten 
 **Leserichtung** (`bookTree` + `flattenTree`, also `book_order`) und baut eine
 durchgehende Sequenz — er summiert nicht `page_stats` auf.
 
-Wer diese Kennzahlen in die Stil-Heatmap ([public/js/book/stil-heatmap.js](../public/js/book/stil-heatmap.js))
+Wer diese Kennzahlen in die Stil-Heatmap ([lib/stil-heatmap.js](../lib/stil-heatmap.js))
 einbauen will, kann das **nicht**: die aggregiert pro Seite aus `page_stats`.
 Kapitelwerte brauchen einen eigenen Pass pro Kapitel (Phase 2).
 
@@ -261,9 +261,10 @@ Referenz), sonst baut er bei jedem Render ein neues Array und `sortableTable`
 sortiert jedes Mal neu.
 
 **Die Analyse-Version kommt vom Server** (`thresholds.version` + `stale`-Flag), das
-Frontend hält **keine Kopie**. Genau an so einer Kopie driftet die Stil-Heatmap
-gegen `lib/page-index.js` (`EXPECTED_METRICS_VERSION` gegen `METRICS_VERSION`) —
-dieser Fehler wird hier nicht wiederholt.
+Frontend hält **keine Kopie**. Dieselbe Regel gilt in der Stil-Karte: dort liefert
+`/history/style-stats` das `needsSync`-Flag mit, gerechnet gegen
+`lib/page-index.js#METRICS_VERSION` — die Karte kennt die Zahl nicht und kann
+darum nicht gegen sie driften.
 
 ## Pflicht-Invarianten
 

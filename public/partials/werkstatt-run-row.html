@@ -7,7 +7,7 @@
   <span class="history-date" x-text="formatRunDate(r.created_at)"></span>
   <span x-show="r.knoten_pfad" class="tag" x-text="r.knoten_pfad"></span>
   <span x-show="r.model" class="tag" x-text="r.model"></span>
-  <span class="history-chevron" :class="{ open: selectedRunId === r.id }">›</span>
+  <span class="history-chevron" :class="{ open: selectedRunId === r.id }" aria-hidden="true"></span>
   <button type="button" class="history-item-delete"
           @click.stop="deleteRun(r.id, r.kind)"
           :data-tip="$app.t('common.deleteEntry')"

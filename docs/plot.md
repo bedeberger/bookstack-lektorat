@@ -258,6 +258,17 @@ Read-only im Plot: jede Beat-Karte zeigt ihre verknüpften Motive als `.tag--mot
 
 Der agentische Buch-Chat liest das Board read-only über das Tool `get_plot_board` ([routes/jobs/book-chat-tools/tools-plot.js](../routes/jobs/book-chat-tools/tools-plot.js), Schema in [public/js/prompts/chat.js#BOOK_CHAT_TOOLS](../public/js/prompts/chat.js)) — siehe [buchchat-tools.md](buchchat-tools.md). Liefert Akte → Beats (Status, Zielkapitel, Strang, beteiligte Katalog-/Werkstatt-Figuren auf Namen aufgelöst) als kompakten Snapshot, damit der Chat „geplant vs. schon im Buch", Chronologie-Fragen, Strang-/POV-Verläufe und Plot-Stimmigkeit beantworten kann. Top-Level-Feld `threads` (nur wenn vorhanden) listet die Stränge mit gebundener Hauptfigur + optionalem `kapitel`; jeder Beat trägt `thread` (Strang-Name oder `null`) sowie — wo zutreffend — die geerbten Felder `geerbte_figur` (Strang-Hauptfigur, sofern nicht schon explizit) und `geerbtes_kapitel` (Strang-Kapitel, sofern der Beat kein eigenes hat). Akte tragen bei Hybrid-Aktstruktur `eigener_akt_von_strang` (sonst geteilt). Optionaler `status`-/`act_id`-Filter; `status_counts` zeigt immer die Gesamtverteilung. Pro Buch + User gescoped (`WHERE book_id = ? AND user_email = ?`, identisch zur CRUD-Skopierung). Rein lesend — der Chat plant nichts, er liest die Planung des Users; die beiden planenden KI-Jobs (Brainstorm/Consistency) bleiben der Karte vorbehalten.
 
+## Weltgesetze als Prüfstein (Consistency)
+
+Die Consistency-Prüfung bekommt zusätzlich die **Weltgesetze** des Buchs: `world_facts` der Kategorien `regel` + `technik` ([routes/jobs/plot.js](../routes/jobs/plot.js)#`_weltgesetzeContext` → [prompts/plot.js](../public/js/prompts/plot.js)#`_weltgesetzeLines`, Cap über `_ctxLimits().weltgesetze`).
+
+**Why:** geprüft wurde der Plan bisher gegen Szenen, Kapitel und Textbelege — also gegen das, was GESCHRIEBEN ist. Ein Beat, der gegen eine etablierte Regel der Welt verstösst («die Tote erscheint», «er telefoniert 1890»), war damit strukturell unentdeckbar: er widerspricht keinem Text, sondern dem Weltmodell.
+
+Drei Regeln:
+- **Nur `regel`+`technik`** — nur sie sind etwas, wogegen ein Plan verstossen kann; die übrigen Kategorien sind Aussagen über die Welt, und Fakt-gegen-Fakt prüft die Kontinuität.
+- **Kein Index ⇒ kein Block und kein Prüfpunkt** (gleiches Muster wie `anchorMap === null`): ein nie erhobener Fakten-Index heisst „unbekannt", nicht „regelfreie Welt".
+- **Der bewusste Regelbruch ist kein Befund** — und die Regeln sind KI-extrahiert, nicht von der Autorin kuratiert; passt eine Regel erkennbar nicht, urteilt das Modell nicht dagegen.
+
 ## Pflicht-Invarianten
 
 - **Nie generativ in den Text** — beide KI-Jobs liefern nur Struktur-Stichpunkte (Beats) bzw. Befunde, nie Prosa. Der System-Prompt erzwingt das explizit; bleibt bei Änderungen erhalten (App-Philosophie: KI rückwärtsgewandt/weltaufbauend, nie in den Buchtext schreibend).

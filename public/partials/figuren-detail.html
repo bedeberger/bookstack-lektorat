@@ -1,0 +1,20 @@
+<!-- Figur-Detail: der aufgeklappte Eintrag der Figurenübersicht.
+     Eingebunden via `<!-- @include figuren-detail -->` in figuren.html, INNERHALB
+     des `x-for` über die Figuren — darum der string-seitige Fragment-Include und
+     nicht der DOM-Placeholder (querySelector steigt nicht in Template-Content ab).
+     Scope: `figurenCard` + Schleifenvariable `f`, Root über `$app`.
+
+     Die drei Gruppen liegen nochmals je in einem eigenen Fragment: sie sind
+     inhaltlich unabhängig (Fakten / Innenleben / Auftritte im Buch) und zusammen
+     mehr als das doppelte Partial-Limit aus CLAUDE.md.
+-->
+<div x-show="$store.catalogUi.selectedFigurId === f.id" class="figur-detail">
+  <p x-show="f.beschreibung" x-text="f.beschreibung" class="figur-beschreibung"></p>
+  <button type="button" class="btn-compact figur-detail-actions" x-show="$store.config.semanticSearchEnabled" @click.stop="$app.findSimilar('figure', f.id, f.name)" x-text="$app.t('search.semantic.similarEntity')"></button>
+
+  <!-- @include figuren-detail-steckbrief -->
+
+  <!-- @include figuren-detail-charakter -->
+
+  <!-- @include figuren-detail-imbuch -->
+</div>

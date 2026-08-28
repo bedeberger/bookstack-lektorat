@@ -7,6 +7,7 @@
 //
 // Pure Funktionen (Alpine-/DOM-frei) → direkt unit-testbar, siehe
 // tests/unit/book-overview-presence.test.mjs.
+import { rankPreferRecurring } from './ranking.js';
 
 // Spalten-Obergrenze. Mehr Spalten passen nicht sinnvoll in die Kachel und
 // die Matrix wird zur Tapete.
@@ -40,8 +41,8 @@ export function bucketByRoot(entries, resolveRoot) {
 /**
  * Präsenz-Matrix aus vor-aggregierten Kandidaten bauen.
  *
- * Spaltenauswahl: nach Gesamt-Fundstellen absteigend, dabei bevorzugt
- * mehrfach belegte Entitäten (`total >= 2`). Einmal-Treffer würden die
+ * Spaltenauswahl über die geteilte Regel aus ./ranking.js: nach Fundstellen
+ * absteigend, bevorzugt mehrfach belegte Entitäten. Einmal-Treffer würden die
  * Top-Spalten sonst fluten und die wiederkehrenden verdrängen — sie kommen
  * nur als Fallback zum Zug, wenn gar nichts mehrfach vorkommt.
  *
@@ -59,9 +60,7 @@ export function buildPresenceMatrix(candidates, chapters, { maxCols = PRESENCE_M
   const withHits = (candidates || []).filter(c => c && c.total > 0);
   if (!withHits.length) return empty;
 
-  const ranked = [...withHits].sort((a, b) => b.total - a.total);
-  const recurring = ranked.filter(c => c.total >= 2);
-  const selected = (recurring.length ? recurring : ranked).slice(0, maxCols);
+  const selected = rankPreferRecurring(withHits, { valueOf: c => c.total, limit: maxCols });
 
   const at = (c, ch) => c.byRootId.get(Number(ch.id)) ?? 0;
 

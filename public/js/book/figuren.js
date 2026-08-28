@@ -3,8 +3,7 @@
 // von POST /jobs/komplett-analyse.
 
 import { fetchJson } from '../utils.js';
-
-const _VALID_TYPES = new Set(['hauptfigur', 'nebenfigur', 'antagonist', 'mentor', 'randfigur', 'andere']);
+import { VALID_FIGUR_TYPEN } from './figur-typen.js';
 
 export function _cleanStr(v) {
   if (v === null || v === undefined) return null;
@@ -48,7 +47,7 @@ function _sanitizeArc(arc) {
 export function _sanitizeFigur(f) {
   return {
     ...f,
-    typ: _VALID_TYPES.has(f.typ) ? f.typ : 'andere',
+    typ: VALID_FIGUR_TYPEN.has(f.typ) ? f.typ : 'andere',
     kurzname: _cleanStr(f.kurzname),
     beruf: _cleanStr(f.beruf),
     wohnadresse: _cleanStr(f.wohnadresse),
@@ -112,25 +111,11 @@ export const figurenMethods = {
     try {
       const data = await fetchJson('/figures/' + bookId, { signal });
       this.$store.catalog.figuren = (data?.figuren || []).map(_sanitizeFigur);
-      this.figurenUpdatedAt = data?.updated_at || null;
       this._figurLookupIndex = null;
       this._buildGlobalZeitstrahl();
     } catch (e) {
       if (e?.name === 'AbortError') return;
       console.error('[loadFiguren]', e);
-    }
-  },
-
-  async saveFiguren() {
-    try {
-      const r = await fetch('/figures/' + this.$store.nav.selectedBookId, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ figuren: this.$store.catalog.figuren }),
-      });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    } catch (e) {
-      console.error('[saveFiguren]', e);
     }
   },
 

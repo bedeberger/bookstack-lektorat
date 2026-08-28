@@ -2,9 +2,13 @@
 // Getrennt vom Renderer, damit die Positionslogik (gewichteter Kapitel-Schwerpunkt,
 // Greedy-Stapelung, Tier-Höhen) ohne Browser testbar ist.
 
+import { FIGUR_TYPEN } from '../book/figur-typen.js';
+
 // Tier-Achse (Y). Reihenfolge ist die Anzeigereihenfolge von oben nach unten;
-// alles ausserhalb landet in 'andere'.
-export const TIER_ORDER = ['hauptfigur', 'antagonist', 'mentor', 'nebenfigur', 'randfigur', 'andere'];
+// alles ausserhalb landet in 'andere'. Dieselbe Reihenfolge ordnet die
+// Figurenlisten der Karte — SSoT ist ../book/figur-typen.js, hier steht nur der
+// sprechende Name fuer die Y-Achse.
+export const TIER_ORDER = FIGUR_TYPEN;
 
 export const ROW_H = 50;          // Vertikaler Abstand zweier Stapelzeilen im selben Tier
 export const TIER_BASE_GAP = 80;  // Zusatz-Luft zwischen zwei Tiers

@@ -6,16 +6,21 @@
 // → unsinnig). Subtyp-Default ist 'sonstiges' (Events ohne `subtyp`-Feld matchen
 // also nur, wenn als 'sonstiges' gefiltert wird). Mapping Subtyp → Lucide-Icon
 // wird ebenfalls hier getestet (`subtypIcon`).
+//
+// Die Fixture mischt bewusst beide Produzenten-Formen (Server: Listen;
+// Figuren-Fallback: Skalare) und schickt sie durch `normalizeEvents` — genau so
+// laeuft es in der App: normalisiert wird EINMAL am Store-Schreibpfad
+// (book/ereignisse.js), der Filter sieht nur noch die Kanonform.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 const {
   applyEreignisseFilters, subtypIcon, buildTimelineItems, timelineBounds,
-  layoutBandItems, bandAxisTicks, buildBandModel, bandMarkerColor,
+  layoutBandItems, bandAxisTicks, buildBandModel, bandMarkerColor, normalizeEvents,
 } = await import('../../public/js/cards/ereignisse-card.js');
 
-const EVENTS = [
+const EVENTS = normalizeEvents([
   {
     id: 1, ereignis: 'Hochzeit auf dem Hügel', subtyp: 'hochzeit',
     figuren: [{ id: 'fA' }, { id: 'fB' }],
@@ -36,7 +41,7 @@ const EVENTS = [
     figuren: [],
     kapitel: ['Kapitel 2'], seiten: ['11'],
   },
-];
+]);
 
 // ── kein Filter ─────────────────────────────────────────────────────────────
 
@@ -103,7 +108,7 @@ test('Kapitel-Filter matcht Array-Form', () => {
   assert.deepEqual(out.map(e => e.id).sort(), [3, 4]);
 });
 
-test('Kapitel-Filter matcht auch String-Form (Legacy)', () => {
+test('Kapitel-Filter matcht auch die Skalar-Form des Fallback-Pfads', () => {
   const out = applyEreignisseFilters(EVENTS, { kapitel: 'Kapitel 1' });
   assert.deepEqual(out.map(e => e.id).sort(), [1, 2]);
 });
@@ -117,11 +122,11 @@ test('Seiten-Filter greift nur in Kombination mit Kapitel', () => {
   assert.deepEqual(mitKapitel.map(e => e.id), [1]);
 });
 
-test('Seiten-Filter Array vs. String', () => {
-  const arr = applyEreignisseFilters(EVENTS, { kapitel: 'Kapitel 1', seite: '2' });
-  assert.deepEqual(arr.map(e => e.id), [1]); // seiten: ['1','2']
-  const str = applyEreignisseFilters(EVENTS, { kapitel: 'Kapitel 1', seite: '3' });
-  assert.deepEqual(str.map(e => e.id), [2]); // seite: '3'
+test('Seiten-Filter: Listen- und Skalar-Herkunft sind nach der Normalisierung gleich', () => {
+  const ausListe = applyEreignisseFilters(EVENTS, { kapitel: 'Kapitel 1', seite: '2' });
+  assert.deepEqual(ausListe.map(e => e.id), [1]);   // kam als seiten: ['1','2']
+  const ausSkalar = applyEreignisseFilters(EVENTS, { kapitel: 'Kapitel 1', seite: '3' });
+  assert.deepEqual(ausSkalar.map(e => e.id), [2]);  // kam als seite: '3'
 });
 
 // ── Kombination ─────────────────────────────────────────────────────────────

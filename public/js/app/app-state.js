@@ -87,6 +87,13 @@ const navigationState = () => ({
   pageSearchActiveIndex: 0,
   _pageSearchActiveId: null,
   _filteredTreeMemo: null,
+  // Memo von `_bookQualifiesForChapterReview()` (book/kapitel-review.js). Die
+  // Sidebar liest das Praedikat ZWEIMAL pro Kapitelzeile, obwohl es ein einziges
+  // Boolean pro Buch ist — ungecacht laeuft jede Zeile ueber den ganzen Baum.
+  _chapterReviewEligibleMemo: null,
+  // Memo des `tokTotals`-Getters (app/app-root-getters.js). Schluessel ist
+  // Identitaet + Eintragszahl von `tokEsts`.
+  _tokTotalsCache: null,
   newChapterTitle: '',
   newChapterCreating: false,
   newChapterError: '',
@@ -108,7 +115,13 @@ const navigationState = () => ({
   pageTreeMenuPos: { left: 0, top: 0 },
   pageTreeMenuTarget: null,
   _pageTreeMenuOutsideHandler: null,
-  _pageTreeMenuEscHandler: null,
+  // Tastatur (Escape + Roving-Fokus), Schliess-Anlaesse (Scroll/Resize/
+  // Buchwechsel/Tree-Reload), Cursor-Anker fuers Nachmessen der Menuegroesse
+  // und das Fokus-Ziel nach dem Schliessen.
+  _pageTreeMenuKeyHandler: null,
+  _pageTreeMenuDismissHandler: null,
+  _pageTreeMenuAnchor: null,
+  _pageTreeMenuReturnFocus: null,
 });
 
 // Page-Slice: Inhalt der aktuell geöffneten Seite. Mode-agnostisch — Notebook,

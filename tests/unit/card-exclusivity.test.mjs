@@ -180,6 +180,16 @@ test('toggleStilCard: zweiter Klick schliesst (Settings-Pattern)', async () => {
   assert.equal(c.showStilCard, false);
 });
 
+test('toggleStilCard: zweiter Klick landet auf der Buchuebersicht (keine leere Spalte)', async () => {
+  // Schliessen per Toggle muss dieselbe Landung nehmen wie das `x` im
+  // Karten-Header (`closeCard`) — sonst steht der User vor einer leeren Ansicht.
+  const c = makeCtx();
+  await c.toggleStilCard();
+  await c.toggleStilCard();
+  assert.equal(c.showStilCard, false);
+  assert.equal(c.showBookOverviewCard, true, 'Nach dem Schliessen faellt die Ansicht auf die Buchuebersicht zurueck');
+});
+
 test('toggleFiguresCard: zweiter Klick dispatcht card:refresh statt zu schliessen', async () => {
   const c = makeCtx();
   const events = [];

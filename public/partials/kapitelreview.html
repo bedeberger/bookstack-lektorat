@@ -19,7 +19,7 @@
         <template x-if="kapitelReviewChapterStats()?.words > 0">
           <span class="display-contents">
             <span class="tok-badge tok-neutral"
-              x-text="kapitelReviewChapterStats().chars >= 1000 ? '~' + Math.round(kapitelReviewChapterStats().chars/1000) + 'k Z' : kapitelReviewChapterStats().chars + ' Z'"></span>
+              x-text="$app.charBadge(kapitelReviewChapterStats().chars)"></span>
             <span class="tok-badge tok-neutral"
               :data-tip="$app.t('bookstats.metric.normseiten')"
               x-text="(Math.round((kapitelReviewChapterStats().chars || 0) / 1500 * 10) / 10).toLocaleString($store.shell.uiLocale === 'en' ? 'en-US' : 'de-CH', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' ' + $app.t('bookstats.unit.ns')"></span>

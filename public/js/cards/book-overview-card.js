@@ -54,7 +54,9 @@ export function registerBookOverviewCard() {
         onViewReset: scheduleLoad,
         // Re-Klick auf die offene Karte: harter Reload vom Server (der
         // Dedupe-Guard in loadBookOverview greift nur bei laufendem Load).
-        onCardRefresh: () => this.loadBookOverview(Alpine.store('nav').selectedBookId),
+        // `fresh` umgeht zusaetzlich den geteilten Stats-/Settings-Cache im
+        // progress-Store — sonst waere „nochmal laden" ein Cache-Treffer.
+        onCardRefresh: () => this.loadBookOverview(Alpine.store('nav').selectedBookId, { fresh: true }),
       });
     },
 

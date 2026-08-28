@@ -4,6 +4,7 @@
 // Rows { book_id, date (YYYY-MM-DD), seconds }, ggf. mehrere Buecher pro Tag.
 
 import { localIsoDate, localIsoDaysAgo } from '../utils.js';
+import { buildStreakGrid } from '../streak-grid.js';
 
 const WEEKS = 52;
 
@@ -102,81 +103,24 @@ export function secondsByDate(writingRows) {
 }
 
 // Streak-Heatmap (52 Wochen × 7 Tage, GitHub-Stil) auf Basis aktiver Schreibtage
-// (seconds > 0). Aktueller Streak: konsekutive aktive Tage endend HEUTE oder
-// GESTERN (heute ohne Eintrag bricht NICHT — noch nicht geschrieben).
-export function computeWritingStreak(writingRows, todayLocal = new Date()) {
+// (seconds > 0). Raster, Einfaerbung und Serien-Zaehlung liegen in
+// [public/js/streak-grid.js] — geteilt mit der Zeichen-Heatmap der
+// Buch-Uebersicht; hier bleibt nur der Tageswert (Schreibsekunden) und die
+// Minuten-Aufbereitung der Zelle.
+//
+// Heisst bewusst NICHT `computeWritingStreak`: today-ring.js exportiert eine
+// gleichnamige Funktion mit anderer Signatur und anderer Datenquelle (Zeichen
+// statt Sekunden), und beide liegen gleichzeitig im Modulgraph.
+export function computeWritingTimeStreak(writingRows, todayLocal = new Date()) {
   const secByDate = secondsByDate(writingRows);
-
-  const today = new Date(todayLocal);
-  today.setHours(12, 0, 0, 0); // Mittag → DST-Drift-sicher beim ±n*86_400_000
-  const todayDow = today.getDay();        // 0 = So ... 6 = Sa
-  const dowMon = (todayDow + 6) % 7;      // Mo=0 ... So=6
-  const startOffset = (WEEKS - 1) * 7 + dowMon;
-  const isoToday = localIsoDate(today);
-
-  const grid = [];                        // weeks[col][row], Mo oben
-  for (let w = 0; w < WEEKS; w++) grid.push([null, null, null, null, null, null, null]);
-
-  const positive = [];
-  for (let i = 0; i < WEEKS * 7; i++) {
-    const col = Math.floor(i / 7);
-    const row = i % 7;
-    const offsetDays = ((WEEKS - 1) - col) * 7 + (dowMon - row);
-    if (offsetDays < 0) {
-      grid[col][row] = { iso: null, seconds: null, minutes: null, level: 0, future: true };
-      continue;
-    }
-    const iso = localIsoDaysAgo(offsetDays, today);
-    const sec = secByDate.get(iso) || 0;
-    const cell = {
-      iso,
-      seconds: sec,
-      minutes: Math.round(sec / 60),
-      level: 0,
-      future: false,
-      active: sec > 0,
-    };
-    if (sec > 0) positive.push(sec);
-    grid[col][row] = cell;
-  }
-
-  // Quartil-Bucketing Level 1..4 auf positiven Sekunden.
-  const sorted = [...positive].sort((a, b) => a - b);
-  const q = (p) => sorted.length === 0 ? 0 : sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))];
-  const t1 = q(0.25), t2 = q(0.5), t3 = q(0.75);
-  for (let w = 0; w < WEEKS; w++) {
-    for (let r = 0; r < 7; r++) {
-      const c = grid[w][r];
-      if (!c || !c.active) continue;
-      if (c.seconds <= t1) c.level = 1;
-      else if (c.seconds <= t2) c.level = 2;
-      else if (c.seconds <= t3) c.level = 3;
-      else c.level = 4;
-    }
-  }
-
-  // Lineare Tagesreihe (aelteste links) fuer Streak-Zaehlung.
-  const linear = [];
-  for (let off = startOffset; off >= 0; off--) {
-    const iso = localIsoDaysAgo(off, today);
-    linear.push({ iso, active: (secByDate.get(iso) || 0) > 0 });
-  }
-
-  let longest = 0, run = 0;
-  for (const x of linear) {
-    if (x.active) { run++; if (run > longest) longest = run; }
-    else run = 0;
-  }
-  let current = 0;
-  for (let i = linear.length - 1; i >= 0; i--) {
-    const x = linear[i];
-    if (i === linear.length - 1 && !x.active && x.iso === isoToday) continue; // heute noch offen
-    if (x.active) current++;
-    else break;
-  }
-  const totalActiveDays = linear.filter(x => x.active).length;
-
-  return { weeks: grid, weeksCount: WEEKS, currentStreak: current, longestStreak: longest, totalActiveDays };
+  return buildStreakGrid({
+    valueForIso: (iso) => secByDate.get(iso) || 0,
+    todayLocal,
+    weeks: WEEKS,
+    decorate: (cell) => cell.future
+      ? { seconds: null, minutes: null }
+      : { seconds: cell.value, minutes: Math.round(cell.value / 60), active: cell.value > 0 },
+  });
 }
 
 // Wochentags-Muster: Summe Schreibminuten je Wochentag (Mo..So).
@@ -387,7 +331,7 @@ export function computeHourPattern(byHourRows) {
 // der LIVE-Stand von heute (vom Server separat geliefert) und ueberschreibt den
 // ggf. noch nicht geflushten Reihen-Wert. Aktueller Streak: konsekutive
 // erreichte Tage endend HEUTE oder GESTERN — ein heute noch nicht erreichtes
-// Ziel bricht NICHT (Tag laeuft noch), analog computeWritingStreak.
+// Ziel bricht NICHT (Tag laeuft noch), analog computeWritingTimeStreak.
 export function computeGoalAttainment(writingRows, goalMinutes, todaySeconds = null, todayLocal = new Date()) {
   const goalMin = Math.max(0, Math.round(Number(goalMinutes) || 0));
   if (goalMin <= 0) return { active: false };

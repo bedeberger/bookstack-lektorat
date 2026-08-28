@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 // utils/date.js liest window.__app fuer Timezone — minimal stubben.
 globalThis.window = { __app: { uiLocale: 'de' } };
 
-const { computeWritingStreak, computeWeekdayPattern, computeDerived, computeMilestones, secondsByDate,
+const { computeWritingTimeStreak, computeWeekdayPattern, computeDerived, computeMilestones, secondsByDate,
         computeReadability, computeWeeklyDelta, computePerBookTime, computeEffortSplit,
         computeVolumeDelta, computeHourPattern, computeGoalAttainment, computeBookGoals,
         filterByWindow } =
@@ -27,13 +27,13 @@ test('secondsByDate summiert mehrere Buecher pro Tag', () => {
   assert.equal(m.get('2026-06-02'), 120);
 });
 
-test('computeWritingStreak: aktuelle Serie endet heute', () => {
+test('computeWritingTimeStreak: aktuelle Serie endet heute', () => {
   const rows = [
     { book_id: 1, date: isoDaysAgo(0), seconds: 600 },
     { book_id: 1, date: isoDaysAgo(1), seconds: 600 },
     { book_id: 1, date: isoDaysAgo(2), seconds: 600 },
   ];
-  const r = computeWritingStreak(rows);
+  const r = computeWritingTimeStreak(rows);
   assert.equal(r.currentStreak, 3);
   assert.equal(r.longestStreak, 3);
   assert.equal(r.totalActiveDays, 3);
@@ -41,30 +41,30 @@ test('computeWritingStreak: aktuelle Serie endet heute', () => {
   assert.equal(r.weeks.length, 52);
 });
 
-test('computeWritingStreak: heute offen bricht die Serie nicht', () => {
+test('computeWritingTimeStreak: heute offen bricht die Serie nicht', () => {
   const rows = [
     { book_id: 1, date: isoDaysAgo(1), seconds: 600 },
     { book_id: 1, date: isoDaysAgo(2), seconds: 600 },
   ];
-  const r = computeWritingStreak(rows);
+  const r = computeWritingTimeStreak(rows);
   assert.equal(r.currentStreak, 2, 'gestern + vorgestern zaehlen, heute leer unschaedlich');
 });
 
-test('computeWritingStreak: Luecke bricht die aktuelle Serie', () => {
+test('computeWritingTimeStreak: Luecke bricht die aktuelle Serie', () => {
   const rows = [
     { book_id: 1, date: isoDaysAgo(0), seconds: 600 },
     // Luecke bei isoDaysAgo(1)
     { book_id: 1, date: isoDaysAgo(2), seconds: 600 },
     { book_id: 1, date: isoDaysAgo(3), seconds: 600 },
   ];
-  const r = computeWritingStreak(rows);
+  const r = computeWritingTimeStreak(rows);
   assert.equal(r.currentStreak, 1);
   assert.equal(r.longestStreak, 2);
   assert.equal(r.totalActiveDays, 3);
 });
 
-test('computeWritingStreak: leere Eingabe → alles 0', () => {
-  const r = computeWritingStreak([]);
+test('computeWritingTimeStreak: leere Eingabe → alles 0', () => {
+  const r = computeWritingTimeStreak([]);
   assert.equal(r.currentStreak, 0);
   assert.equal(r.longestStreak, 0);
   assert.equal(r.totalActiveDays, 0);

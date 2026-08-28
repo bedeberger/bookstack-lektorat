@@ -60,10 +60,46 @@ export const kontinuitaetMethods = {
   async _loadKontinuitaetHistory() {
     try {
       const data = await fetchJson('/jobs/kontinuitaet/' + Alpine.store('nav').selectedBookId);
+      this._memos = {};
       this.kontinuitaetResult = data;
     } catch (e) {
       console.error('[_loadKontinuitaetHistory]', e);
     }
+  },
+
+  // Ein Memo-Helper pro Modul (CLAUDE.md): Cache mit shallow-Array-Deps-
+  // Vergleich (`===`). Reset ueber this._memos = {} im Lade-/Reset-Pfad
+  // (kontinuitaet-card.js).
+  _memo(key, deps, compute) {
+    const memos = (this._memos ||= {});
+    const hit = memos[key];
+    if (hit && hit.deps.length === deps.length && hit.deps.every((d, i) => d === deps[i])) {
+      return hit.value;
+    }
+    const value = compute();
+    memos[key] = { deps: [...deps], value };
+    return value;
+  },
+
+  // Kapitel des Baums als Liste + Id-Index. Memoisiert, weil die Befundliste den
+  // Index PRO ZEILE braucht: kontinuitaet.html liest kontinuitaetResolveStelle()
+  // sechsmal je Befund, und jeder Aufruf baute vorher ein frisches, gefiltertes
+  // Kapitel-Array ueber den ganzen Baum auf.
+  //
+  // Deps sind bewusst O(1) (ein Signatur-Durchlauf kostete genau das, was der
+  // Cache spart): Baum-Referenz + Kapitelzahl. `type`/`solo`/`id` werden nie in
+  // place veraendert, der Index bleibt darum gueltig. Kapitelnamen dagegen
+  // schon (Buchorganizer benennt in place um) — deshalb haelt der Index die
+  // LEBENDEN Baum-Objekte und es gibt bewusst KEINEN Namens-Index; die
+  // Namenssuche laeuft weiter ueber `list` und sieht damit jede Umbenennung.
+  _kontinuitaetChapters() {
+    const tree = Alpine.store('nav').tree || [];
+    return this._memo('chapters', [tree, tree.length], () => {
+      const list = tree.filter(t => t.type === 'chapter');
+      const byId = new Map();
+      for (const c of list) if (!byId.has(c.id)) byId.set(c.id, c);
+      return { list, byId };
+    });
   },
 
   // Issues gefiltert nach UI-Filtern (figurId, kapitel). Reads figuren+tree
@@ -71,29 +107,41 @@ export const kontinuitaetMethods = {
   // wird per `...spread` in die Alpine.data-Factory übernommen, und Spread ruft
   // Getter auf und speichert nur den Wert — die Reaktivität auf Filter/Result
   // ginge verloren, und der Wert wäre zur Spread-Zeit `[]`.
+  //
+  // Memoisiert, weil das Template die Liste (ueber kontinuitaetIssuesSorted)
+  // viermal pro Render liest und jeder Durchlauf den Kapitelnamen-Index neu aufbaute.
   kontinuitaetIssuesFiltered() {
-    const root = window.__app;
     const filters = Alpine.store('catalogUi').kontinuitaetFilters;
-    const chapters = (Alpine.store('nav').tree || []).filter(t => t.type === 'chapter');
-    const chapterNames = new Set(chapters.map(t => t.name));
+    const issues = this.kontinuitaetResult?.issues || [];
+    const chapters = this._kontinuitaetChapters();
+    const figuren = window.__app.$store.catalog.figuren || [];
+    return this._memo(
+      'filtered',
+      [issues, chapters, figuren, filters.figurId, filters.kapitel, filters.schwere],
+      () => this._computeKontinuitaetIssuesFiltered(issues, chapters, figuren, filters),
+    );
+  },
+
+  _computeKontinuitaetIssuesFiltered(issues, chapters, figuren, filters) {
+    const chapterNames = new Set(chapters.list.map(t => t.name));
     const fromStelle = (s) => {
       if (!s) return null;
       const ci = s.indexOf(':');
       const c = ci > 0 ? s.substring(0, ci).trim() : s.trim();
       return chapterNames.has(c) ? c : null;
     };
-    return (this.kontinuitaetResult?.issues || []).filter(issue => {
+    return issues.filter(issue => {
       if (filters.figurId) {
         if (issue.fig_ids?.length) {
           if (!issue.fig_ids.includes(filters.figurId)) return false;
         } else {
-          const selectedName = root.$store.catalog.figuren.find(f => f.id === filters.figurId)?.name || '';
+          const selectedName = figuren.find(f => f.id === filters.figurId)?.name || '';
           if (selectedName && !(issue.figuren || []).includes(selectedName)) return false;
         }
       }
       if (filters.kapitel) {
         const f = filters.kapitel;
-        const selectedId = chapters.find(t => t.name === f)?.id;
+        const selectedId = chapters.list.find(t => t.name === f)?.id;
         const idMatch    = selectedId !== undefined && issue.chapter_ids?.includes(selectedId);
         const nameMatch  = (issue.kapitel || []).includes(f);
         const stelleMatch = fromStelle(issue.stelle_a) === f || fromStelle(issue.stelle_b) === f;
@@ -107,9 +155,16 @@ export const kontinuitaetMethods = {
     });
   },
 
+  // Memoisiert auf die (ihrerseits memoisierte) gefilterte Liste: das Template
+  // liest sie viermal pro Render (Zaehler, Leer-Zustand, x-for).
   kontinuitaetIssuesSorted() {
+    const filtered = this.kontinuitaetIssuesFiltered();
+    return this._memo('sorted', [filtered], () => this._sortKontinuitaetIssues(filtered));
+  },
+
+  _sortKontinuitaetIssues(filtered) {
     const order = { kritisch: 0, mittel: 1, niedrig: 2 };
-    const list = this.kontinuitaetIssuesFiltered().slice();
+    const list = filtered.slice();
     list.sort((a, b) => {
       // Erledigte ans Ende, danach nach Schwere.
       const ra = a.resolved ? 1 : 0;
@@ -135,6 +190,11 @@ export const kontinuitaetMethods = {
     if (!issue || issue.id == null) return;
     const next = !issue.resolved;
     issue.resolved = next;
+    // `resolved` wird in place umgeschaltet, die Sortierung haengt daran
+    // (Erledigte ans Ende): den Sortier-Slot gezielt verwerfen, sonst bliebe die
+    // Zeile bis zum naechsten Laden an ihrem Platz. Der Filter liest `resolved`
+    // nicht und bleibt gueltig.
+    this._invalidateKontinuitaetSort();
     try {
       await fetchJson('/jobs/kontinuitaet/issue/' + issue.id + '/resolved', {
         method: 'POST',
@@ -143,8 +203,13 @@ export const kontinuitaetMethods = {
       });
     } catch (e) {
       issue.resolved = !next;
+      this._invalidateKontinuitaetSort();
       console.error('[kontinuitaetToggleResolved]', e);
     }
+  },
+
+  _invalidateKontinuitaetSort() {
+    if (this._memos) delete this._memos.sorted;
   },
 
   // Anzahl noch offener (nicht erledigter) Issues im aktuellen Check.
@@ -172,10 +237,8 @@ export const kontinuitaetMethods = {
 
   kontinuitaetKapitelListe() {
     const root = window.__app;
-    const chapterById = new Map(
-      (Alpine.store('nav').tree || []).filter(t => t.type === 'chapter').map(t => [t.id, t.name])
-    );
-    const chapterNames = new Set(chapterById.values());
+    const chapters = this._kontinuitaetChapters();
+    const chapterNames = new Set(chapters.list.map(t => t.name));
     const fromStelle = (s) => {
       if (!s) return null;
       const ci = s.indexOf(':');
@@ -185,7 +248,7 @@ export const kontinuitaetMethods = {
     const names = new Set();
     for (const issue of (this.kontinuitaetResult?.issues || [])) {
       if (issue.chapter_ids?.length) {
-        for (const id of issue.chapter_ids) { const n = chapterById.get(id); if (n) names.add(n); }
+        for (const id of issue.chapter_ids) { const n = chapters.byId.get(id)?.name; if (n) names.add(n); }
       }
       if (issue.kapitel?.length) {
         for (const k of issue.kapitel) if (k && chapterNames.has(k)) names.add(k);
@@ -206,18 +269,17 @@ export const kontinuitaetMethods = {
   // Seite namens "Der Vater" (in irgendeinem Kapitel). Globalen Page-
   // Fallback gibt es nicht: ohne Kapitelkontext kein Link.
   kontinuitaetResolveStelle(stelle, issue, side) {
-    const root = window.__app;
     if (!stelle) return null;
-    const chapters = (Alpine.store('nav').tree || []).filter(t => t.type === 'chapter');
+    const chapters = this._kontinuitaetChapters();
     const chIds = issue?.chapter_ids || [];
     const idx = side === 'b' && chIds.length > 1 ? 1 : 0;
-    const targetCh = chIds[idx] ? chapters.find(c => c.id === chIds[idx]) : null;
+    const targetCh = chIds[idx] ? (chapters.byId.get(chIds[idx]) || null) : null;
 
     const ci = stelle.indexOf(':');
     const part1 = (ci > 0 ? stelle.slice(0, ci) : stelle).trim();
     const part2 = ci > 0 ? stelle.slice(ci + 1).trim() : '';
 
-    const chapter = targetCh || chapters.find(c => c.name === part1) || null;
+    const chapter = targetCh || chapters.list.find(c => c.name === part1) || null;
     if (!chapter) return null;
 
     const pageByName = (pages, needle) => {

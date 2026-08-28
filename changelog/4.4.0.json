@@ -1,0 +1,56 @@
+{
+  "version": "4.4.0",
+  "date": "2026-08-28",
+  "entries": [
+    {
+      "kind": "neu",
+      "de": "Plot-Werkstatt und Figuren-Werkstatt: Die Konsistenzprüfung kennt jetzt die Weltregeln aus der Komplettanalyse. Ein geplanter Beat oder eine Figureneigenschaft, die in dieser Welt nicht möglich ist, wird als Konflikt gemeldet.",
+      "en": "Plot Workshop and Character Workshop: The consistency check now knows the world rules from the full analysis. A planned beat or character trait that is impossible in this world is reported as a conflict."
+    },
+    {
+      "kind": "neu",
+      "de": "Buchbewertung: Der Weltaufbau wird jetzt an den gesammelten Welt-Fakten gemessen. Auch Kapitel, die keine einzige Aussage über die Welt festlegen, sind Teil des Urteils.",
+      "en": "Book review: World building is now measured against the collected world facts. Chapters that establish nothing about the world are part of the assessment too."
+    },
+    {
+      "kind": "verbessert",
+      "de": "Buch-Chat: Die etablierten Welt-Fakten liegen dem Chat direkt vor. Fragen nach geltenden Regeln oder dem Technik-Stand der Welt werden schneller und ohne Umweg über ganze Kapitel beantwortet.",
+      "en": "Book chat: The established world facts are available to the chat directly. Questions about the rules or the technology of the world are answered faster, without reading through whole chapters."
+    },
+    {
+      "kind": "verbessert",
+      "de": "Stil-Heatmap: Die Tabelle erscheint deutlich schneller, auch bei grossen Büchern. Die Beispielsätze lädt die Karte erst beim Aufklappen einer Zelle.",
+      "en": "Style heatmap: The table appears noticeably faster, even for large books. Example sentences are loaded only when a cell is opened."
+    },
+    {
+      "kind": "verbessert",
+      "de": "Fehler-Heatmap: Unter der Tabelle steht jetzt eine Legende, die die Farben und die Schraffur erklärt. Der Tooltip einer Zelle nennt zusätzlich die Befunde pro 1000 geprüften Wörtern.",
+      "en": "Issue heatmap: A legend below the table now explains the colours and the hatching. A cell's tooltip also states the findings per 1,000 words checked."
+    },
+    {
+      "kind": "verbessert",
+      "de": "Figuren, Reiter „Alter“: Der Fortschritt der Alters-Analyse erscheint jetzt in der Job-Leiste am Fuss der Seite, und am Ende meldet ein Hinweis das Ergebnis.",
+      "en": "Characters, “Age” tab: The progress of the age analysis now appears in the job bar at the bottom of the page, and a notice reports the result when it finishes."
+    },
+    {
+      "kind": "behoben",
+      "de": "Fehler-Heatmap: Die Kapitel standen nach Anlagedatum statt in der Reihenfolge des Buchs, sobald im Buchorganizer umsortiert worden war.",
+      "en": "Issue heatmap: Chapters were listed by creation date instead of in book order once they had been rearranged in the book organiser."
+    },
+    {
+      "kind": "behoben",
+      "de": "Welt-Fakten: Die Karte forderte eine Komplettanalyse, obwohl diese schon gelaufen war und nur nichts gefunden hatte.",
+      "en": "World facts: The card asked for a full analysis even though one had already run and simply found nothing."
+    },
+    {
+      "kind": "behoben",
+      "de": "Seitenleiste: Das Rechtsklick-Menü am Seitenbaum zeigte Einträge zum Anlegen und Umbenennen auch ohne Schreibrecht. Ein Klick endete dann in einer Fehlermeldung.",
+      "en": "Sidebar: The right-click menu in the page tree offered entries for creating and renaming even without write access. Clicking them ended in an error message."
+    },
+    {
+      "kind": "behoben",
+      "de": "Buch-Übersicht: In der Musik-Liste verdrängten Titel mit einer einzigen Nennung die wiederkehrenden Stücke.",
+      "en": "Book overview: In the music list, titles mentioned only once pushed out the recurring pieces."
+    }
+  ]
+}

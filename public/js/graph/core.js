@@ -1,5 +1,6 @@
 import { ensureVis, graphPlaceholder, graphTheme } from '../graph-kit.js';
 import { toggleWrapFullscreen } from '../fullscreen.js';
+import { isGraphMode } from './constants.js';
 
 // Entry-Points: Mode-Switch, Fullscreen, Render-Dispatcher.
 export const coreMethods = {
@@ -10,13 +11,25 @@ export const coreMethods = {
     this.$nextTick(() => this.renderFigurGraph());
   },
 
+  // Zeichnet der aktuelle Reiter ueberhaupt ein Netz? Das Partial blendet den
+  // Graph-Block darueber aus, der Render-Dispatcher steigt darueber aus — eine
+  // Frage, eine Quelle (GRAPH_MODES in ./constants.js).
+  figurenIsGraphModus() {
+    return isGraphMode(this.figurenGraphModus);
+  },
+
+  // Memoisiert: das Reiter-Markup liest das Praedikat pro Render (Sperr-Zustand
+  // des Familien-Reiters), und der Lauf geht ueber alle Figuren x Beziehungen.
   figurenHasFamilyEdges() {
-    for (const f of this._graphFiguren()) {
-      for (const bz of (f.beziehungen || [])) {
-        if (['elternteil', 'kind', 'geschwister'].includes(bz.typ)) return true;
+    const figuren = Alpine.store('catalog').figuren;
+    return this._memo('hasFamilyEdges', [figuren], () => {
+      for (const f of this._graphFiguren()) {
+        for (const bz of (f.beziehungen || [])) {
+          if (['elternteil', 'kind', 'geschwister'].includes(bz.typ)) return true;
+        }
       }
-    }
-    return false;
+      return false;
+    });
   },
 
   async toggleFigurenGraphFullscreen() {
@@ -36,10 +49,11 @@ export const coreMethods = {
   },
 
   async renderFigurGraph() {
-    // Präsenz- und Alters-Tab sind reine DOM-Ansichten (Heatmap bzw. Tabelle, kein
-    // vis-network) → nichts rendern, vis-Bundle nicht lazy-laden. Beide Blöcke
-    // leben separat in ihren Partials.
-    if (this.figurenGraphModus === 'praesenz' || this.figurenGraphModus === 'alter') return;
+    // Präsenz-, Alters- und Lebenslauf-Tab sind reine DOM-Ansichten (Heatmap,
+    // Tabelle, Matrix — kein vis-network) → nichts rendern, vis-Bundle nicht
+    // lazy-laden. Die Blöcke leben separat in ihren Partials; welcher Reiter
+    // zeichnet, entscheidet GRAPH_MODES in ./constants.js.
+    if (!isGraphMode(this.figurenGraphModus)) return;
     const container = document.getElementById('figuren-graph');
     if (!container) return;
     const figuren = this._graphFiguren();

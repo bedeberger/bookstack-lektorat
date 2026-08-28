@@ -4,7 +4,7 @@
 //
 // __SHELL_BUILD: content hash over all listed assets → drives SHELL_CACHE.
 // __SHELL_MANIFEST: the coherent set precached atomically at SW install.
-self.__SHELL_BUILD = "7e7795ffb5a70f17";
+self.__SHELL_BUILD = "ffcd33af7e50f2f7";
 self.__SHELL_MANIFEST = [
   "/css/admin/admin-backup.css",
   "/css/admin/admin-home.css",
@@ -73,6 +73,7 @@ self.__SHELL_MANIFEST = [
   "/css/components/icon-btn.css",
   "/css/components/icons.css",
   "/css/components/job-toast.css",
+  "/css/components/kapitel-badges.css",
   "/css/components/manuscript-content.css",
   "/css/components/manuscript-stream.css",
   "/css/components/my-books.css",
@@ -112,6 +113,7 @@ self.__SHELL_MANIFEST = [
   "/css/entities/ereignisse-subtyp.css",
   "/css/entities/figur-werkstatt.css",
   "/css/entities/figuren-alter.css",
+  "/css/entities/figuren-graph.css",
   "/css/entities/figuren-lebenslauf.css",
   "/css/entities/figuren.css",
   "/css/entities/ideen.css",
@@ -216,6 +218,7 @@ self.__SHELL_MANIFEST = [
   "/js/book-overview/plot.js",
   "/js/book-overview/presence.js",
   "/js/book-overview/projection.js",
+  "/js/book-overview/ranking.js",
   "/js/book-overview/recent.js",
   "/js/book-overview/review.js",
   "/js/book-overview/songs.js",
@@ -239,6 +242,7 @@ self.__SHELL_MANIFEST = [
   "/js/book/erzaehlprofil.js",
   "/js/book/export.js",
   "/js/book/fehler-heatmap.js",
+  "/js/book/figur-typen.js",
   "/js/book/figuren-alter.js",
   "/js/book/figuren-lebenslauf.js",
   "/js/book/figuren-presence.js",
@@ -297,6 +301,7 @@ self.__SHELL_MANIFEST = [
   "/js/book/titelwerkstatt.js",
   "/js/book/tree-context-menu.js",
   "/js/book/tree.js",
+  "/js/book/tree/build.js",
   "/js/book/tree/load.js",
   "/js/book/tree/open-state.js",
   "/js/book/tree/permissions.js",
@@ -360,7 +365,10 @@ self.__SHELL_MANIFEST = [
   "/js/cards/entity-picker.js",
   "/js/cards/epub-export-card.js",
   "/js/cards/ereignisse-card.js",
+  "/js/cards/ereignisse/band.js",
   "/js/cards/ereignisse/date.js",
+  "/js/cards/ereignisse/model.js",
+  "/js/cards/ereignisse/subtyp.js",
   "/js/cards/erzaehlprofil-card.js",
   "/js/cards/export-card-base.js",
   "/js/cards/export-card.js",
@@ -657,6 +665,7 @@ self.__SHELL_MANIFEST = [
   "/js/sources/manage.js",
   "/js/sources/search.js",
   "/js/sources/source-cache.js",
+  "/js/streak-grid.js",
   "/js/table/table-html.js",
   "/js/tabs.js",
   "/js/theme-init.js",
@@ -771,6 +780,10 @@ self.__SHELL_MANIFEST = [
   "/partials/fehler-heatmap.html",
   "/partials/figur-werkstatt.html",
   "/partials/figuren-alter.html",
+  "/partials/figuren-detail-charakter.html",
+  "/partials/figuren-detail-imbuch.html",
+  "/partials/figuren-detail-steckbrief.html",
+  "/partials/figuren-detail.html",
   "/partials/figuren-graph-legend.html",
   "/partials/figuren-lebenslauf.html",
   "/partials/figuren-presence-strip.html",

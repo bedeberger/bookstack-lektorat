@@ -9,8 +9,8 @@
 // Lücke). Methoden werden in Alpine.data('figurenCard') gespreadet; Root-Zugriffe
 // via window.__app. Reine Compute-Funktionen exportiert → ohne Alpine testbar.
 
-// Reihenfolge der Figuren-Zeilen (Typ-Tier, danach Gesamtpräsenz absteigend).
-const TYP_ORDER = { hauptfigur: 0, antagonist: 1, mentor: 2, nebenfigur: 3, randfigur: 4, andere: 5 };
+import { typRank } from './figur-typen.js';
+
 // Typen, für die dramaturgische Befunde (Lücke / später Auftritt / früher Abgang) zählen.
 const CORE_TYPES = new Set(['hauptfigur', 'antagonist', 'mentor']);
 const EDGE_FRACTION = 0.25; // erstes/letztes Viertel des Buchs = "spät/früh"
@@ -93,10 +93,8 @@ export function computePresence(figuren, chapterOrder) {
     });
   }
 
-  rows.sort((a, b) => {
-    const t = (TYP_ORDER[a.typ] ?? 9) - (TYP_ORDER[b.typ] ?? 9);
-    return t || (b.total - a.total);
-  });
+  // Zeilen-Reihenfolge: Typ-Tier, danach Gesamtpräsenz absteigend.
+  rows.sort((a, b) => typRank(a.typ) - typRank(b.typ) || (b.total - a.total));
   for (const r of rows) r.share = grandTotal > 0 ? r.total / grandTotal : 0;
 
   return {
@@ -191,7 +189,7 @@ export const presenceMethods = {
 
   // Befund-Zeile als lokalisierter Klartext (x-text-sicher, kein x-html).
   figurenPresenceFindingText(fd) {
-    const t = (k, p) => window.__app.t(k, p);
+    const t = (k, p) => this._t(k, p);
     switch (fd.kind) {
       case 'gap':          return t('figuren.presence.finding.gap', { name: fd.figName, len: fd.len, from: fd.fromChapter, to: fd.toChapter });
       case 'lateEntrance': return t('figuren.presence.finding.lateEntrance', { name: fd.figName, chapter: fd.chapter });
