@@ -11341,6 +11341,30 @@ function _runMigrationsLocked() {
     logger.info('DB-Migration auf Version 279 abgeschlossen (motif_consistency_runs).');
   }
 
+  if (version < 280) {
+    // `figure_ages.gerechnet` — das aus dem Geburtsjahr gerechnete Alter am
+    // Ankerjahr der Figur, die zweite der beiden Alters-Spalten (die woertliche
+    // Angabe steht in `alter_von`/`alter_bis`). Der Vergleich der beiden IST das
+    // Feature: eine Abweichung ist ein Befund, keine Korrektur.
+    //
+    // Eigener Block statt Spalte im 276er-CREATE, weil `CREATE TABLE IF NOT
+    // EXISTS` auf einer Instanz, die 276 bereits gefahren hat, ein No-op ist —
+    // die Tabelle stuende dort ohne die Spalte, waehrend eine frische DB (Squash)
+    // sie hat. Additiv (ADD COLUMN), nullable: bestehende Zeilen stammen aus
+    // Laeufen ohne diesen Wert.
+    const ageCols280 = db.pragma('table_info(figure_ages)').map(c => c.name);
+    if (ageCols280.length > 0 && !ageCols280.includes('gerechnet')) {
+      db.exec('ALTER TABLE figure_ages ADD COLUMN gerechnet INTEGER');
+    }
+
+    const fkErrors280 = db.pragma('foreign_key_check');
+    if (fkErrors280.length) {
+      throw new Error(`Migration 280: foreign_key_check meldet ${fkErrors280.length} Verstoesse.`);
+    }
+    db.prepare('UPDATE schema_version SET version = 280').run();
+    logger.info('DB-Migration auf Version 280 abgeschlossen (figure_ages.gerechnet).');
+  }
+
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);
   if (feColsCheck.length > 0 && !feColsCheck.includes('typ')) {
