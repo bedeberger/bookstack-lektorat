@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="de-CH">
+<head>
+  <meta charset="UTF-8">
+  <title>Referenz-Karte · Kontext-Filter Test Harness</title>
+  <link rel="stylesheet" href="/public/css/tokens.css">
+  <style>
+    body { margin: 0; padding: 24px; font: 16px/1.5 system-ui, sans-serif; }
+    [x-cloak] { display: none; }
+  </style>
+</head>
+<body>
+  <!-- Kontext-Filter der Orte- und Szenen-Reiter. Die Karte zeigt im Scope
+       "Seite" nicht nur, was woertlich auf der Seite steht: ein Ort haengt
+       ueber `ort.kapitel` (location_chapters) am Kapitel, eine Szene ueber
+       chapter_id — auch dann, wenn sie an einer ANDEREN Seite desselben
+       Kapitels haengt. Genau diese Faelle fielen frueher aus der Liste. -->
+  <div id="root" x-data="referenceCard">
+    <button data-test="scope" type="button" @click="toggleReferenceScope()" x-text="referenceScope"></button>
+
+    <div data-test="count-orte" x-text="referenceCount('orte')"></div>
+    <template x-for="ort in referenceOrte()" :key="'ro-' + ort.id">
+      <div :data-test="'ort-' + ort.id" :data-ctx="ort.refCtx || ''" x-text="ort.name"></div>
+    </template>
+
+    <div data-test="count-szenen" x-text="referenceCount('szenen')"></div>
+    <template x-for="s in referenceSzenen()" :key="'rs-' + s.id">
+      <div :data-test="'szene-' + s.id" :data-ctx="s.refCtx || ''"
+           :data-where="referenceRowWhere(s)" x-text="s.titel"></div>
+    </template>
+
+    <div data-test="count-figuren" x-text="referenceCount('figuren')"></div>
+    <template x-for="f in referenceFiguren()" :key="'rf-' + f.id">
+      <div :data-test="'figur-' + f.id" :data-ctx="f.refCtx || ''" x-text="f.name"></div>
+    </template>
+
+    <div data-test="count-ereignisse" x-text="referenceCount('ereignisse')"></div>
+    <template x-for="ev in referenceEreignisse()" :key="'re-' + ev.id">
+      <div :data-test="'ereignis-' + ev.id" :data-ctx="ev.refCtx || ''"
+           :data-where="referenceRowWhere(ev)" x-text="ev.ereignis"></div>
+    </template>
+
+    <div data-test="count-recherche" x-text="referenceCount('recherche')"></div>
+    <template x-for="it in referenceRechercheItems()" :key="'rr-' + it.id">
+      <div :data-test="'recherche-' + it.id" :data-ctx="it.refCtx || ''" x-text="it.title"></div>
+    </template>
+  </div>
+
+  <script type="module">
+    const { registerReferenceCard } = await import('/public/js/cards/reference-card.js');
+
+    document.addEventListener('alpine:init', () => {
+      window.__app = window.Alpine.reactive({
+        // Startet zu: der Lifecycle-Helfer haengt an einem $watch und laedt die
+        // Recherche erst beim Sichtbarwerden. Das Harness macht die Karte darum
+        // nach dem Alpine-Start auf, statt den Ladepfad zu ueberspringen.
+        showReferenceCard: false,
+        // Seite 7 in Kapitel 3. Ihr Text nennt nur "Waldhuette".
+        currentPage: { id: 7, updated_at: '2026-01-01T00:00:00Z', chapter_id: 3 },
+        originalHtml: '<p>Brandt und Roth erreichten die Waldhuette erst im Dunkeln.</p>',
+        // Index-Sicht des Kapitels: kennt Brandt (im Text) und Kessler (nur
+        // umschrieben), NICHT die eben erst geschriebene Erwaehnung von Roth.
+        chapterFigures: [
+          { id: 21, name: 'Brandt' },
+          { id: 22, name: 'Kessler' },
+        ],
+        t: (k, p) => (p ? k + ':' + JSON.stringify(p) : k),
+        loadFiguren: () => {},
+        loadOrte: () => {},
+        loadSzenen: () => {},
+        _reloadZeitstrahl: () => {},
+      });
+      window.Alpine.magic('app', () => window.__app);
+      window.Alpine.store('nav', {
+        selectedBookId: 1,
+        tree: [{ id: 3, name: 'Kapitel Eins' }],
+        pages: [{ id: 7, name: 'Seite Sieben' }, { id: 8, name: 'Seite Acht' }],
+      });
+      window.Alpine.store('config', { semanticSearchEnabled: false });
+      window.Alpine.store('catalog', {
+        figuren: [
+          // 21: im Seitentext UND im Kapitel-Index.
+          { id: 21, name: 'Brandt', typ: 'haupt' },
+          // 22: nur im Kapitel-Index — auf der Seite umschrieben.
+          { id: 22, name: 'Kessler', typ: 'neben' },
+          // 23: im Seitentext, aber noch nicht im Index (frisch geschrieben).
+          { id: 23, name: 'Roth', typ: 'neben' },
+          // 24: weder noch.
+          { id: 24, name: 'Vogler', typ: 'neben' },
+        ],
+        orte: [
+          // 1: woertlich auf der Seite genannt.
+          { id: 1, name: 'Waldhuette', kapitel: [{ chapter_id: 3, name: 'Kapitel Eins' }] },
+          // 2: nur ueber das Kapitel verknuepft — auf der Seite umschrieben.
+          { id: 2, name: 'Burg Hohenstein', kapitel: [{ chapter_id: 3, name: 'Kapitel Eins' }] },
+          // 3: anderes Kapitel, nicht genannt → draussen.
+          { id: 3, name: 'Hafenstadt', kapitel: [{ chapter_id: 4, name: 'Kapitel Zwei' }] },
+          // 4: gar keine Kapitel-Kante, nicht genannt → draussen.
+          { id: 4, name: 'Nordwueste', kapitel: [] },
+        ],
+        szenen: [
+          { id: 11, titel: 'Ankunft',   page_id: 7,    chapter_id: 3, sort_order: 0 },
+          { id: 12, titel: 'Ungebunden', page_id: null, chapter_id: 3, sort_order: 0 },
+          { id: 13, titel: 'Nebenan',   page_id: 8,    chapter_id: 3, sort_order: 0 },
+          { id: 14, titel: 'Fremd',     page_id: 9,    chapter_id: 4, sort_order: 0 },
+        ],
+        globalZeitstrahl: [
+          // 31: Seitenanker auf die offene Seite.
+          { id: 31, ereignis: 'Aufbruch',  page_ids: [7], chapter_ids: [3], kapitel: ['Kapitel Eins'] },
+          // 32: nur Kapitelanker.
+          { id: 32, ereignis: 'Geruecht',  page_ids: [],  chapter_ids: [3], kapitel: ['Kapitel Eins'] },
+          // 33: Kapitelanker + Seitenanker auf eine ANDERE Seite.
+          { id: 33, ereignis: 'Brief',     page_ids: [8], chapter_ids: [3], kapitel: ['Kapitel Eins'] },
+          // 34: fremdes Kapitel — der NAME ist derselbe, die ID nicht. Genau der
+          // Fall, an dem der alte Namensvergleich falsch lag.
+          { id: 34, ereignis: 'Fremd',     page_ids: [],  chapter_ids: [4], kapitel: ['Kapitel Eins'] },
+          // 35: Alt-Eintrag ganz ohne IDs → Namens-Rueckfall greift.
+          { id: 35, ereignis: 'Altlast',   kapitel: ['Kapitel Eins'] },
+        ],
+      });
+      registerReferenceCard();
+    });
+
+    document.addEventListener('alpine:initialized', () => {
+      queueMicrotask(() => {
+        window.__app.showReferenceCard = true;   // feuert onShow → laedt Recherche
+        window.harnessReady = true;
+      });
+    });
+
+    const s = document.createElement('script');
+    s.src = '/public/vendor/alpine-3.15.12.min.js';
+    document.head.appendChild(s);
+  </script>
+</body>
+</html>

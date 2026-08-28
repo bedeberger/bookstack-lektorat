@@ -71,6 +71,18 @@ export const hashApplyMethods = {
       return;
     }
 
+    if (parts[0] === 'meine-buecher') {
+      this._applyingHash = true;
+      this._inHashApply = true;
+      try {
+        if (!this.showMyBooksCard) await this.toggleMyBooksCard();
+      } finally {
+        this._applyingHash = false;
+        this._inHashApply = false;
+      }
+      return;
+    }
+
     if (parts[0] === 'meine-statistik') {
       this._applyingHash = true;
       this._inHashApply = true;

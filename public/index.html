@@ -47,6 +47,7 @@
   <link rel="stylesheet" href="css/components/tabs.css">
   <link rel="stylesheet" href="css/components/device-tokens.css">
   <link rel="stylesheet" href="css/components/my-stats.css">
+  <link rel="stylesheet" href="css/components/my-books.css">
   <link rel="stylesheet" href="css/components/help.css">
   <link rel="stylesheet" href="css/components/onboarding.css">
   <link rel="stylesheet" href="css/components/confirm-dialog.css">
@@ -108,6 +109,7 @@
   <link rel="stylesheet" href="vendor/jsmind-0.8.7.css">
   <link rel="stylesheet" href="css/entities/figuren.css">
   <link rel="stylesheet" href="css/entities/figuren-alter.css">
+  <link rel="stylesheet" href="css/entities/figuren-lebenslauf.css">
   <link rel="stylesheet" href="css/entities/figur-werkstatt.css">
   <link rel="stylesheet" href="css/entities/szenen.css">
   <link rel="stylesheet" href="css/entities/world-facts.css">
@@ -216,6 +218,7 @@
   <link rel="modulepreload" href="js/book/history.js">
   <link rel="modulepreload" href="js/book/figuren.js">
   <link rel="modulepreload" href="js/book/figuren-alter.js">
+  <link rel="modulepreload" href="js/book/figuren-lebenslauf.js">
   <link rel="modulepreload" href="js/book/orte.js">
   <link rel="modulepreload" href="js/book/szenen.js">
   <link rel="modulepreload" href="js/book/ereignisse.js">
@@ -494,9 +497,10 @@
             x-show="$store.session.currentUser && !isAdminOnly"
             x-cloak
             :aria-pressed="showHelpCard"
+            :class="{ 'icon-btn--attention': hasUnreadChangelog($store.shell) }"
             @click="toggleHelpCard()"
-            :data-tip="t('help.openHint')"
-            :aria-label="t('help.openHint')">
+            :data-tip="hasUnreadChangelog($store.shell) ? t('changelog.openHint') : t('help.openHint')"
+            :aria-label="hasUnreadChangelog($store.shell) ? t('changelog.openHint') : t('help.openHint')">
       <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#circle-help"/></svg>
     </button>
     <div id="partial-avatar-menu"></div>
@@ -636,6 +640,7 @@
 <div id="partial-share-links"></div>
 <div id="partial-user-settings"></div>
 <div id="partial-my-stats"></div>
+<div id="partial-my-books"></div>
 <div id="partial-help"></div>
 <div id="partial-onboarding"></div>
 <div id="partial-admin-users"></div>

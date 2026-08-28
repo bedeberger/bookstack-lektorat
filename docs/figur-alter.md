@@ -38,10 +38,24 @@ was im vorgelegten Satz **steht** — samt wörtlichem Zitat.
 Beide Verwerfungs-Zähler stehen im Job-Ergebnis (`verworfen.zitat` / `.zahl` / `.figur`)
 und im Log — ein stiller Filter liest sich wie „mehr gab es nicht".
 
+## Der gerechnete Wert hängt am Ankerjahr der Figur
+
+`gerechnet` = `jahr_im_roman − geburtsjahr`, wobei `jahr_im_roman` das **jüngste
+datierte Ereignis dieser Figur** ist ([lib/figure-years.js](../lib/figure-years.js)) —
+nicht das Ende des Buchs. Eine Figur, die 1987 aus der Geschichte verschwindet,
+während das Buch bis 2003 läuft, ist fünf und nicht einundzwanzig. Vorrang hat
+deshalb die kanonische Rechnung `alter_im_roman` (dieselbe Zahl, die der Figuren-
+Katalog anzeigt); nur wenn die fehlt, weil das Geburtsjahr **nur im Text** steht
+(`alter_im_roman` liest ausschliesslich das kuratierte Feld), zieht die Verdichtung
+sie aus Bezugsjahr − Geburtsjahr nach.
+
+Die buchweite Jahresspanne (`bookYearSpan`) ist deshalb **nur Rahmen für den
+Prompt** und geht nicht in die Verdichtung ein.
+
 ## Datenmodell (abgeleiteter Index, Full-Replace pro Lauf)
 
 - `figure_ages` — **eine Zeile pro Figur**: Altersspanne, Bezugsjahre, Geburtsjahr +
-  dessen Quelle, Konfidenz, `widerspruch_json`.
+  dessen Quelle, `gerechnet`, Konfidenz, `widerspruch_json`.
 - `figure_age_belege` — die Fundstellen: `art`/`wert`/`zitat`/`page_id` (Sprungziel).
 - `figure_age_scans` — Lauf-Kopf pro Buch + User: „Stand vom", `content_sig` für den
   Delta-Skip, `embed_used`.
@@ -67,8 +81,14 @@ wurde, müsste sonst aktiv gelöscht werden — und genau das vergisst man.
   Buch nicht zwölf, sie wird zwischen zwölf und neunzehn. Darum verteilt
   `selectCandidates` die Stellen über den Buchbogen (erste und letzte immer) statt die
   ersten N zu nehmen — sonst steht dort das Alter aus Kapitel 1.
-- **Konfidenz in drei Stufen, nicht als Kommazahl.** `belegt` / `gerechnet` /
-  `unsicher`; eine Zahl wie `0.75` behauptet eine Präzision, die eine Heuristik nicht hat.
+- **Konfidenz in drei Stufen, nicht als Kommazahl** — und als **Ton der einen
+  Herkunfts-Plakette**, nicht als zweite Plakette daneben: „aus dem Text" +
+  „gerechnet" nebeneinander lesen sich wie zwei widersprüchliche Quellenangaben.
+  Das Wort steht im Tooltip. Eine Zahl wie `0.75` behauptet ohnehin eine Präzision,
+  die eine Heuristik nicht hat.
+- **Ohne Alter kein Bezugsjahr.** `jahr_im_roman` fällt für eine undatierte Figur
+  auf das späteste Jahr des Buchs zurück; neben „unbekannt" wäre diese Jahreszahl
+  eine Scheinantwort.
 - **„Alter sinkt im Buchverlauf" ist ein Hinweis, kein Fehler.** Rückblenden sind
   legitim. Das Badge heisst darum `prüfen`, nicht „falsch".
 - **Nur die Zeitlinien-Achse ist gegated.** Der gerechnete Wert setzt
@@ -91,4 +111,18 @@ wurde, müsste sonst aktiv gelöscht werden — und genau das vergisst man.
   `id` nach vorne gibt.
 - Analysieren: `POST /jobs/figur-alter` (ab `editor`, `force: true` überspringt den
   Delta-Skip — manuell ausgelöst heisst „ich will jetzt eine Zahl sehen").
-- Tests: [tests/unit/figure-age.test.js](../tests/unit/figure-age.test.js).
+- Tests: [tests/unit/figure-age.test.js](../tests/unit/figure-age.test.js) (reine
+  Schichten), [tests/integration/figur-alter.test.js](../tests/integration/figur-alter.test.js)
+  (Naht der drei Schichten mit Mock-AI, inkl. der beiden Prüfungen),
+  [tests/e2e-app/figuren-alter.spec.js](../tests/e2e-app/figuren-alter.spec.js)
+  (Reiter in der echten App).
+
+## Zwei Layout-Fallen, die hier schon zugeschnappt sind
+
+- **`display:flex` gehört nie auf ein `<td>`.** Eine Zelle mit `display:flex` ist
+  kein `table-cell` mehr, der Browser wickelt sie in eine anonyme Zelle — die Spalte
+  verrutscht gegen ihren Kopf. Der Flex-Kontext gehört auf einen inneren Span
+  (gebraucht wird er nur, damit `.figur-typ-dot` als inline-Span seine 8×8 bekommt).
+- **Der Chevron-Platz bleibt immer reserviert** (`visibility: hidden`, nicht
+  `x-show`), sonst beginnen Punkt und Name in Zeilen ohne Belege weiter links und
+  die Namensspalte franst aus.

@@ -1,0 +1,88 @@
+<!-- Manuskript-Import: Zuordnung der Ueberschriften-Ebenen + Vorschau.
+     Fragment der Import-Karte (string-seitiger Include, siehe app-ui.js),
+     damit folder-import.html unter dem Partial-LOC-Limit bleibt. -->
+<div class="folder-import-row folder-import-mapping" x-show="importKind === 'manuscript'">
+  <label class="folder-import-label" x-text="$app.t('folderImport.manuscript.mappingLabel')"></label>
+  <div class="folder-import-field">
+    <div class="folder-import-map-grid">
+      <template x-for="lvl in [1, 2, 3]" :key="'h' + lvl">
+        <div class="folder-import-map-row">
+          <span class="folder-import-map-level" x-text="$app.t('folderImport.manuscript.level', { n: lvl })"></span>
+          <div x-data="combobox($app.t('folderImport.manuscript.role.content'))"
+               x-modelable="value" x-model="headingMap['h' + lvl]"
+               x-effect="options = [
+                 { value: 'chapter',       label: $app.t('folderImport.manuscript.role.chapter') },
+                 { value: 'subchapter',    label: $app.t('folderImport.manuscript.role.subchapter') },
+                 { value: 'subsubchapter', label: $app.t('folderImport.manuscript.role.subsubchapter') },
+                 { value: 'page',          label: $app.t('folderImport.manuscript.role.page') },
+                 { value: 'content',       label: $app.t('folderImport.manuscript.role.content') }
+               ]"
+               @combobox-change="preview = null"></div>
+        </div>
+      </template>
+    </div>
+
+    <div x-data="collapsible()" class="folder-import-map-more">
+      <button type="button" class="collapsible-toggle" x-bind="trigger">
+        <span class="history-chevron" x-bind="chevron" aria-hidden="true"></span>
+        <span x-text="$app.t('folderImport.manuscript.moreLevels')"></span>
+      </button>
+      <div class="folder-import-map-grid" x-bind="panel" x-cloak>
+        <template x-for="lvl in [4, 5, 6]" :key="'h' + lvl">
+          <div class="folder-import-map-row">
+            <span class="folder-import-map-level" x-text="$app.t('folderImport.manuscript.level', { n: lvl })"></span>
+            <div x-data="combobox($app.t('folderImport.manuscript.role.content'))"
+                 x-modelable="value" x-model="headingMap['h' + lvl]"
+                 x-effect="options = [
+                   { value: 'chapter',       label: $app.t('folderImport.manuscript.role.chapter') },
+                   { value: 'subchapter',    label: $app.t('folderImport.manuscript.role.subchapter') },
+                   { value: 'subsubchapter', label: $app.t('folderImport.manuscript.role.subsubchapter') },
+                   { value: 'page',          label: $app.t('folderImport.manuscript.role.page') },
+                   { value: 'content',       label: $app.t('folderImport.manuscript.role.content') }
+                 ]"
+                 @combobox-change="preview = null"></div>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <label class="folder-import-check">
+      <input type="checkbox" x-model="keepHeadings" @change="preview = null">
+      <span x-text="$app.t('folderImport.manuscript.keepHeadings')"></span>
+    </label>
+
+    <div class="folder-import-hint" x-text="$app.t('folderImport.manuscript.mappingHint')"></div>
+  </div>
+</div>
+
+<div class="folder-import-row folder-import-preview-row" x-show="importKind === 'manuscript'">
+  <label class="folder-import-label" x-text="$app.t('folderImport.manuscript.previewTitle')"></label>
+  <div class="folder-import-field">
+    <div class="folder-import-preview-actions">
+      <button type="button" class="btn-compact"
+              :disabled="!file || previewBusy" @click="loadPreview()"
+              x-text="previewBusy ? $app.t('folderImport.manuscript.previewBusy') : $app.t('folderImport.manuscript.preview')"></button>
+      <span class="folder-import-preview-summary" x-show="preview"
+            x-text="$app.t('folderImport.manuscript.previewSummary', { chapters: preview?.chapterCount || 0, pages: preview?.pageCount || 0 })"></span>
+    </div>
+    <div class="folder-import-hint" x-show="!preview" x-text="$app.t('folderImport.manuscript.previewEmpty')"></div>
+    <div class="folder-import-heading-counts" x-show="preview && headingCountList.length">
+      <span x-text="$app.t('folderImport.manuscript.headingCounts') + ':'"></span>
+      <template x-for="hc in headingCountList" :key="hc.level">
+        <span class="folder-import-heading-chip"
+              x-text="$app.t('folderImport.manuscript.headingCount', { n: hc.n, level: hc.level })"></span>
+      </template>
+    </div>
+    <ul class="folder-import-outline" x-show="preview && previewOutlineFlat.length">
+      <template x-for="(node, idx) in previewOutlineFlat" :key="idx">
+        <li :class="'folder-import-outline-item is-' + node.type" :style="{ '--outline-depth': node.depth }">
+          <span class="folder-import-outline-name" x-text="node.name"></span>
+          <span class="folder-import-outline-meta" x-show="node.type === 'page'"
+                x-text="$app.t('folderImport.manuscript.pageChars', { n: node.chars || 0 })"></span>
+        </li>
+      </template>
+    </ul>
+    <div class="folder-import-hint" x-show="preview?.outlineTruncated"
+         x-text="$app.t('folderImport.manuscript.previewTruncated')"></div>
+  </div>
+</div>

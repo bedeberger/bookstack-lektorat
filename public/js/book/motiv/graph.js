@@ -16,6 +16,10 @@ import { ensureVis, graphPlaceholder, createGraphTooltip, graphTheme, paletteCol
 export const THEME_COLOR_KEYS = ['blue', 'green', 'amber', 'orange', 'red', 'wine', 'pink', 'purple', 'brown', 'gray'];
 const NEUTRAL = '#8a8f98';
 const LAYER = { figure: '#0891b2', beat: '#7c3a48', chapter: '#65758b' };
+// Kante mit Konsistenz-Befund (Messung, siehe motiv/consistency.js): rot +
+// gestrichelt. Fester Wert wie die Layer-Farben — auf hellem und dunklem Grund
+// lesbar; der Canvas löst keine CSS-Custom-Properties auf.
+const REL_WARN = '#dc2626';
 
 // Auto-Farbe (Palette-Schlüssel) für ein Thema am gegebenen Listen-Index.
 export function defaultThemeColorKey(ix) {
@@ -220,15 +224,22 @@ export const graphMethods = {
       const key = [r.from_motif_id, r.to_motif_id].sort((a, b) => a - b).join('-');
       pairCount[key] = (pairCount[key] || 0) + 1;
     }
+    // Kanten, zu denen die deterministische Messung etwas gefunden hat — sie werden
+    // im Bild markiert, damit die Konstellation nicht nur zeigt, WAS verknüpft ist,
+    // sondern auch, wo die Verknüpfung im Text nicht aufgeht.
+    const flaggedRels = this.checkedRelationIds();
     for (const r of this.relations) {
       const key = [r.from_motif_id, r.to_motif_id].sort((a, b) => a - b).join('-');
       const parallel = pairCount[key] > 1;
+      const warn = flaggedRels.has(r.id);
       // Bei Parallelkanten die Ausweich-Seite deterministisch aus der Knoten-
       // Reihenfolge ableiten, damit Hin- und Rückkante gegenläufig ausweichen.
       const cw = r.from_motif_id < r.to_motif_id;
       edges.push({
-        from: nodeId('motif', r.from_motif_id), to: nodeId('motif', r.to_motif_id), label: r.typ,
-        arrows: 'to', color: { color: '#b45309' }, width: 2,
+        from: nodeId('motif', r.from_motif_id), to: nodeId('motif', r.to_motif_id),
+        label: this.motifRelLabel(r.typ),
+        arrows: 'to', color: { color: warn ? REL_WARN : '#b45309' }, width: warn ? 3 : 2,
+        dashes: warn ? [6, 4] : false,
         font: { size: 11, color: mutedColor, strokeWidth: 3, strokeColor: bgColor },
         smooth: parallel ? { type: cw ? 'curvedCW' : 'curvedCCW', roundness: 0.2 } : false,
       });

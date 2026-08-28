@@ -336,6 +336,9 @@ export {
   buildMotivSystemPrompt,
   buildMotivBrainstormPrompt,
   SCHEMA_MOTIV_BRAINSTORM,
+  buildMotivConsistencyPrompt,
+  SCHEMA_MOTIV_CONSISTENCY,
+  MOTIV_SEVERITY,
 } from './prompts/motiv.js';
 
 export {

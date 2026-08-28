@@ -9,6 +9,7 @@ const pagePresence = require('../../db/page-presence');
 const appUsersDevices = require('../../db/app-users-devices');
 const pageDeletions = require('../../db/page-deletions');
 const bookAccess = require('../../db/book-access');
+const bookShelf = require('../../db/book-shelf');
 const { db } = require('../../db/connection');
 const { toIntId } = require('../../lib/validate');
 const { setContext } = require('../../lib/log-context');
@@ -44,6 +45,11 @@ function register(router) {
           buchtyp: r.buchtyp,
         }])
       );
+      // Regal-Zustand (angeheftet/archiviert) je Buch fuer DIESEN User. Er
+      // reist mit der Buchliste, weil jede Oberflaeche, die Buecher anbietet
+      // (Buchwahl-Combobox, Palette, Regal-Karte), dieselbe Ordnung zeigen
+      // muss — ein zweiter Fetch pro Konsument driftet auseinander.
+      const shelf = bookShelf.shelfMap(email);
       const visible = all
         .filter(b => allowedIds.has(b.id))
         .map(b => ({
@@ -52,6 +58,8 @@ function register(router) {
           owner_email: meta.get(b.id)?.owner_email || null,
           category_id: meta.get(b.id)?.category_id ?? null,
           buchtyp: meta.get(b.id)?.buchtyp ?? null,
+          pinned: !!shelf.get(b.id)?.pinnedAt,
+          archived: !!shelf.get(b.id)?.archivedAt,
         }));
       res.json(visible);
     } catch (e) { _fail(res, e, 'GET /content/books'); }

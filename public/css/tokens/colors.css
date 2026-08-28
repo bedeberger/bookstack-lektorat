@@ -182,6 +182,10 @@
   --card-accent-bookstats: var(--card-accent-bookstats-base);
   --card-accent-mystats-base: #4a58a8;
   --card-accent-mystats: var(--card-accent-mystats-base);
+  /* Buecherregal („Meine Buecher"): gedaempftes Braun-Ocker — Regal/Buchruecken,
+     bewusst neben, nicht in der Familie der Analyse-Karten. */
+  --card-accent-mybooks-base: #8a6a3c;
+  --card-accent-mybooks: var(--card-accent-mybooks-base);
   --card-accent-review-base: #5a4a8e;
   --card-accent-review: var(--card-accent-review-base);
   --card-accent-kapitel-base: #5e7a3a;
@@ -431,6 +435,7 @@
   --card-accent-heatmap: oklch(from var(--card-accent-heatmap-base) max(var(--accent-dark-floor), calc(l + var(--accent-dark-lift))) calc(c * var(--accent-dark-chroma)) h);
   --card-accent-bookstats: oklch(from var(--card-accent-bookstats-base) max(var(--accent-dark-floor), calc(l + var(--accent-dark-lift))) calc(c * var(--accent-dark-chroma)) h);
   --card-accent-mystats: oklch(from var(--card-accent-mystats-base) max(var(--accent-dark-floor), calc(l + var(--accent-dark-lift))) calc(c * var(--accent-dark-chroma)) h);
+  --card-accent-mybooks: oklch(from var(--card-accent-mybooks-base) max(var(--accent-dark-floor), calc(l + var(--accent-dark-lift))) calc(c * var(--accent-dark-chroma)) h);
   --card-accent-review: oklch(from var(--card-accent-review-base) max(var(--accent-dark-floor), calc(l + var(--accent-dark-lift))) calc(c * var(--accent-dark-chroma)) h);
   --card-accent-kapitel: oklch(from var(--card-accent-kapitel-base) max(var(--accent-dark-floor), calc(l + var(--accent-dark-lift))) calc(c * var(--accent-dark-chroma)) h);
   --card-accent-chat: oklch(from var(--card-accent-chat-base) max(var(--accent-dark-floor), calc(l + var(--accent-dark-lift))) calc(c * var(--accent-dark-chroma)) h);

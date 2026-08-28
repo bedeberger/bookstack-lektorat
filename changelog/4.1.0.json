@@ -1,0 +1,101 @@
+{
+  "version": "4.1.0",
+  "date": "2026-08-28",
+  "entries": [
+    {
+      "kind": "neu",
+      "de": "Tabellen im Manuskript: über ein Gitter eingefügt, mit Kopfzeile und Spaltenausrichtung. Im PDF werden sie gesetzt statt eingebettet — Spaltenbreiten aus dem Inhalt, Umbruch über Seiten mit wiederholter Kopfzeile; in Word werden sie zu echten Word-Tabellen, in Markdown zu Pipe-Tabellen, im Blog zu einem Tabellen-Block. Nummer und Beschriftung („Tab. 3.2\") setzt der Export selbst, und Querverweise zeigen darauf.",
+      "en": "Tables in the manuscript: inserted through a grid, with header row and column alignment. In PDF they are typeset rather than embedded — column widths from the content, page breaks with a repeated header row; in Word they become real Word tables, in Markdown pipe tables, on the blog a table block. Numbering and caption (“Table 3.2”) are added by the export itself, and cross-references point at them."
+    },
+    {
+      "kind": "neu",
+      "de": "Alterstabelle der Figuren: ein neuer Reiter der Figuren-Karte zeigt für jede Figur zwei Werte nebeneinander — was das Manuskript wörtlich über ihr Alter sagt (mit klickbarer Belegstelle) und was sich aus Geburtsjahr und erzählter Zeit rechnen lässt. Weichen die beiden ab, ist genau das der Befund. Die Analyse liest den heutigen Text und verwirft jede Zahl, die sie nicht wörtlich belegen kann.",
+      "en": "Character age table: a new tab on the characters card shows two values side by side for every character — what the manuscript literally says about their age (with a clickable passage) and what follows from birth year and narrated time. Where the two disagree, that is the finding. The analysis reads the current text and discards any figure it cannot quote."
+    },
+    {
+      "kind": "neu",
+      "de": "Lebenslauf der Figuren: die gewählten Figuren stehen als Spalten nebeneinander, die Lebensphasen als Zeilen — von der Geburt bis ins hohe Alter. In den Zellen stehen die datierten Lebensereignisse mit Jahr, Alter und Sprung an die Fundstelle. Einsortiert wird nach dem Alter der Figur, nicht nach dem Kalenderjahr, damit der Vergleich zweier Leben nicht zerschnitten wird. Der Reiter braucht keinen eigenen Lauf.",
+      "en": "Character life courses: the selected characters stand side by side as columns, life stages as rows — from birth to old age. The cells hold the dated life events with year, age and a jump to the passage. Sorting follows the character's age rather than the calendar year, so that comparing two lives stays intact. The tab needs no analysis run of its own."
+    },
+    {
+      "kind": "neu",
+      "de": "Buchlandkarte: jede Seite des Buchs wird zu einem Punkt, und Nähe heisst inhaltliche Verwandtschaft. Sichtbar werden Kapitel, die dasselbe erzählen, ein Kapitel, das in zwei Wolken zerfällt und damit einen Teilungsvorschlag macht, und die Seite weit draussen — der Exkurs, der Blindtext, die vergessene Notiz.",
+      "en": "Book map: every page becomes a dot, and proximity means related content. It reveals chapters that tell the same story, a chapter splitting into two clouds and thereby suggesting a division, and the page far out on its own — the digression, the placeholder, the forgotten note."
+    },
+    {
+      "kind": "neu",
+      "de": "Belegvorschlag: meldet das Lektorat einen Satz ohne Beleg, wird der Satz selbst zur Suchanfrage — er wird sinngemäss gegen die Volltexte Ihrer Quellen-Bibliothek gehalten, und daneben stehen die Stellen, die ihn stützen könnten. Ein Klick setzt den Kurzbeleg hinter den Satz; der Satz selbst bleibt Zeichen für Zeichen stehen.",
+      "en": "Evidence suggestions: when the editing pass flags an unsupported claim, the sentence itself becomes the query — matched by meaning against the full texts in your source library, with the passages that might support it shown alongside. One click places the citation after the sentence; the sentence itself stays character for character."
+    },
+    {
+      "kind": "neu",
+      "de": "Meine Bücher: eine Zeile pro Buch mit Umfang, Schreibzeit, festgehaltenen Fassungen, Export-Läufen, aktiven Lese-Links und den Kommentaren Ihrer Testleser — mit Zähler für die ungelesenen. Abgeschlossene Bücher wandern ins Archiv und verschwinden aus der Buchwahl, ohne gelöscht zu werden; die zwei oder drei, an denen Sie wirklich arbeiten, heften Sie oben an. Beides gilt nur für Ihre Ansicht.",
+      "en": "My books: one row per book with word count, writing time, captured versions, export runs, active share links and your readers' comments — with a badge for the unread ones. Finished books move to the archive and disappear from the book picker without being deleted; the two or three you actually work on get pinned to the top. Both apply to your view only."
+    },
+    {
+      "kind": "neu",
+      "de": "Word-Manuskript importieren: ein einzelnes Word- oder ODT-Dokument wird an seinen Überschriften-Ebenen zerlegt — und Sie bestimmen, welche Ebene was wird: Überschrift 1 zum Kapitel, Überschrift 2 zur Seite, oder einfach Fliesstext. Eine Vorschau zeigt die entstehende Gliederung mit Kapiteln, Seiten und Zeichenzahl, bevor etwas angelegt wird.",
+      "en": "Import a Word manuscript: a single Word or ODT document is split along its heading levels — and you decide what each level becomes: heading 1 a chapter, heading 2 a page, or simply body text. A preview shows the resulting structure with chapters, pages and character counts before anything is created."
+    },
+    {
+      "kind": "neu",
+      "de": "Motiv-Befunde: die Motiv-Werkstatt misst Ihre geplanten Motiv-Beziehungen gegen die tatsächlich gefundenen Textstellen und meldet, was nicht zusammenpasst — ein Motiv, das mit einem anderen verknüpft ist, das im Text gar nicht vorkommt; ein Kontrast, der nie im selben Kapitel stattfindet; ein Motiv, das mitten im Buch abbricht. Reine Messung, kein KI-Lauf — und ohne Motiverkennung sagt die Liste ehrlich, dass nichts gemessen wurde.",
+      "en": "Motif findings: the motif workshop measures your planned motif relations against the passages actually found in the text and reports what does not add up — a motif linked to one that never appears; a contrast that never happens in the same chapter; a motif that breaks off mid-book. Pure measurement, no AI run — and without a motif scan the list honestly says that nothing was measured."
+    },
+    {
+      "kind": "neu",
+      "de": "Neuigkeiten: die Hilfe hat einen zweiten Reiter, der zeigt, was sich in den letzten Versionen geändert hat. Solange etwas ungelesen ist, trägt der „?\"-Knopf einen Punkt.",
+      "en": "What's new: the help card has a second tab showing what changed in recent versions. As long as something is unread, the “?” button carries a dot."
+    },
+    {
+      "kind": "neu",
+      "de": "Akte archivieren: ein abgeschlossener Akt der Plot-Werkstatt verlässt die Board-Spalten und gilt der Konsistenzprüfung als erledigt. Seine Beats zählen weiter in jeder Kennzahl — archiviert heisst „fertig durchgesehen\", nicht „verworfen\".",
+      "en": "Archive acts: a finished act leaves the plot board's columns and counts as done for the consistency check. Its beats still count in every metric — archived means “reviewed”, not “discarded”."
+    },
+    {
+      "kind": "neu",
+      "de": "Seiten löschen: direkt im Buchorganizer, mit Rückfrage. Arbeiten mehrere an einem Buch oder liegt es zusätzlich auf einem Gerät, erfahren die anderen, dass die Seite verschwunden ist, statt eine Leiche im Verzeichnis stehen zu lassen.",
+      "en": "Delete pages: straight from the book organizer, with a confirmation. When several people work on a book, or it also lives on a device, the others are told the page is gone instead of keeping a dead entry in their list."
+    },
+    {
+      "kind": "verbessert",
+      "de": "PDF- und Word-Export gliedern jetzt bis auf die Seite: jede Seite eines Kapitels kann eine eigene Überschrift, einen eigenen Seitenumbruch und einen eigenen Verzeichnis-Eintrag bekommen — oder durchgehend gesetzt werden. Verzeichnistiefe und Seiten-Einträge sind getrennt einstellbar, und die Überschriften aus dem Seitentext ordnen sich richtig darunter ein.",
+      "en": "PDF and Word export now structure down to the page: each page of a chapter can get its own heading, its own page break and its own entry in the table of contents — or be typeset continuously. Depth and page entries are configured separately, and headings written inside a page nest correctly beneath them."
+    },
+    {
+      "kind": "verbessert",
+      "de": "Buch-Chat: die passendsten Stellen zu Ihrer Frage stehen jetzt schon vor der ersten Runde im Kontext, und kleinere Modelle bekommen einen kompakteren Werkzeugsatz. Antworten kommen schneller und kosten weniger, weil der Chat nicht mehr für jede kleine Frage ein ganzes Kapitel liest.",
+      "en": "Book chat: the passages most relevant to your question are now in context before the first round, and smaller models get a leaner tool set. Answers arrive faster and cost less, because the chat no longer reads a whole chapter for a single fact."
+    },
+    {
+      "kind": "verbessert",
+      "de": "Diagramme erscheinen in der Leseansicht und im Lese-Link deutlich schneller — sie werden fertig ausgeliefert, statt im Browser eine grosse Bibliothek nachzuladen.",
+      "en": "Diagrams appear much faster in the reading view and in share links — they arrive ready-made instead of pulling a large library into the browser."
+    },
+    {
+      "kind": "verbessert",
+      "de": "Die Versionsliste einer Seite lädt zuerst die jüngsten Stände und ältere auf Knopfdruck nach — bei lang beschriebenen Seiten öffnet der Verlauf damit spürbar schneller.",
+      "en": "A page's version list now loads the most recent states first and older ones on demand — on heavily edited pages the history opens noticeably faster."
+    },
+    {
+      "kind": "verbessert",
+      "de": "Der Kopf eines Beitrags — Dachzeile, Titel und Lead — sieht in Leseansicht, Lese-Link und allen Export-Formaten gleich aus, und der Titel ersetzt konsequent den Ordnungsnamen der Seite.",
+      "en": "An article's head — kicker, title and lead — now looks the same in the reading view, in share links and in every export format, and the title consistently replaces the page's filing name."
+    },
+    {
+      "kind": "verbessert",
+      "de": "Geteilte Lese-Links bleiben aus den Suchmaschinen. Ob die Instanz selbst gefunden werden darf, ist eine Einstellung — für Demo- und Testinstanzen, die der Hauptseite sonst als doppelter Inhalt in den Index laufen.",
+      "en": "Shared reading links stay out of search engines. Whether the instance itself may be indexed is a setting — for demo and staging instances that would otherwise compete with the main site as duplicate content."
+    },
+    {
+      "kind": "verbessert",
+      "de": "Nach einem Update lädt die App zuverlässiger: sie holt sich den neuen Stand vollständig, statt neue und alte Bestandteile zu mischen.",
+      "en": "The app loads more reliably after an update: it fetches the new state as a whole instead of mixing new and old parts."
+    },
+    {
+      "kind": "behoben",
+      "de": "Im Schreibmodus verschluckte „Rückgängig\" das zuletzt getippte Leerzeichen am Zeilenende — das nächste Wort klebte danach am vorigen.",
+      "en": "In focus mode, undo swallowed the space just typed at the end of a line — the next word then stuck to the previous one."
+    }
+  ]
+}

@@ -63,20 +63,32 @@ export function buildRanges(text, entities) {
   return out;
 }
 
-/** Filtert Szenen fuer das Seiten-Panel:
- *   - onPage: scenes mit page_id = aktuelle Seite
- *   - inChapter: scenes mit chapter_id = aktuelles Kapitel UND page_id IS NULL
+/** Filtert Szenen fuer das Seiten-Panel. Drei Toepfe, weil eine Szene auf drei
+ *  Arten zum aktuellen Kontext gehoeren kann:
+ *   - onPage:             page_id = aktuelle Seite
+ *   - inChapter:          chapter_id = aktuelles Kapitel UND keine page_id
+ *   - inChapterOtherPage: chapter_id = aktuelles Kapitel, aber an eine ANDERE
+ *                         Seite gebunden
+ *  Der dritte Topf ist Pflicht: ohne ihn faellt jede seitengebundene Szene des
+ *  Kapitels aus beiden Listen und das Panel verschweigt sie. Der Aufrufer
+ *  entscheidet, ob und wie er sie abgesetzt zeigt.
  *  Sortierung nach sort_order (falls vorhanden), sonst nach id. */
 export function selectScenesForView(scenes, pageId, chapterId) {
-  if (!Array.isArray(scenes)) return { onPage: [], inChapter: [] };
+  if (!Array.isArray(scenes)) return { onPage: [], inChapter: [], inChapterOtherPage: [] };
   const pid = pageId != null ? Number(pageId) : null;
   const cid = chapterId != null ? Number(chapterId) : null;
-  const onPage = pid != null ? scenes.filter(s => Number(s.page_id) === pid) : [];
-  const inChapter = (cid != null)
-    ? scenes.filter(s => Number(s.chapter_id) === cid && (s.page_id == null || s.page_id === ''))
-    : [];
+  // Leerstring zaehlt als ungebunden (Alt-Daten aus Formularen).
+  const unbound = (s) => s.page_id == null || s.page_id === '';
+  const inChap = (s) => cid != null && Number(s.chapter_id) === cid;
+  const onPage = pid != null ? scenes.filter(s => !unbound(s) && Number(s.page_id) === pid) : [];
+  const inChapter = scenes.filter(s => inChap(s) && unbound(s));
+  const inChapterOtherPage = scenes.filter(s => inChap(s) && !unbound(s) && Number(s.page_id) !== pid);
   const sortFn = (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || (a.id - b.id);
-  return { onPage: [...onPage].sort(sortFn), inChapter: [...inChapter].sort(sortFn) };
+  return {
+    onPage: [...onPage].sort(sortFn),
+    inChapter: [...inChapter].sort(sortFn),
+    inChapterOtherPage: [...inChapterOtherPage].sort(sortFn),
+  };
 }
 
 /** Filtert figurgebundene Ereignisse fuer das Seiten-Panel.

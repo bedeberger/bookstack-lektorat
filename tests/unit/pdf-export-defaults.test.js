@@ -7,7 +7,13 @@ test('defaultConfig liefert vollständigen Schema-Baum', () => {
   const c = defaultConfig();
   assert.equal(c.layout.pageSize, 'A4');
   assert.equal(c.font.body.family, 'Lora');
-  assert.equal(c.chapter.pageStructure, 'flatten');
+  // Die BookStack-Seite ist Strukturelement: eigene Ueberschrift, eigener
+  // Umbruch, eigener Verzeichnis-Eintrag (siehe lib/pdf-export-defaults.js).
+  assert.equal(c.chapter.pageStructure, 'nested');
+  assert.equal(c.chapter.pageBreakBetweenPages, true);
+  assert.equal(c.font.heading.sizes.h4, 13);
+  assert.equal(c.toc.depth, 3);
+  assert.equal(c.toc.includePages, true);
   assert.equal(c.cover.enabled, false);
   assert.equal(c.toc.enabled, true);
   assert.equal(c.toc.startOnRecto, true);
@@ -89,9 +95,29 @@ test('validateConfig clamped numerische Bereiche bei Schriftgrössen', () => {
 });
 
 test('validateConfig erhält pageStructure und pageBreakBetweenPages', () => {
-  const c = validateConfig({ chapter: { pageStructure: 'nested', pageBreakBetweenPages: true } });
-  assert.equal(c.chapter.pageStructure, 'nested');
-  assert.equal(c.chapter.pageBreakBetweenPages, true);
+  const c = validateConfig({ chapter: { pageStructure: 'flatten', pageBreakBetweenPages: false } });
+  assert.equal(c.chapter.pageStructure, 'flatten');
+  assert.equal(c.chapter.pageBreakBetweenPages, false);
+});
+
+test('Heading-Skala ist absteigend: Kapitel > Seitentitel > Autoren-Ueberschriften', () => {
+  // Die Reihenfolge IST die Aussage (siehe lib/pdf-export-defaults.js): h1..h3
+  // Kapitelebenen, h4 Seitentitel, h5/h6 die Ueberschriften im Seitentext.
+  const s = defaultConfig().font.heading.sizes;
+  const body = defaultConfig().font.body.sizePt;
+  assert.ok(s.h1 > s.h2 && s.h2 > s.h3 && s.h3 > s.h4 && s.h4 > s.h5 && s.h5 > s.h6,
+    `Kette nicht absteigend: ${JSON.stringify(s)}`);
+  assert.ok(s.h6 >= body, 'h6 darf nicht unter die Fliesstext-Groesse fallen');
+});
+
+test('validateConfig: h4/h5/h6 clamped, toc.includePages als Bool', () => {
+  assert.equal(validateConfig({ font: { heading: { sizes: { h4: 999 } } } }).font.heading.sizes.h4, 30);
+  assert.equal(validateConfig({ font: { heading: { sizes: { h5: 999 } } } }).font.heading.sizes.h5, 28);
+  assert.equal(validateConfig({ font: { heading: { sizes: { h6: 1 } } } }).font.heading.sizes.h6, 7);
+  assert.equal(validateConfig({ font: { heading: { sizes: { h4: 1 } } } }).font.heading.sizes.h4, 7);
+  assert.equal(validateConfig({ toc: { includePages: false } }).toc.includePages, false);
+  // Unbekannter Wert faellt auf den Default zurueck, nicht auf `false`.
+  assert.equal(validateConfig({ toc: { includePages: 'ja' } }).toc.includePages, true);
 });
 
 test('validateConfig erhält titleRule und pageTitleRule', () => {
@@ -135,11 +161,13 @@ test('validateConfig: skipPageCounter Listen — Defaults leer, Junk gefiltert, 
   assert.deepEqual(empty.chapter.skipPageCounterPageIds, []);
 });
 
-test('validateConfig: breakBeforeSubchapter Default false, akzeptiert true', () => {
+test('validateConfig: breakBeforeSubchapter Default true, akzeptiert false', () => {
+  // Sub-Kapitel beginnen auf neuer Seite, sonst haelt „jede Seite beginnt neu"
+  // in einer Hierarchie nicht (die erste Seite folgt der Sub-Ueberschrift).
   const def = defaultConfig();
-  assert.equal(def.chapter.breakBeforeSubchapter, false);
-  const on = validateConfig({ chapter: { breakBeforeSubchapter: true } });
-  assert.equal(on.chapter.breakBeforeSubchapter, true);
+  assert.equal(def.chapter.breakBeforeSubchapter, true);
+  const off = validateConfig({ chapter: { breakBeforeSubchapter: false } });
+  assert.equal(off.chapter.breakBeforeSubchapter, false);
 });
 
 test('validateConfig: toc.depth akzeptiert 3', () => {

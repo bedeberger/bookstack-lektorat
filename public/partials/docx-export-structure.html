@@ -27,6 +27,12 @@
          x-modelable="value" x-model="activeProfile.config.toc.depth"
          x-effect="options = tocDepthOptions()"></div>
   </div>
+  <div class="card-form-row" x-show="activeProfile.config.toc.mode !== 'none' && activeProfile.config.chapter.pageStructure === 'nested'">
+    <label class="book-settings-option">
+      <input type="checkbox" x-model="activeProfile.config.toc.includePages">
+      <span x-text="$app.t('docxExport.field.tocIncludePages')"></span>
+    </label>
+  </div>
   <p class="card-form-section-divider" x-text="$app.t('docxExport.group.chapters')"></p>
   <div class="card-form-row">
     <label class="card-form-label" x-text="$app.t('docxExport.field.numbering')"></label>
@@ -64,11 +70,23 @@
       <span x-text="$app.t('docxExport.field.pageBreakBefore')"></span>
     </label>
   </div>
+  <div class="card-form-row" x-show="activeProfile.config.chapter.pageBreakBefore">
+    <label class="book-settings-option">
+      <input type="checkbox" x-model="activeProfile.config.chapter.breakBeforeSubchapter">
+      <span x-text="$app.t('docxExport.field.breakBeforeSubchapter')"></span>
+    </label>
+  </div>
   <div class="card-form-row">
     <label class="card-form-label" x-text="$app.t('docxExport.field.pageStructure')"></label>
     <div x-data="combobox($app.t('docxExport.field.pageStructure'))"
          x-modelable="value" x-model="activeProfile.config.chapter.pageStructure"
          x-effect="options = pageStructureOptions()"></div>
+  </div>
+  <div class="card-form-row" x-show="activeProfile.config.chapter.pageStructure === 'nested'">
+    <label class="book-settings-option">
+      <input type="checkbox" x-model="activeProfile.config.chapter.pageBreakBetweenPages">
+      <span x-text="$app.t('docxExport.field.pageBreakBetweenPages')"></span>
+    </label>
   </div>
   <div class="card-form-row">
     <label class="card-form-label" x-text="$app.t('docxExport.field.sceneSep')"></label>

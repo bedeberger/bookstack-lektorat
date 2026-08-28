@@ -52,6 +52,119 @@
   line-height: var(--lh-base);
 }
 
+/* ── Reiter ──────────────────────────────────────────────────────────────
+   Panel-Padding ist Pflicht (DESIGN.md „Tabs / Modus-Toggle"): `.tabs` rendert
+   nur die Button-Reihe, ohne Container um die Panels. */
+.help-tab-panel {
+  padding: var(--space-lg) 0 var(--space-sm);
+}
+
+/* „Neu"-Plakette im Reiter-Knopf — Text statt Zahl, sonst Geometrie wie der
+   Count-Badge (tabs.css). */
+.help-tab-new {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: var(--font-size-mini);
+}
+
+/* ── Neuigkeiten (Release-Notizen) ──────────────────────────────────────── */
+.changelog-current {
+  color: var(--color-muted);
+}
+
+.changelog-status {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: var(--font-size-sm);
+}
+
+.changelog-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+
+.changelog-release {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.changelog-release-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  padding-bottom: var(--space-xs);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.changelog-version {
+  margin: 0;
+  font-size: var(--font-size-md);
+  font-weight: var(--fw-semibold);
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.changelog-date {
+  font-size: var(--font-size-mini);
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.changelog-new {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: var(--font-size-mini);
+  padding: var(--pad-badge);
+  border-radius: var(--radius-sm);
+}
+
+.changelog-entries {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+/* Zeile = Art-Marke + Text. Die Marke traegt die Farbe (Hue pro Art), damit
+   „Neu / Verbessert / Behoben" ohne Icon unterscheidbar bleibt. */
+.changelog-entry {
+  display: grid;
+  grid-template-columns: 7.5em 1fr;
+  gap: var(--space-md);
+  align-items: baseline;
+  font-size: var(--font-size-sm);
+  line-height: var(--lh-base);
+}
+
+.changelog-kind {
+  justify-self: start;
+  padding: var(--pad-badge);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-mini);
+  font-weight: var(--fw-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  background: color-mix(in oklch, var(--changelog-hue) 18%, var(--color-surface));
+  color: color-mix(in oklch, var(--changelog-hue) 70%, var(--color-text));
+}
+
+.changelog-entry--neu         { --changelog-hue: var(--palette-green); }
+.changelog-entry--verbessert  { --changelog-hue: var(--palette-blue); }
+.changelog-entry--behoben     { --changelog-hue: var(--palette-amber); }
+
+.changelog-text {
+  color: var(--color-text);
+}
+
 /* Header-„?"-Button: steht ausserhalb von `.header-action-cluster`, richtet sich
    aber auf dieselbe 28px-Chip-Höhe wie Heute-Ring + Avatar aus. min-width/height
    neutralisiert den generischen Touch-Boost (icon-btn.css @media pointer:coarse →
@@ -141,6 +254,9 @@
 
 @media (max-width: 640px) {
   .help-features { grid-template-columns: 1fr; }
+  /* Art-Marke ueber den Text statt daneben — 7.5em Spalte laesst sonst zu
+     wenig Platz fuer den Satz. */
+  .changelog-entry { grid-template-columns: 1fr; gap: var(--space-xs); }
   .help-feature { padding: var(--space-md); }
   .welcome-steps { max-width: 100%; }
 }

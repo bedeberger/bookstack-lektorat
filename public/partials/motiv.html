@@ -70,6 +70,12 @@
         <button type="button" class="tabs-btn" role="tab"
                 :class="{ 'tabs-btn--active': motivView === 'band' }" :aria-selected="motivView === 'band'"
                 @click="setMotivView('band')" x-text="$app.t('motiv.view.band')"></button>
+        <button type="button" class="tabs-btn" role="tab"
+                :class="{ 'tabs-btn--active': motivView === 'checks' }" :aria-selected="motivView === 'checks'"
+                @click="setMotivView('checks')">
+          <span x-text="$app.t('motiv.view.checks')"></span>
+          <span class="badge" x-show="checks.length" x-text="checks.length"></span>
+        </button>
       </div>
     </div>
     <div class="motiv-toolbar-group">
@@ -163,6 +169,10 @@
       </div>
     </template>
   </div>
+
+  <!-- Konsistenz-Befunde: deterministische Messung der Motiv-Kanten gegen den
+       Ist-Index (nested Partial — HTML-Partial-LOC-Limit). Kein KI-Lauf. -->
+  <div id="partial-motiv-befunde" x-show="motivView === 'checks'" x-cloak></div>
 
   <!-- KI-Brainstorm-Lauf-Historie: persistierte Läufe pro Buch, unter Graph +
        Panel. Klick lädt die Vorschläge in das Panel direkt darunter

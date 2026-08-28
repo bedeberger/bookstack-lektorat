@@ -539,6 +539,11 @@ app.use('/textsorte', require('./routes/textsorte'));
 app.use('/redaktion', require('./routes/redaktion'));
 app.use('/headline', require('./routes/headline'));
 app.use('/booksettings', bookSettingsRouter);
+app.use('/changelog', require('./routes/changelog'));
+// Buecherregal vor /me: eigener Router (usersettings.js ist eine LOC-Altlast),
+// gleicher Mount-Praefix. Express probiert Router in Reihenfolge — /me/books
+// gibt es in userSettingsRouter nicht, die Reihenfolge ist also nur Kosmetik.
+app.use('/me/books', require('./routes/mybooks'));
 app.use('/me', userSettingsRouter);
 app.use('/sync', syncRouter);
 app.use('/export', exportRouter);

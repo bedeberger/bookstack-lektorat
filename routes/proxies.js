@@ -10,6 +10,7 @@ const { getPromptConfig } = require('../lib/prompts-loader');
 const { toIntId } = require('../lib/validate');
 const appSettings = require('../lib/app-settings');
 const { getVersion, getShellBuild } = require('../lib/version');
+const { getLatestVersion: getLatestChangelogVersion } = require('../lib/changelog');
 const { MAX_INPUT_BYTES: PDF_MAX_BYTES } = require('../lib/pdf-attachment');
 const { sessionEmail } = require('../lib/acl');
 
@@ -30,6 +31,7 @@ router.get('/config', (req, res) => {
   const sessionUser = req.session?.user || null;
   let user = sessionUser;
   let userSettings = null;
+  let changelogSeen = null;
   if (sessionUser) {
     const appUser = appUsers.getUser(sessionUser.email);
     // Google-Profilbild über den Same-Origin-Proxy (/auth/avatar) ausliefern,
@@ -59,6 +61,7 @@ router.get('/config', (req, res) => {
         default_region:    appUser.default_region,
         focus_granularity: appUser.focus_granularity,
       };
+      changelogSeen = appUser.changelog_seen_version || null;
     }
   }
   // Effektiver (per-User aufgelöster) Provider — Basis fürs Feature-Gating von
@@ -92,6 +95,11 @@ router.get('/config', (req, res) => {
     appName: appSettings.get('app.name') || 'Schreibwerkstatt',
     appVersion: getVersion(),
     shellBuild: getShellBuild(),
+    // Neuigkeiten-Punkt am Hilfe-Knopf: nur die beiden Versionen, nie die Liste
+    // selbst (die holt der Reiter lazy ueber GET /changelog). `changelogSeen`
+    // ist der quittierte Stand des Users; null = noch nie geoeffnet.
+    changelogLatest: getLatestChangelogVersion(),
+    changelogSeen,
     languagetool: {
       enabled: appSettings.get('languagetool.enabled') === true
         && !!String(appSettings.get('languagetool.url') || '').replace(/\/$/, '').replace(/\/v2$/i, '').trim(),

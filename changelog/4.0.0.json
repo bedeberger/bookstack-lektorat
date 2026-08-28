@@ -1,0 +1,66 @@
+{
+  "version": "4.0.0",
+  "date": "2026-08-08",
+  "entries": [
+    {
+      "kind": "neu",
+      "de": "Quellen & Quellenverzeichnis: eine persoenliche Literatur-Bibliothek, die ueber mehrere Buecher hinweg genutzt wird. Belegen im Text per Quellen-Chip, drei Zitierstile, Kurzbeleg oder Anmerkungsapparat, Import aus BibTeX/RIS und Nachschlagen ueber DOI/ISBN. Das Verzeichnis entsteht in jedem Export automatisch.",
+      "en": "Sources and bibliography: a personal reference library shared across all your books. Cite inside the text via source chips, three citation styles, short-form or endnote apparatus, BibTeX/RIS import and DOI/ISBN lookup. The bibliography is generated automatically in every export."
+    },
+    {
+      "kind": "neu",
+      "de": "Quellen-Erkennung: findet im Buchtext lose erwaehnte Werke, gleicht sie gegen Crossref und OpenLibrary ab und schlaegt sie zur Aufnahme vor. Der Buchtext wird dabei nicht angefasst — wo belegt wird, entscheiden Sie.",
+      "en": "Source detection: finds works mentioned loosely in your text, matches them against Crossref and OpenLibrary and suggests adding them. It never touches your manuscript — you decide where citations go."
+    },
+    {
+      "kind": "neu",
+      "de": "Diagramme im Manuskript: Ablaufdiagramme, Zeitleisten und Struktur-Skizzen als Mermaid-Notation, eingegeben ueber einen Dialog mit Live-Vorschau. Sie erscheinen in der Leseansicht, im Share-Link und in allen Export-Formaten.",
+      "en": "Diagrams in the manuscript: flowcharts, timelines and structure sketches in Mermaid notation, entered through a dialog with live preview. They appear in the reading view, in share links and in every export format."
+    },
+    {
+      "kind": "neu",
+      "de": "Wortschatz-Analyse: laengenrobuste Masse fuer sprachliche Vielfalt, Lieblingswoerter mit ihrer Verteilung ueber die Kapitel, auffaellige Woerter im Vergleich zu Ihren uebrigen Buechern, Einmalwoerter und Mehrwort-Wendungen — dazu eine Wortwolke.",
+      "en": "Vocabulary analysis: length-robust diversity measures, favourite words with their spread across chapters, distinctive words compared to your other books, one-off words and multi-word phrases — plus a word cloud."
+    },
+    {
+      "kind": "neu",
+      "de": "Journalistisches Arbeiten: der Buchtyp „Journalismus\" macht aus dem Werk ein Ressort. Titel-Werkstatt fuer Dachzeile, Titel, Lead und Teaser mit Kanal-Limits, neun Textsorten, ein eigenes Lektorat-Profil, Struktur-Check pro Beitrag, Redaktions-Status und Interview-Transkription mit O-Ton-Uebernahme als belegtes Zitat.",
+      "en": "Journalistic workflow: the “journalism” book type turns a work into a desk. Headline workshop for kicker, title, lead and teaser with per-channel limits, nine article formats, a dedicated editing profile, a structure check per article, editorial status and interview transcription with quotes carried over as cited material."
+    },
+    {
+      "kind": "neu",
+      "de": "Recherche-Chat mit Web-Suche: recherchiert im Netz, liest Ihr Recherche-Board und die Buch-Entitaeten mit und schlaegt Fundstuecke zur Uebernahme vor. Verfuegbar, wenn Claude als Modell laeuft.",
+      "en": "Research chat with web search: searches the web, reads your research board and book entities, and proposes findings for you to accept. Available when running on Claude."
+    },
+    {
+      "kind": "neu",
+      "de": "Browser-Erweiterung fuers Erfassen: eine Seite im Netz mit einem Klick als Recherche-Fundstueck und/oder Quelle ablegen — inklusive Hinweis, wenn das Dokument schon in Ihrer Bibliothek liegt.",
+      "en": "Browser extension for capturing: file a web page as a research item and/or source in one click — including a heads-up when the document is already in your library."
+    },
+    {
+      "kind": "neu",
+      "de": "Tabellen im Manuskript, eingegeben ueber einen Gitter-Dialog. Sie werden im PDF sauber umbrochen, gehen als echte Word-Tabelle ins DOCX und lassen sich wie Abbildungen nummerieren und referenzieren.",
+      "en": "Tables in the manuscript, entered through a grid dialog. They break cleanly across PDF pages, export as real Word tables and can be numbered and cross-referenced like figures."
+    },
+    {
+      "kind": "verbessert",
+      "de": "Buch-Chat antwortet guenstiger und praeziser: die zur Frage passenden Passagen stehen schon vor der ersten Runde im Kontext, und lokale Modelle bekommen einen kleineren, treffsichereren Werkzeugsatz.",
+      "en": "Book chat answers more cheaply and precisely: passages relevant to your question are in context before the first round, and local models get a smaller, more reliable tool set."
+    },
+    {
+      "kind": "verbessert",
+      "de": "Komplettanalyse: genauere Erkennung von Ereignissen und Datumsangaben, verlaesslichere Zusammenfuehrung doppelt erkannter Figuren und eine Kosten-Aufschluesselung nach Analyse-Phase.",
+      "en": "Full analysis: more accurate detection of events and dates, more reliable merging of duplicate characters, and a cost breakdown by analysis phase."
+    },
+    {
+      "kind": "verbessert",
+      "de": "Ein zu grosser Prompt scheitert jetzt mit einer verstaendlichen Meldung, statt eine kryptische Fehlermeldung des Modell-Anbieters durchzureichen.",
+      "en": "An oversized prompt now fails with a clear message instead of passing through a cryptic provider error."
+    },
+    {
+      "kind": "behoben",
+      "de": "Schreibmodus: ein Wort rutscht beim Leerschlag am Zeilenende nicht mehr eine Zeile nach unten, ein Klick in den Text reisst die Zeile nicht mehr auf die Schreiblinie, und die Scroll-Position bleibt beim Wechsel der Fenstergroesse stehen.",
+      "en": "Focus mode: a word no longer drops a line when you type a space at the end of a line, clicking into the text no longer yanks the line to the writing anchor, and the scroll position holds when the window is resized."
+    }
+  ]
+}

@@ -25,7 +25,7 @@ const _stmtFindByEmail = db.prepare(`
          theme, default_buchtyp, default_language, default_region,
          focus_granularity, daily_goal_minutes,
          monthly_budget_usd, budget_mode, ai_profile_id,
-         onboarding_state
+         onboarding_state, changelog_seen_version
     FROM app_users
    WHERE email = ?
 `);
@@ -119,6 +119,21 @@ function setOnboardingState(email, state) {
   const e = _normEmail(email);
   if (!e) return;
   _stmtSetOnboarding.run(state == null ? null : JSON.stringify(state), e);
+}
+
+// Zuletzt vom User gesehene App-Version (Reiter „Neuigkeiten" der Hilfe-Karte).
+// NULL = noch nie geoeffnet → der Neu-Punkt erscheint, sobald ueberhaupt ein
+// Changelog vorliegt. Nur vorwaerts: eine aeltere Version darf den Stand nicht
+// zurueckdrehen, sonst holt ein Zweitgeraet mit alter Shell den Punkt zurueck.
+const _stmtSetChangelogSeen = db.prepare(`
+  UPDATE app_users SET changelog_seen_version = ? WHERE email = ?
+`);
+function setChangelogSeen(email, version) {
+  const e = _normEmail(email);
+  if (!e) return;
+  const v = String(version || '').trim();
+  if (!/^\d+\.\d+\.\d+$/.test(v)) return;
+  _stmtSetChangelogSeen.run(v, e);
 }
 
 const _stmtSetBudget = db.prepare(`
@@ -420,7 +435,7 @@ module.exports = {
   getUser, listUsers, getActiveAdminEmails, createUser, touchLogin,
   touchUserLastSeen, updateUserSettings, addUserActivity,
   setStatus, setGlobalRole, setCanInviteUsers, setBudget, softDeleteUser,
-  setAiProfile, setOnboardingState,
+  setAiProfile, setOnboardingState, setChangelogSeen,
   recordAuditEvent, listAuditForUser,
   createInvite, findInviteByToken, findInviteById, inviteStatus,
   acceptInvite, revokeInvite, listActiveInvites,

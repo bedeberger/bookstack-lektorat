@@ -63,6 +63,13 @@ const _updateBookSettingsEntitiesEnabled = db.prepare(`
     entities_enabled=excluded.entities_enabled,
     updated_at=excluded.updated_at
 `);
+const _updateBookIsFinished = db.prepare(`
+  INSERT INTO book_settings (book_id, is_finished, updated_at)
+  VALUES (?, ?, ?)
+  ON CONFLICT(book_id) DO UPDATE SET
+    is_finished=excluded.is_finished,
+    updated_at=excluded.updated_at
+`);
 const _updateBookStilprofil = db.prepare(`
   INSERT INTO book_settings (book_id, stilprofil, updated_at)
   VALUES (?, ?, ?)
@@ -219,6 +226,18 @@ function setBookXrefSettings(bookId, { figure_numbering, table_numbering } = {})
   );
 }
 
+/** Quick-Update nur fuer is_finished — Regal-Karte („Meine Buecher") schaltet
+ *  den Fertig-Status ohne das ganze Settings-Formular. `is_finished` bleibt
+ *  damit EIN Schalter: er gilt buchweit und geht in die Prompts, ein zweiter
+ *  pro User wuerde diese Aussage zerteilen. */
+function setBookIsFinished(bookId, isFinished) {
+  _updateBookIsFinished.run(
+    parseInt(bookId),
+    isFinished ? 1 : 0,
+    new Date().toISOString()
+  );
+}
+
 /** Quick-Update nur fuer stilprofil — der Stilprofil-Extraktions-Job persistiert
  *  sein Ergebnis, ohne die uebrigen Settings (die er nicht geladen hat) zu beruehren. */
 function setBookStilprofil(bookId, stilprofil) {
@@ -234,6 +253,7 @@ module.exports = {
   getBookLocale,
   saveBookSettings,
   setBookEntitiesEnabled,
+  setBookIsFinished,
   setBookStilprofil,
   setBookTextsorte,
   setBookCitationSettings,

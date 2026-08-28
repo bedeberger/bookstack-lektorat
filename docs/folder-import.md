@@ -1,5 +1,7 @@
 # Folder-Import
 
+> Die Import-Karte trägt drei Import-Arten: den hier beschriebenen Tagebuch-ZIP, den [Manuskript-Import](manuscript-import.md) (ein Word-/ODT-Dokument nach Überschriften-Ebenen zerlegt) und das [`.swbook`-Bundle](book-migration.md). Geteilt sind Karte, Drop-Zone und Job-Polling — sonst nichts.
+
 Importiert Tagebuch-Archive mit Struktur `<YYYY>/<Monat>/<Tagesdatei>` aus ZIP. Erzeugt **ein Top-Level-Kapitel pro Jahr**, **ein Sub-Kapitel pro Monat** (parent_chapter_id zeigt aufs Jahr-Kapitel; Sub-Name-Format `YYYY Monatsname` z.B. `2020 November` — Monatsname aus der Buch-Locale via `getBookLocale`, DE/EN), **eine Seite pro Tagesdatei** unterhalb des Monat-Sub-Kapitels (Page-Name = ISO-Datum `YYYY-MM-DD`). Modi: `new-book` (Buch anlegen) oder `merge` (in bestehendes Buch importieren).
 
 Bei `year-only`-Fallback (kein Monat ableitbar) hängt die Seite direkt am Year-Chapter, ohne Month-Sub.

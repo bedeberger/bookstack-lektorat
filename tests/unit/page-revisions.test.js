@@ -316,3 +316,85 @@ test('page_revisions: FK-CASCADE bei Page-Delete', () => {
   db.prepare('DELETE FROM pages WHERE page_id = ?').run(90401);
   assert.equal(pageRevisions.countForPage(90401), 0);
 });
+
+// ── Keyset-Paginierung ───────────────────────────────────────────────────────
+// Deckt ab, was die Revisionsliste im Editor braucht: das erste Fenster ist
+// nicht die ganze Historie (raw-Bucket haelt jeden Autosave der letzten 24 h),
+// und der Cursor muss auch bei gleichem `created_at` weiterkommen.
+
+test('page_revisions: listForPageKeyset — Fenster + hasMore + Cursor', () => {
+  upsertBookByName(914, 'Test-Buch Keyset');
+  _seedPage(914, 91401);
+  const ins = db.prepare(`
+    INSERT INTO page_revisions
+      (page_id, book_id, body_html, chars, words, tok, source, created_at)
+    VALUES (?, ?, ?, ?, 1, 1, 'main', ?)
+  `);
+  const base = new Date('2026-06-01T00:00:00.000Z').getTime();
+  for (let i = 0; i < 7; i++) {
+    ins.run(91401, 914, `<p>r${i}</p>`, i + 1, new Date(base + i * 60_000).toISOString());
+  }
+
+  const first = pageRevisions.listForPageKeyset(91401, { limit: 3 });
+  assert.equal(first.revisions.length, 3);
+  assert.equal(first.hasMore, true);
+  // DESC: juengste zuerst.
+  assert.equal(first.revisions[0].chars, 7);
+  assert.equal(first.revisions[2].chars, 5);
+
+  const last = first.revisions[first.revisions.length - 1];
+  const second = pageRevisions.listForPageKeyset(91401, {
+    limit: 3, before: last.created_at, beforeId: last.id,
+  });
+  assert.equal(second.revisions.length, 3);
+  assert.equal(second.hasMore, true);
+  assert.equal(second.revisions[0].chars, 4, 'Cursor-Revision darf nicht doppelt kommen');
+
+  const last2 = second.revisions[second.revisions.length - 1];
+  const third = pageRevisions.listForPageKeyset(91401, {
+    limit: 3, before: last2.created_at, beforeId: last2.id,
+  });
+  assert.equal(third.revisions.length, 1);
+  assert.equal(third.hasMore, false, 'letztes Fenster darf kein hasMore melden');
+
+  // Kein Loch, keine Dublette ueber alle drei Fenster.
+  const all = [...first.revisions, ...second.revisions, ...third.revisions].map(r => r.chars);
+  assert.deepEqual(all, [7, 6, 5, 4, 3, 2, 1]);
+});
+
+test('page_revisions: listForPageKeyset — id als Tie-Break bei gleichem created_at', () => {
+  upsertBookByName(915, 'Test-Buch Keyset Tie');
+  _seedPage(915, 91501);
+  const same = '2026-06-02T10:00:00.000Z';
+  const ins = db.prepare(`
+    INSERT INTO page_revisions
+      (page_id, book_id, body_html, chars, words, tok, source, created_at)
+    VALUES (?, ?, ?, ?, 1, 1, 'main', ?)
+  `);
+  const ids = [];
+  for (let i = 0; i < 3; i++) {
+    ids.push(Number(ins.run(91501, 915, `<p>t${i}</p>`, i + 1, same).lastInsertRowid));
+  }
+
+  const first = pageRevisions.listForPageKeyset(91501, { limit: 2 });
+  assert.deepEqual(first.revisions.map(r => r.id), [ids[2], ids[1]]);
+  assert.equal(first.hasMore, true);
+
+  // Ohne id im WHERE waere hier Schluss (created_at < created_at ist leer).
+  const second = pageRevisions.listForPageKeyset(91501, {
+    limit: 2, before: same, beforeId: ids[1],
+  });
+  assert.deepEqual(second.revisions.map(r => r.id), [ids[0]]);
+  assert.equal(second.hasMore, false);
+});
+
+test('page_revisions: listForPageKeyset — halber Cursor liest von vorne', () => {
+  // Der Route-Handler filtert das schon; die DB-Schicht darf bei fehlendem
+  // beforeId trotzdem nicht in ein SQL mit NULL-Vergleich laufen (liefert sonst
+  // stumm 0 Zeilen und die Liste bricht mitten in der Historie ab).
+  const full = pageRevisions.listForPageKeyset(91501, { limit: 10 });
+  const halfCursor = pageRevisions.listForPageKeyset(91501, {
+    limit: 10, before: '2026-06-02T10:00:00.000Z', beforeId: null,
+  });
+  assert.equal(halfCursor.revisions.length, full.revisions.length);
+});

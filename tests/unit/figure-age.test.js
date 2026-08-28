@@ -107,13 +107,15 @@ test('consolidateFigure: Textangabe gewinnt, Spanne bleibt Spanne', () => {
       { art: 'alter', wert: 19, zitat: 'neunzehn Jahre alt', ordinal: 9, offset: 0 },
     ],
     kuratiert: { geburtstag: '1900' },
-    buchJahre: { minYear: 1912, maxYear: 1919 },
+    zeitstrahl: { jahr_im_roman: 1919, geburtsjahr: 1900, alter_im_roman: 19 },
   });
   assert.equal(r.quelle, 'text');
   assert.equal(r.alter_von, 12);
   assert.equal(r.alter_bis, 19);
   assert.equal(r.geburtsjahr, 1900);
   assert.equal(r.geburtsjahr_quelle, 'kuratiert');
+  // Der gerechnete Wert liegt IN der belegten Spanne → kein Widerspruch.
+  assert.equal(r.gerechnet, 19);
   assert.equal(r.widerspruch, null);
   assert.equal(r.konfidenz, 0.9);
 });
@@ -122,12 +124,55 @@ test('consolidateFigure: Rechnung greift ohne Textangabe', () => {
   const r = consolidateFigure({
     funde: [],
     kuratiert: { geburtstag: 'Frühling 1880' },
-    buchJahre: { minYear: 1900, maxYear: 1910 },
+    zeitstrahl: { jahr_im_roman: 1910, geburtsjahr: 1880, alter_im_roman: 30 },
   });
   assert.equal(r.quelle, 'geburtsjahr');
-  assert.equal(r.alter_von, 20);
+  assert.equal(r.alter_von, 30);
   assert.equal(r.alter_bis, 30);
+  assert.equal(r.bezugsjahr_von, 1910);
   assert.equal(r.konfidenz, 0.75);
+});
+
+test('consolidateFigure: Rechnung am ANKERJAHR der Figur, nicht am Buchende', () => {
+  // Die Figur verschwindet 1987 aus der Geschichte; das Buch endet 2003. Ihr
+  // Alter ist 5, nicht 21 — genau der Fehler, den eine buchweite Spanne machte.
+  const r = consolidateFigure({
+    funde: [],
+    kuratiert: { geburtstag: null },
+    zeitstrahl: { jahr_im_roman: 1987, geburtsjahr: 1982, alter_im_roman: 5 },
+  });
+  assert.equal(r.alter_von, 5);
+  assert.equal(r.gerechnet, 5);
+  assert.equal(r.quelle, 'zeitstrahl');
+});
+
+test('consolidateFigure: im Text gefundenes Geburtsjahr traegt die Rechnung', () => {
+  // `alter_im_roman` kennt nur das KURATIERTE Geburtsjahr — fehlt das, muss der
+  // Textfund die Rechnung tragen, sonst bleibt die Spalte leer, obwohl beide
+  // Zahlen bekannt sind.
+  const r = consolidateFigure({
+    funde: [{ art: 'geburtsjahr', wert: 1950, zitat: 'geboren 1950', ordinal: 1, offset: 0 }],
+    kuratiert: { geburtstag: null },
+    zeitstrahl: { jahr_im_roman: 1980, geburtsjahr: null, alter_im_roman: null },
+  });
+  assert.equal(r.geburtsjahr, 1950);
+  assert.equal(r.geburtsjahr_quelle, 'text');
+  assert.equal(r.gerechnet, 30);
+  assert.equal(r.alter_von, 30);
+  assert.equal(r.quelle, 'geburtsjahr');
+});
+
+test('consolidateFigure: ohne Alter kein Bezugsjahr', () => {
+  // `jahr_im_roman` faellt fuer eine undatierte Figur auf das Buchende zurueck.
+  // Neben „unbekannt" waere diese Jahreszahl eine Scheinantwort.
+  const r = consolidateFigure({
+    funde: [],
+    kuratiert: { geburtstag: null },
+    zeitstrahl: { jahr_im_roman: 2003, geburtsjahr: null, alter_im_roman: null },
+  });
+  assert.equal(r.alter_von, null);
+  assert.equal(r.bezugsjahr_von, null);
+  assert.equal(r.bezugsjahr_bis, null);
 });
 
 test('consolidateFigure: Widerspruch Steckbrief vs. Text', () => {
@@ -157,7 +202,7 @@ test('consolidateFigure: Textangabe gegen Rechnung', () => {
   const r = consolidateFigure({
     funde: [{ art: 'alter', wert: 40, zitat: 'vierzig Jahre alt', ordinal: 5, offset: 0 }],
     kuratiert: { geburtstag: '1900' },
-    buchJahre: { minYear: 1920, maxYear: 1920 },
+    zeitstrahl: { jahr_im_roman: 1920, geburtsjahr: 1900, alter_im_roman: 20 },
   });
   assert.ok(r.widerspruch.some(w => w.typ === 'rechnung'), 'Text sagt 40, Rechnung 20');
 });

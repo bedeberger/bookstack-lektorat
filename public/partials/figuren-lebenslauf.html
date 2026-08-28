@@ -1,0 +1,112 @@
+<!-- Lebenslauf-Tab der Figuren-Karte: Lebensphasen x Figuren als Matrix.
+     Nested Partial (Placeholder `partial-figuren-lebenslauf` in figuren.html),
+     laeuft im figurenCard-Scope. Logik: js/book/figuren-lebenslauf.js
+
+     KEIN `sortableTable`, und das ist die Ausnahme, nicht die Schlamperei: die
+     Zeilen sind eine Ordnung (Lebensphase von frueh nach spaet), keine Liste.
+     Eine umsortierte Biografie ist keine Biografie mehr — gleicher Grund, aus dem
+     die Praesenz-Matrix und die Heatmaps in CLAUDE.md von der Regel ausgenommen
+     sind.
+
+     Die Spaltenzahl ist gedeckelt (LEBENSLAUF_MAX_SPALTEN): breiter als der
+     Bildschirm faellt der Vergleich, um den es geht, auseinander. -->
+<div x-show="figurenGraphModus === 'lebenslauf'" class="figur-cv" x-cloak>
+  <div class="figur-cv-head">
+    <p class="figur-cv-intro" x-text="$app.t('figuren.lebenslauf.intro')"></p>
+  </div>
+
+  <!-- Figurenwahl -->
+  <div class="filter-bar">
+    <span class="filter-search-wrap">
+      <input type="text" x-model="figurenLebenslaufFilters.suche" :placeholder="$app.t('common.search')"
+             :aria-label="$app.t('common.search')" class="filter-search-input">
+      <button type="button" class="search-clear--icon" x-show="figurenLebenslaufFilters.suche"
+              @click="figurenLebenslaufFilters.suche = ''" :aria-label="$app.t('search.clear')"
+              :data-tip="$app.t('search.clear')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=690#x"/></svg></button>
+    </span>
+    <div x-data="catalogFilter('figurTyp')"
+         x-modelable="value" x-model="figurenLebenslaufFilters.typ"
+         x-effect="options = figurenAlterTypListe().map(k => ({ value: k, label: $app.t('figuren.type.' + k) }))"></div>
+    <span class="filter-count"
+          x-text="$app.t('figuren.lebenslauf.selected', { n: figurenLebenslaufIds.length, max: figurenLebenslaufMax() })"></span>
+  </div>
+
+  <!-- Eine Figur ohne Geburtsjahr laesst sich keiner Lebensphase zuordnen. Das
+       wird ausgewiesen statt verschwiegen — sonst liest sich die kuerzere Liste
+       wie „mehr Figuren gibt es nicht". -->
+  <p class="figur-cv-hint" x-show="figurenLebenslaufKandidaten().ohneJahr > 0"
+     x-text="$app.t('figuren.lebenslauf.ohneJahr', { n: figurenLebenslaufKandidaten().ohneJahr })"></p>
+
+  <div class="figur-cv-chips" role="group" :aria-label="$app.t('figuren.lebenslauf.pickLabel')">
+    <template x-for="k in figurenLebenslaufKandidaten().liste" :key="k.id">
+      <button type="button" class="figur-cv-chip"
+              :class="{ 'figur-cv-chip--on': figurenLebenslaufSelected(k.id) }"
+              :aria-pressed="figurenLebenslaufSelected(k.id)"
+              :disabled="!figurenLebenslaufSelected(k.id) && figurenLebenslaufVoll()"
+              @click="figurenLebenslaufToggle(k.id)">
+        <span class="figur-typ-dot" :class="'figur-typ-dot--' + k.typ"></span>
+        <span x-text="k.name"></span>
+        <span class="figur-cv-chip-year" x-text="k.geburtsjahr"></span>
+      </button>
+    </template>
+  </div>
+
+  <div x-show="!figurenLebenslaufKandidaten().liste.length" class="muted-msg muted-msg--spaced"
+       x-text="$app.t('figuren.lebenslauf.empty')"></div>
+  <div x-show="figurenLebenslaufKandidaten().liste.length && !figurenLebenslaufMatrix().spalten.length"
+       class="muted-msg muted-msg--spaced" x-text="$app.t('figuren.lebenslauf.pickHint')"></div>
+
+  <div class="table-scroll" x-show="figurenLebenslaufMatrix().spalten.length">
+    <table class="figur-cv-table">
+      <thead>
+        <tr>
+          <th class="figur-cv-phase-th" x-text="$app.t('figuren.lebenslauf.col.phase')"></th>
+          <template x-for="sp in figurenLebenslaufMatrix().spalten" :key="sp.id">
+            <th>
+              <span class="figur-cv-col-head">
+                <span class="figur-typ-dot" :class="'figur-typ-dot--' + sp.typ"></span>
+                <span class="internal-link" @click="$app.openFigurById(sp.id)"
+                      :data-tip="$app.t('figuren.alter.openFigur')" x-text="sp.name"></span>
+                <span class="figur-cv-col-year"
+                      x-text="$app.t('figuren.lebenslauf.born', { jahr: sp.geburtsjahr })"></span>
+              </span>
+            </th>
+          </template>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="zeile in figurenLebenslaufMatrix().zeilen" :key="zeile.key">
+          <tr class="figur-cv-row">
+            <th scope="row" class="figur-cv-phase">
+              <span class="figur-cv-phase-name" x-text="figurenLebenslaufPhaseLabel(zeile)"></span>
+              <span class="figur-cv-phase-span" x-show="figurenLebenslaufPhaseSpanne(zeile)"
+                    x-text="figurenLebenslaufPhaseSpanne(zeile)"></span>
+            </th>
+            <template x-for="(zelle, zi) in zeile.zellen" :key="zi">
+              <td class="figur-cv-cell">
+                <span class="figur-cv-cell-empty" x-show="!zelle.length" aria-hidden="true">·</span>
+                <ul class="figur-cv-events" x-show="zelle.length">
+                  <template x-for="(evt, ei) in zelle" :key="ei">
+                    <li class="figur-cv-event"
+                        :class="{ 'figur-cv-event--clickable': evt.page_id != null }"
+                        :role="evt.page_id != null ? 'button' : null"
+                        :tabindex="evt.page_id != null ? 0 : null"
+                        :data-tip="evt.bedeutung || null"
+                        @click="figurenLebenslaufGoto(evt)"
+                        @keydown.enter.prevent="figurenLebenslaufGoto(evt)"
+                        @keydown.space.prevent="figurenLebenslaufGoto(evt)">
+                      <span class="figur-cv-marke" x-text="figurenLebenslaufMarke(evt)"></span>
+                      <span class="figur-cv-text" x-text="evt.ereignis"></span>
+                      <span class="tag figur-cv-subtyp" x-show="evt.subtyp && evt.subtyp !== 'sonstiges'"
+                            x-text="figurenLebenslaufSubtypLabel(evt)"></span>
+                    </li>
+                  </template>
+                </ul>
+              </td>
+            </template>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </div>
+</div>

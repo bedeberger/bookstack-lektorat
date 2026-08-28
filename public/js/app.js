@@ -1,4 +1,5 @@
 import { escHtml } from './utils.js';
+import { hasUnreadChangelog } from './cards/help-card.js';
 
 import { historyMethods } from './book/history.js';
 import { treeMethods } from './book/tree.js';
@@ -65,6 +66,11 @@ document.addEventListener('alpine:init', () => {
     // Navigations-State (books, selectedBookId, pages, tree) lebt in
     // Alpine.store('nav') (cards/nav-store.js) und wird direkt via $store.nav /
     // this.$store.nav gelesen (kein Root-Proxy — wie catalog/tts/jobs).
+
+    // Ungelesene Release-Notizen? Traegt den Achtungs-Punkt am Hilfe-Knopf im
+    // Header. Pure Funktion aus der Hilfe-Karte — dieselbe Frage, die die Karte
+    // beim Oeffnen stellt, damit Punkt und Reiterwahl nie auseinanderlaufen.
+    hasUnreadChangelog,
 
     // ── Computed ─────────────────────────────────────────────────────────────
     // Admin-only View: Globaler Admin (global_role='admin') bekommt eine

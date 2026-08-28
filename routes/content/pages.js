@@ -126,12 +126,26 @@ function register(router) {
   // savePage → page_revisions-Row). Routen hier sind nur Lese-Pfad + Restore.
 
   // GET /content/pages/:page_id/revisions — Liste (ohne body_html).
+  // Keyset-Paginierung ueber `before` (created_at der letzten gelieferten
+  // Revision) + `before_id` (Tie-Break). `has_more` sagt, ob dahinter noch etwas
+  // liegt, `total` ist die Gesamtzahl fuer die Seite.
+  // Why `total`: die Liste zeigt ein Fenster, nicht alles — das `raw`-Bucket der
+  // Retention (db/page-revisions.js#pruneTiered) haelt jeden Autosave der
+  // letzten 24 h, ein Schreibtag fuellt das Fenster also allein. Ohne `total`
+  // waere sowohl die Kopfzeile ("N Revisionen") als auch die Revisionsnummer im
+  // Viewer eine Aussage ueber das Fenster und wuerde beim Nachladen springen.
   router.get('/pages/:page_id/revisions', async (req, res) => {
     const pageId = toIntId(req.params.page_id);
     if (!pageId) return res.status(400).json({ error_code: 'INVALID_PAGE_ID' });
     if (_guardPage(req, res, pageId, 'viewer') == null) return;
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 500);
-    res.json({ revisions: pageRevisions.listForPage(pageId, limit) });
+    const before = typeof req.query.before === 'string' && req.query.before ? req.query.before : null;
+    const beforeId = toIntId(req.query.before_id);
+    // Cursor nur mit BEIDEN Feldern: ein halber Cursor waere stillschweigend
+    // eine Anfrage von vorne und wuerde beim Nachladen Duplikate anhaengen.
+    const cursor = before && beforeId ? { before, beforeId } : {};
+    const { revisions, hasMore } = pageRevisions.listForPageKeyset(pageId, { limit, ...cursor });
+    res.json({ revisions, has_more: hasMore, total: pageRevisions.countForPage(pageId) });
   });
 
   // GET /content/pages/:page_id/revisions/:rev_id — Voller Body fuer Vorschau.

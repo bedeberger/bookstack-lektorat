@@ -182,6 +182,9 @@ export const appInitMethods = {
         if (meta) meta.setAttribute('content', cfg.appName);
       }
       if (cfg.appVersion) this.$store.shell.appVersion = cfg.appVersion;
+      // Neuigkeiten: nur die beiden Versionen (die Liste holt der Reiter lazy).
+      this.$store.shell.changelogLatest = cfg.changelogLatest || '';
+      this.$store.shell.changelogSeen = cfg.changelogSeen || '';
       // Build-Guard: window.__SHELL_BUILD ist der Build, mit dem DIESE Shell
       // ausgeliefert wurde (aus dem gecachten /sw-manifest.js); cfg.shellBuild
       // ist der aktuelle Server-Build. Weichen sie ab, ist eine neue Generation

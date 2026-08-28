@@ -1,0 +1,211 @@
+<!-- Meine Buecher (Buecherregal): Verwaltungsansicht ueber ALLE sichtbaren
+     Buecher — Anheften, Archivieren, Fertig-Status, dazu die Kennzahlen, die
+     man beim Aufraeumen braucht (Umfang, Fassungen, Exporte, geteilte Links,
+     Kommentare). Alpine.data-Sub-Komponente, siehe
+     public/js/cards/my-books-card.js. User-bound, nicht buch-bound.
+     „Fertig" schreibt bewusst `book_settings.is_finished` (buchweit, ab Rolle
+     editor) — kein zweiter Fertig-Schalter. -->
+<div class="card card--mybooks" x-data="myBooksCard" x-show="$app.showMyBooksCard" x-cloak>
+  <div class="card-header">
+    <span class="card-title" x-text="$app.t('mybooks.title')"></span>
+    <button type="button" class="btn-card-close" @click="$app.toggleMyBooksCard()"
+            :aria-label="$app.t('common.close')" :data-tip="$app.t('common.close')">
+      <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=696#x"/></svg>
+    </button>
+  </div>
+
+  <p class="mybooks-note" x-text="$app.t('mybooks.note')"></p>
+
+  <div x-show="myBooksLoading" class="muted-msg" x-text="$app.t('mybooks.loading')"></div>
+  <p x-show="myBooksError" x-cloak class="card-form-error" x-text="myBooksError"></p>
+  <p x-show="myBooksIsEmpty" x-cloak class="muted-msg" x-text="$app.t('mybooks.empty')"></p>
+
+  <template x-if="!myBooksLoading && !myBooksIsEmpty">
+    <div>
+      <!-- Summen der GEFILTERTEN Menge — sie sollen zu der Tabelle darunter
+           passen. Wert-/Einheit-Atome aus der Buch-Uebersicht
+           (.overview-substats / .overview-substat*), damit das Regal dieselbe
+           Kennzahl-Typografie spricht wie der Rest der App. -->
+      <div class="mybooks-summary overview-substats">
+        <div class="overview-substat">
+          <span class="overview-substat-value" x-text="_myBooksFmt(myBooksTotals().books)"></span>
+          <span class="overview-substat-unit" x-text="$app.t('mybooks.total.books')"></span>
+        </div>
+        <div class="overview-substat">
+          <span class="overview-substat-value" x-text="myBooksNormpages(myBooksTotals().chars)"></span>
+          <span class="overview-substat-unit" x-text="$app.t('mybooks.total.normpages')"></span>
+        </div>
+        <div class="overview-substat">
+          <span class="overview-substat-value" x-text="myBooksDuration(myBooksTotals().writing_seconds)"></span>
+          <span class="overview-substat-unit" x-text="$app.t('mybooks.total.writingTime')"></span>
+        </div>
+        <div class="overview-substat">
+          <span class="overview-substat-value" x-text="_myBooksFmt(myBooksTotals().snapshots)"></span>
+          <span class="overview-substat-unit" x-text="$app.t('mybooks.total.snapshots')"></span>
+        </div>
+        <div class="overview-substat">
+          <span class="overview-substat-value" x-text="_myBooksFmt(myBooksTotals().exports)"></span>
+          <span class="overview-substat-unit" x-text="$app.t('mybooks.total.exports')"></span>
+        </div>
+        <div class="overview-substat">
+          <span class="overview-substat-value" x-text="_myBooksFmt(myBooksTotals().share_links_active)"></span>
+          <span class="overview-substat-unit" x-text="$app.t('mybooks.total.shareLinks')"></span>
+        </div>
+        <div class="overview-substat">
+          <span class="overview-substat-value" x-text="_myBooksFmt(myBooksTotals().comments)"></span>
+          <span class="overview-substat-unit" x-text="$app.t('mybooks.total.comments')"></span>
+          <span class="badge-warn mybooks-unread" x-show="myBooksTotals().comments_unread > 0"
+                :data-tip="$app.t('mybooks.unreadTip')"
+                x-text="'+' + myBooksTotals().comments_unread"></span>
+        </div>
+      </div>
+
+      <div class="card-toolbar">
+        <div class="tabs" role="tablist">
+          <template x-for="tab in myBooksTabs" :key="tab">
+            <button type="button" class="tabs-btn" role="tab"
+                    :class="{ 'is-active': myBooksTab === tab }"
+                    :aria-selected="myBooksTab === tab"
+                    @click="myBooksTab = tab">
+              <span x-text="$app.t('mybooks.tab.' + tab)"></span>
+              <span class="mybooks-tab-count" x-text="myBooksTabCount(tab)"></span>
+            </button>
+          </template>
+        </div>
+        <div class="filter-bar filter-bar--inline">
+          <span class="filter-search-wrap">
+            <input class="filter-search-input filter-search-input--wide" type="text"
+                   :placeholder="$app.t('mybooks.search')" x-model="myBooksQuery">
+            <button type="button" class="search-clear--icon" x-show="myBooksQuery" @click="myBooksQuery = ''"
+                    :aria-label="$app.t('search.clear')" :data-tip="$app.t('search.clear')">
+              <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=696#x"/></svg>
+            </button>
+          </span>
+          <span class="filter-count" x-text="myBooksFiltered().length + ' / ' + myBooksRows.length"></span>
+        </div>
+      </div>
+
+      <p x-show="myBooksFiltered().length === 0" x-cloak class="muted-msg"
+         x-text="$app.t('mybooks.noMatch')"></p>
+
+      <div class="table-scroll" x-show="myBooksFiltered().length > 0">
+        <table class="mybooks-table"
+               x-data="sortableTable({
+                 rows: () => myBooksFiltered(),
+                 defaultKey: 'last_activity_at',
+                 defaultDir: 'desc',
+                 persistKey: 'mybooks.shelf',
+                 types: { chars: 'number', pages: 'number', writing_seconds: 'number',
+                          snapshots: 'number', exports: 'number', share_links_active: 'number',
+                          comments: 'number', last_activity_at: 'date' },
+               })">
+          <thead>
+            <tr>
+              <th class="sortable-th" :class="sortClass('name')" :aria-sort="ariaSort('name')"
+                  @click="sortBy('name')" x-text="$app.t('mybooks.col.book')"></th>
+              <th class="sortable-th mybooks-num" :class="sortClass('chars')" :aria-sort="ariaSort('chars')"
+                  @click="sortBy('chars')" x-text="$app.t('mybooks.col.volume')"></th>
+              <th class="sortable-th mybooks-num" :class="sortClass('pages')" :aria-sort="ariaSort('pages')"
+                  @click="sortBy('pages')" x-text="$app.t('mybooks.col.structure')"></th>
+              <th class="sortable-th mybooks-num" :class="sortClass('writing_seconds')" :aria-sort="ariaSort('writing_seconds')"
+                  @click="sortBy('writing_seconds')" x-text="$app.t('mybooks.col.time')"></th>
+              <th class="sortable-th mybooks-num" :class="sortClass('snapshots')" :aria-sort="ariaSort('snapshots')"
+                  @click="sortBy('snapshots')" x-text="$app.t('mybooks.col.snapshots')"></th>
+              <th class="sortable-th mybooks-num" :class="sortClass('exports')" :aria-sort="ariaSort('exports')"
+                  @click="sortBy('exports')" x-text="$app.t('mybooks.col.exports')"></th>
+              <th class="sortable-th mybooks-num" :class="sortClass('share_links_active')" :aria-sort="ariaSort('share_links_active')"
+                  @click="sortBy('share_links_active')" x-text="$app.t('mybooks.col.shareLinks')"></th>
+              <th class="sortable-th mybooks-num" :class="sortClass('comments')" :aria-sort="ariaSort('comments')"
+                  @click="sortBy('comments')" x-text="$app.t('mybooks.col.comments')"></th>
+              <th class="sortable-th" :class="sortClass('last_activity_at')" :aria-sort="ariaSort('last_activity_at')"
+                  @click="sortBy('last_activity_at')" x-text="$app.t('mybooks.col.lastActivity')"></th>
+              <th x-text="$app.t('mybooks.col.actions')"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Angeheftete bleiben oben, unabhaengig von der Spalten-Sortierung. -->
+            <template x-for="row in myBooksOrdered(sorted)" :key="row.book_id">
+              <tr :class="{ 'mybooks-row--archived': row.archived, 'mybooks-row--pinned': row.pinned }">
+                <td class="mybooks-book">
+                  <button type="button" class="internal-link mybooks-book-name"
+                          @click="myBooksOpen(row)" x-text="row.name"></button>
+                  <span class="mybooks-book-meta">
+                    <span x-show="row.is_finished" class="badge-ok" x-text="$app.t('mybooks.status.finished')"></span>
+                    <span x-show="row.archived" class="badge-neutral" x-text="$app.t('mybooks.status.archived')"></span>
+                    <span x-show="row.category" class="mybooks-chip" x-text="row.category"></span>
+                    <span x-show="row.role && row.role !== 'owner'" class="badge-neutral"
+                          x-text="$app.t('book.share.role.' + (row.role || 'viewer'))"></span>
+                  </span>
+                </td>
+                <td class="mybooks-num">
+                  <span x-text="_myBooksFmt(row.chars)"></span>
+                  <span class="mybooks-sub" x-text="$app.t('mybooks.normpagesShort', { n: myBooksNormpages(row.chars) })"></span>
+                </td>
+                <td class="mybooks-num">
+                  <span x-text="_myBooksFmt(row.pages)"></span>
+                  <span class="mybooks-sub" x-text="$app.t('mybooks.chaptersShort', { n: _myBooksFmt(row.chapters) })"></span>
+                </td>
+                <td class="mybooks-num" x-text="myBooksDuration(row.writing_seconds)"></td>
+                <td class="mybooks-num">
+                  <span x-text="_myBooksFmt(row.snapshots)"></span>
+                  <span class="mybooks-sub" x-show="row.snapshot_last_at" x-text="myBooksDate(row.snapshot_last_at)"></span>
+                </td>
+                <td class="mybooks-num">
+                  <span x-text="_myBooksFmt(row.exports)"></span>
+                  <span class="mybooks-sub" x-show="row.export_last_at" x-text="myBooksDate(row.export_last_at)"></span>
+                </td>
+                <td class="mybooks-num">
+                  <span x-text="_myBooksFmt(row.share_links_active)"></span>
+                  <span class="mybooks-sub" x-show="row.share_views > 0"
+                        x-text="$app.t('mybooks.viewsShort', { n: _myBooksFmt(row.share_views) })"></span>
+                </td>
+                <td class="mybooks-num">
+                  <span x-text="_myBooksFmt(row.comments)"></span>
+                  <span class="badge-warn mybooks-unread" x-show="row.comments_unread > 0"
+                        :data-tip="$app.t('mybooks.unreadTip')"
+                        x-text="'+' + row.comments_unread"></span>
+                </td>
+                <td x-text="myBooksDate(row.last_activity_at)"></td>
+                <td class="mybooks-actions">
+                  <button type="button" class="icon-btn icon-btn--ghost"
+                          :class="{ 'is-active': row.pinned }"
+                          :aria-pressed="row.pinned"
+                          :disabled="myBooksBusyId === row.book_id"
+                          @click="myBooksTogglePin(row)"
+                          :data-tip="row.pinned ? $app.t('mybooks.unpin') : $app.t('mybooks.pin')"
+                          :aria-label="row.pinned ? $app.t('mybooks.unpin') : $app.t('mybooks.pin')">
+                    <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=696#pin"/></svg>
+                  </button>
+                  <button type="button" class="icon-btn icon-btn--ghost"
+                          :class="{ 'is-active': row.archived }"
+                          :aria-pressed="row.archived"
+                          :disabled="myBooksBusyId === row.book_id"
+                          @click="myBooksToggleArchive(row)"
+                          :data-tip="row.archived ? $app.t('mybooks.unarchive') : $app.t('mybooks.archive')"
+                          :aria-label="row.archived ? $app.t('mybooks.unarchive') : $app.t('mybooks.archive')">
+                    <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=696#archive"/></svg>
+                  </button>
+                  <button type="button" class="icon-btn icon-btn--ghost"
+                          x-show="myBooksMayFinish(row)"
+                          :class="{ 'is-active': row.is_finished }"
+                          :aria-pressed="row.is_finished"
+                          :disabled="myBooksBusyId === row.book_id"
+                          @click="myBooksToggleFinished(row)"
+                          :data-tip="row.is_finished ? $app.t('mybooks.unfinish') : $app.t('mybooks.finish')"
+                          :aria-label="row.is_finished ? $app.t('mybooks.unfinish') : $app.t('mybooks.finish')">
+                    <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=696#check"/></svg>
+                  </button>
+                  <button type="button" class="icon-btn icon-btn--ghost"
+                          @click="myBooksOpen(row)"
+                          :data-tip="$app.t('mybooks.open')" :aria-label="$app.t('mybooks.open')">
+                    <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=696#book-open"/></svg>
+                  </button>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </template>
+</div>

@@ -80,6 +80,16 @@
 ></div>
                 </div>
               </div>
+              <div class="card-form-row" x-show="activeProfile.config.chapter.pageStructure === 'nested'">
+                <label class="card-form-label">&nbsp;</label>
+                <div class="card-form-field">
+                  <label class="pdfx-check">
+                    <input type="checkbox" x-model="activeProfile.config.toc.includePages">
+                    <span x-text="$app.t('pdfExport.toc.includePages')"></span>
+                  </label>
+                  <p class="card-form-field-note" x-text="$app.t('pdfExport.toc.includePagesHint')"></p>
+                </div>
+              </div>
               <div class="card-form-row">
                 <label class="card-form-label" x-text="$app.t('pdfExport.toc.indentMm')"></label>
                 <div class="card-form-field">

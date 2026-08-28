@@ -90,6 +90,7 @@ function bootstrap() {
   const synonyme = require('../../../routes/jobs/synonyme');
   const sourceDetect = require('../../../routes/jobs/source-detect');
   const figurAlter = require('../../../routes/jobs/figur-alter');
+  const motifConsistency = require('../../../routes/jobs/motif-consistency');
   const shared = require('../../../routes/jobs/shared');
   const dbSchema = require('../../../db/schema');
 
@@ -109,7 +110,7 @@ function bootstrap() {
     try { fs.unlinkSync(`${dbFile}-shm`); } catch (_) {}
   }
 
-  return { mockAi, dbSeed, komplett, review, kapitel, rueckblick, lektorat, synonyme, sourceDetect, figurAlter, shared, dbSchema, dbFile, cleanup };
+  return { mockAi, dbSeed, komplett, review, kapitel, rueckblick, lektorat, synonyme, sourceDetect, figurAlter, motifConsistency, shared, dbSchema, dbFile, cleanup };
 }
 
 const POLL_MS = 10;

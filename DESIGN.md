@@ -1235,6 +1235,36 @@ CSS: [public/css/entities/entity-list.css](public/css/entities/entity-list.css).
 
 ---
 
+## Auswahl-Chip-Reihe (Mehrfachauswahl vor einer Vergleichsansicht)
+
+**Use:** Der Leser stellt sich selbst zusammen, was verglichen wird — mehrere Entitäten gleichzeitig, mit hartem Deckel (Lebenslauf-Reiter der Figuren-Karte: welche Figuren als Spalten der Phasen-Matrix stehen). **Nicht** für Einfachauswahl oder Filtern — dort bleibt die `combobox` zuständig; ein Chip pro Option wäre eine ausgeklappte Liste, die nie zugeht.
+
+**Warum ein Chip und keine Multi-Combobox:** die Auswahl bleibt sichtbar, während man die Vergleichsansicht darunter liest. Eine geschlossene Combobox verbirgt genau die Angabe, die man beim Deuten der Tabelle braucht.
+
+```html
+<div class="xxx-chips" role="group" :aria-label="$app.t('…pickLabel')">
+  <template x-for="k in kandidaten()" :key="k.id">
+    <button type="button" class="xxx-chip"
+            :class="{ 'xxx-chip--on': istGewaehlt(k.id) }"
+            :aria-pressed="istGewaehlt(k.id)"
+            :disabled="!istGewaehlt(k.id) && istVoll()"
+            @click="toggle(k.id)">…</button>
+  </template>
+</div>
+```
+
+**Regeln:**
+- **`<button>` + `:aria-pressed`**, kein `div` mit `.internal-link` — es ist ein Umschalter, kein Sprung.
+- **Am Deckel wird gesperrt, nicht ignoriert** (`:disabled` auf den nicht gewählten Chips): ein Klick, der wortlos nichts tut, liest sich als Defekt. Die Zählung („3 von max. 6") steht daneben in der `.filter-count`.
+- **Der Deckel kommt aus einer Konstante im Modul**, nicht als Zahl ins Template — zwei Zahlen laufen auseinander.
+- **Eckig** (`--radius-sm`), wie jedes Badge/Tag; die Pillenform gehört dem An/Aus-Schalter.
+- **Wer nicht in Frage kommt, erscheint gar nicht** — und wie viele das sind, wird als Hinweis ausgewiesen. Eine stumm gekürzte Liste liest sich als „mehr gibt es nicht".
+- Erste Öffnung wählt selbst vor (die stärksten Kandidaten), statt eine leere Ansicht mit Aufforderung zu zeigen.
+
+**Beispiele:** [public/partials/figuren-lebenslauf.html](public/partials/figuren-lebenslauf.html)
+
+---
+
 ## Table-Scroll (`.table-scroll`)
 
 **Use:** Wrapper um breite Tabellen, damit sie auf engen Viewports horizontal scrollen statt aus der Karte zu ragen. Pflicht für mehrspaltige Admin-/Listen-Tables.
@@ -1294,6 +1324,14 @@ CSS: [public/css/layout/utilities.css](public/css/layout/utilities.css). `overfl
 **Wann nicht:** Server-Pagination oder Server-Sort noetig (z.B. Admin-Logs mit > 10k Rows) → eigene Route + Cursor-Pagination; `sortableTable` kann den Server-Result-Slice nicht ueber alle Seiten sortieren. Presence-Matrizen ([bookoverview-figpresence.html](public/partials/bookoverview-figpresence.html), [bookoverview-ortpresence.html](public/partials/bookoverview-ortpresence.html)) und Heatmap-Tabellen (`.heatmap-table`) sind ebenfalls ausgenommen — feste Spalten/Zeilen-Semantik, kein Row-Sort sinnvoll.
 
 ---
+
+**Falle: Padding-Shorthand auf `th` frisst den Chevron-Platz.** `.sortable-th`
+reserviert ihn mit `padding-right: calc(var(--space-md) + 14px)` — die Regel liegt
+aber in `@layer components`, und eine ungelayerte Feature-Datei (`public/css/entities/…`)
+gewinnt unabhängig von der Ladereihenfolge. Wer im eigenen Stylesheet
+`.xxx-table th { padding: … 0; }` setzt, überschreibt sie und das Sortier-Chevron
+sitzt im Spaltentitel. Dann den Platz für sortierbare Köpfe explizit zurückholen:
+`.xxx-table th.sortable-th { padding-right: calc(var(--space-md) + 14px); }`.
 
 ## Card-Status / Loading / Empty / Error
 
@@ -2700,6 +2738,7 @@ Struktur: 8 thematische Subfolder unter [public/css/](public/css/) + Root-Solit�
 | [components/tabs.css](public/css/components/tabs.css) | `.tabs` / `.tabs-btn` + `--active`/`--scrollable`/`--fullwidth`. Basis scrollt horizontal (Scrollbalken versteckt, Rand-Schatten als Signal). |
 | [components/device-tokens.css](public/css/components/device-tokens.css) | `.device-tokens-*` — Token-Verwaltung in User-Settings (Reveal-Block für Klartext-Token einmalig nach Create, Row-List statt Table). |
 | [components/my-stats.css](public/css/components/my-stats.css) | „Meine Statistik"-Karte (aggregierte Schreib-Werte über alle eigenen Bücher). Teilt **das Tile-Grid + die Tile-Atome der Buch-Übersicht** (`.overview-grid` + `.overview-tile`/`--hero`/`--medium`/`--wide`, `.overview-hero-*`, `.overview-substat*`, `.overview-streak-*`, `.overview-weekday-*`, `.overview-consistency-*` — siehe „Book-Overview-Tiles" + `book-overview/`); Akzent = globaler `var(--color-accent)`, nicht die Karten-Hue. Tiles: Umfang-Hero (Zeichen gross + inline Sub-Stats), Schreibrhythmus (Kennzahlen-Grid + Streak-Heatmap), Wochentags-Muster (Balken), Meilensteine, Entwicklung (Chart). Eigene Reste: `.mystats-allbooks-note` (Hinweis „über alle Bücher"); `.mystats-controls` / `.mystats-chart-wrap` (240px) für den Entwicklungs-Chart (Chart.js lazy; Modus-`.btn-group` Gesamt/Pro Buch + Metrik-Combobox + Zeitraum-`.btn-group`, mirror von `.book-stats-chart-wrap`); `.mystats-badges` / `.mystats-badge` (eckig, `var(--color-accent)`) + `.mystats-milestone-next(-head)` für die Meilensteine. Pro-Buch-Modus: eine Linie je Buch aus fester JS-Farbpalette, Legende unten. Eckig, Tabular-Nums. |
+| [components/my-books.css](public/css/components/my-books.css) | „Meine Bücher"-Karte (Bücherregal: Anheften/Archivieren/Fertig + Kennzahlen je Buch). Fast alles kommt aus bestehenden Patterns — `.card-toolbar`, `.tabs`/`.tabs-btn` (Reiter In Arbeit/Fertig/Archiviert/Alle), `.filter-bar filter-bar--inline`, `.table-scroll`, `.sortable-th` (`sortableTable`), `.icon-btn icon-btn--ghost` (Pin/Archiv/Fertig/Öffnen), `.badge-ok`/`.badge-warn`/`.badge-neutral`, und die Summenzeile nutzt die Kennzahl-Atome der Buch-Übersicht (`.overview-substats`/`.overview-substat*`). Eigen sind nur: `.mybooks-summary` (Rahmen der Summenzeile, Akzentkante links), `.mybooks-note`, `.mybooks-tab-count`, die Tabellen-Typografie (`.mybooks-table` mit **schmalem `--space-sm`-Zellenpadding**, damit zehn Spalten ohne Horizontal-Scroll lesbar bleiben — `.sortable-th` braucht deshalb seine Chevron-Reserve explizit zurück; `.mybooks-num` rechts + Tabular-Nums, `.mybooks-sub` als Zweitzeile in der Zelle, `.mybooks-book*`, `.mybooks-chip`), die **sticky Aktions-Spalte** (`th:last-child` + `.mybooks-actions`, `position: sticky; right: 0` mit `--color-card-bg` — die Schalter sind der Grund, das Regal zu öffnen, und dürfen beim Scrollen nicht als erstes verschwinden) und die zwei Zeilen-Zustände `.mybooks-row--archived` (gedämpfter Text, **ohne** `opacity` auf der Zeile — das dimmte auch die Knöpfe, mit denen man sie zurückholt) und `.mybooks-row--pinned` (Akzent-Kante via `inset box-shadow` an der ersten Zelle). Es gibt **keine Status-Spalte**: fertig/archiviert stehen als Badges neben dem Buchnamen (`.mybooks-book-meta`), wo auch Kategorie und Fremd-Rolle sitzen. Akzent = `--card-accent-mybooks`. |
 | [components/help.css](public/css/components/help.css) | „Hilfe & Funktionen"-Karte (`.card--help`) — statischer Funktionsüberblick für den Einstieg, buch-unabhängig. `.help-intro` (Lede), `.help-features` (2-Spalten-Grid, mobil 1-spaltig) mit `.help-feature`/`-title`/`-desc` (Accent-Border-Left = globaler `var(--color-accent)`), `.help-palette-hint` (muted Fusszeile). Inhalt = Landing-Feature-Texte (`landing.featNTitle/Desc`, SSoT). Dazu der globale Header-`?`-Button (`.header-help-btn[aria-pressed=true]`) und der Welcome-Empty-State: Textlink (`.welcome-help-link`) plus 3-Schritt-Ablauf (`.welcome-steps`/`.welcome-step`/`.welcome-step-num` eckig/`.welcome-step-body`/`-title`/`-desc`, Schreiben→Analysieren→Überarbeiten) und Philosophie-Zeile (`.welcome-philosophy`, muted) — vermittelt früh die rückwärtsgewandte KI. |
 | [components/onboarding.css](public/css/components/onboarding.css) | „Erste Schritte"-Karte (`.card--onboarding`, Accent `--card-accent-onboarding`) — Fortschritts-Checkliste für den Einstieg, buch-unabhängig. `.onboarding-intro` (Lede), `.onboarding-progress` (Zeile: globaler `.progress-bar` + `.onboarding-progress-count`), `.onboarding-steps`/`.onboarding-step` (Accent-Border-Left; `.is-done` = gedimmt + gefüllter `.onboarding-step-num` eckig; `.onboarding-step-state` „Erledigt"-Badge eckig vs. `.onboarding-step-cta` Button), `.onboarding-demo` (gestrichelte Beispielbuch-Box), `.onboarding-alldone`/`-error`/`-palette-hint`. Dazu der First-Login-`.onboarding-welcome-banner` (schlanke, wegklickbare Leiste in index.html, `-text`/`-actions`). Mobil (≤640px): Steps umbrechen, Demo-Box + Banner stapeln. |
 | [components/confirm-dialog.css](public/css/components/confirm-dialog.css) | `.confirm-overlay` / `-dialog`, Shortcuts-Overlay. |
@@ -2769,6 +2808,7 @@ Drei Editoren leben in eigenen Subfoldern (`book/`, `focus/`, `notebook/`); edit
 |------|--------|
 | [entities/figuren.css](public/css/entities/figuren.css) | Figuren-Karte (Graph, Familie, Soziogramm). |
 | [entities/figuren-alter.css](public/css/entities/figuren-alter.css) | Alterstabelle der Figuren (5. Reiter): Kopfzeile mit Analyse-Knopf, Tabelle mit aufklappbarer Beleg-Zeile, Konfidenz-/Widerspruch-Tags. Akzent via `var(--card-accent)` von `.card--figuren`. |
+| [entities/figuren-lebenslauf.css](public/css/entities/figuren-lebenslauf.css) | Lebenslauf der Figuren (6. Reiter): Auswahl-Chip-Reihe, Phasen-x-Figuren-Matrix mit `table-layout: fixed`, Jahr-/Alter-Marke pro Ereignis. Akzent via `var(--card-accent)` von `.card--figuren`. |
 | [entities/figur-werkstatt.css](public/css/entities/figur-werkstatt.css) | Figuren-Werkstatt (Mindmap, Drafts-Sidebar, Read-only-Tree). |
 | [entities/szenen.css](public/css/entities/szenen.css) | Szenen-Karte. |
 | [entities/world-facts.css](public/css/entities/world-facts.css) | Welt-Fakten-Karte (read-only): Kategorie-Gruppierung (`.weltfakten-*`), Fakt-Zeile mit Akzent-Leiste. |

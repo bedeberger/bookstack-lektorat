@@ -102,14 +102,31 @@ export const treeLoadMethods = {
   // Liest this.$store.nav.books + this.bookFilterCategoryPool im x-effect → reaktiv getrackt.
   bookComboOptions() {
     const names = new Map(this.bookFilterCategoryPool.map(c => [String(c.id), c.name]));
-    const hasCategories = this.$store.nav.books.some(b => b.category_id && names.has(String(b.category_id)));
+    const selected = String(this.$store.nav.selectedBookId || '');
+    // Regal-Zustand aus der Karte „Meine Buecher" (book_shelf, pro User):
+    // Archiviertes verschwindet aus der Buchwahl — genau dafuer archiviert man.
+    // Ausnahme ist das aktuell gewaehlte Buch: es aus seiner eigenen Auswahl zu
+    // entfernen liesse die Combobox leer aussehen, obwohl ein Buch offen ist.
+    const source = this.$store.nav.books.filter(b => !b.archived || String(b.id) === selected);
+    const hasCategories = source.some(b => b.category_id && names.has(String(b.category_id)));
     const uncategorized = hasCategories ? this.t('book.filter.uncategorized') : '';
-    const opts = this.$store.nav.books.map(b => {
+    const opts = source.map(b => {
       const cat = b.category_id ? names.get(String(b.category_id)) : null;
-      return { value: String(b.id), label: b.name, group: cat || uncategorized };
+      return { value: String(b.id), label: b.name, group: cat || uncategorized, pinned: !!b.pinned };
     });
-    if (!hasCategories) return opts;
+    // Angeheftete zuerst — in beiden Varianten (mit und ohne Kategorien), sonst
+    // haengt die Wirkung des Pins daran, ob Kategorien gepflegt sind. Ohne
+    // Kategorien bleibt die Server-Reihenfolge darunter erhalten (stabil ueber
+    // den Index): eine Alphabetisierung waere eine Verhaltensaenderung fuer
+    // jeden, der nichts angeheftet hat.
+    const byPin = (a, b) => (a.pinned === b.pinned ? 0 : a.pinned ? -1 : 1);
+    if (!hasCategories) {
+      const idx = new Map(opts.map((o, i) => [o, i]));
+      return opts.sort((a, b) => byPin(a, b) || idx.get(a) - idx.get(b));
+    }
     return opts.sort((a, b) => {
+      const p = byPin(a, b);
+      if (p) return p;
       const au = a.group === uncategorized, bu = b.group === uncategorized;
       if (au !== bu) return au ? 1 : -1; // Unkategorisierte ans Ende
       if (a.group !== b.group) return a.group.localeCompare(b.group);

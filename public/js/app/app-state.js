@@ -307,6 +307,7 @@ const cardsState = () => ({
   showBookSettingsCard: false,
   showUserSettingsCard: false,
   showMyStatsCard: false,
+  showMyBooksCard: false,
   showHelpCard: false,
   showOnboardingCard: false,
   // First-Login-Willkommens-Banner (zeigt einmalig auf „Erste Schritte").

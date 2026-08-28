@@ -1,0 +1,131 @@
+<!-- Motiv-Werkstatt — Konsistenz (dritte Ansicht). ZWEI Schichten, bewusst
+     getrennt sichtbar:
+       1. MESSUNG (oben) — der Server rechnet die vom Autor gezogenen Motiv-Kanten
+          gegen den Ist-Index (GET /motifs/consistency). Kein KI-Lauf, keine Kosten,
+          kommt mit jedem Board-Load. Befund-Texte aus den Locales
+          (motiv.check.<code>), nicht aus dem Payload.
+       2. KI-URTEIL (unten) — Job `motif-consistency`, knopfgesteuert, historisiert.
+          Beurteilt, was sich nicht messen lässt; bekommt die Messbefunde als
+          Vorbefund mit.
+     Eine Messung darf nicht wie eine Modellmeinung aussehen und umgekehrt — daher
+     die zwei Plaketten. -->
+<div class="motiv-checks">
+  <div class="motiv-checks-head">
+    <span class="badge-source" x-text="$app.t('motiv.checks.badge')"></span>
+    <span class="muted-msg" x-text="$app.t('motiv.checks.intro')"></span>
+  </div>
+
+  <!-- Ungemessen ≠ in Ordnung: ohne Ist-Index gibt es nichts zu vergleichen. -->
+  <div class="motiv-hint motiv-hint--action" x-show="!checksScanned" x-cloak>
+    <span class="motiv-hint-text" x-text="$app.t('motiv.checks.unscanned')"></span>
+    <button type="button" class="btn-compact" @click="runScan()" :disabled="scanning || !motifs.length">
+      <span x-show="scanning" class="spinner"></span>
+      <span x-text="$app.t('motiv.scan.run')"></span>
+    </button>
+  </div>
+
+  <div class="card-status" x-show="checksScanned && !checksLoading && !checks.length"
+       x-text="$app.t('motiv.checks.none')"></div>
+
+  <div class="motiv-check-list">
+    <template x-for="(f, idx) in checks" :key="idx">
+      <div class="motiv-check internal-link" :class="{ 'motiv-check--open': selectedCheckIdx === idx }"
+           :aria-expanded="selectedCheckIdx === idx"
+           @click="selectedCheckIdx = selectedCheckIdx === idx ? null : idx">
+        <div class="motiv-check-head">
+          <span class="severity-tag" :class="checkSeverityClass(f)" x-text="checkSeverityLabel(f)"></span>
+          <span class="motiv-check-name internal-link"
+                :data-tip="$app.t('motiv.checks.gotoMotif')"
+                @click.stop="gotoCheckMotif(f)" x-text="f.motiv"></span>
+          <span class="motiv-check-text" x-text="checkText(f)"></span>
+          <span class="history-chevron" :class="{ open: selectedCheckIdx === idx }" aria-hidden="true"></span>
+        </div>
+        <div x-show="selectedCheckIdx === idx && checkHint(f)" class="motiv-check-hint" x-cloak>
+          <span class="entity-meta-label" x-text="$app.t('motiv.checks.hint')"></span>
+          <span x-text="checkHint(f)"></span>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  <!-- ── KI-Urteil (Job motif-consistency) ─────────────────────────────────── -->
+  <div class="motiv-checks-head motiv-checks-head--ai">
+    <span class="badge-source" x-text="$app.t('motiv.consistency.badge')"></span>
+    <span class="muted-msg" x-text="$app.t('motiv.consistency.intro')"></span>
+    <button type="button" class="btn-compact" @click="runConsistency()"
+            :disabled="consistencyRunning || !motifs.length">
+      <span x-show="consistencyRunning" class="spinner"></span>
+      <span x-text="$app.t('motiv.consistency.run')"></span>
+    </button>
+  </div>
+
+  <div class="motiv-progress" x-show="consistencyRunning" x-cloak>
+    <div class="progress-bar" :style="{ '--progress': consistencyProgress + '%' }"></div>
+  </div>
+
+  <div class="motiv-consistency" x-show="consistencyResult" x-cloak>
+    <div class="motiv-checks-head">
+      <h4 class="motiv-panel-heading" x-text="$app.t('motiv.consistency.title')"></h4>
+      <button type="button" class="icon-btn icon-btn--ghost" @click="dismissConsistency()"
+              :data-tip="$app.t('motiv.consistency.closePanel')" :aria-label="$app.t('motiv.consistency.closePanel')">
+        <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#x"/></svg>
+      </button>
+    </div>
+    <!-- Ohne gelaufene Erkennung stand der KI keine Ist-Seite zur Verfügung — das
+         gehört an den Befund, nicht in die Fussnote. -->
+    <div class="motiv-hint" x-show="consistencyResult && consistencyResult.scanned === false" x-cloak>
+      <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#alert-triangle"/></svg>
+      <span x-text="$app.t('motiv.consistency.unscannedNote')"></span>
+    </div>
+    <p class="motiv-consistency-fazit" x-show="consistencyResult && consistencyResult.fazit"
+       x-text="consistencyResult && consistencyResult.fazit"></p>
+    <div class="card-status" x-show="consistencyResult && !consistencyResult.konflikte.length"
+         x-text="$app.t('motiv.consistency.noFindings')"></div>
+    <div class="motiv-check-list">
+      <template x-for="(k, idx) in (consistencyResult ? consistencyResult.konflikte : [])" :key="idx">
+        <div class="motiv-check internal-link" :class="{ 'motiv-check--open': selectedKonfliktIdx === idx }"
+             :aria-expanded="selectedKonfliktIdx === idx"
+             @click="selectedKonfliktIdx = selectedKonfliktIdx === idx ? null : idx">
+          <div class="motiv-check-head">
+            <span class="severity-tag" :class="konfliktSeverityClass(k)" x-text="konfliktSeverityLabel(k)"></span>
+            <span class="motiv-check-name" :class="{ 'internal-link': k.motiv_id != null }"
+                  :data-tip="k.motiv_id != null ? $app.t('motiv.consistency.gotoMotiv') : null"
+                  @click.stop="gotoKonfliktMotiv(k)" x-text="k.motiv"></span>
+            <span class="motiv-check-text" x-text="k.problem"></span>
+            <!-- Sprungziel kommt deterministisch aus dem Fund-Index, nicht aus dem
+                 Modelltext (ein erfundenes Ziel fiele niemandem auf). -->
+            <button type="button" class="tag motiv-check-beleg internal-link"
+                    x-show="k.fundstelle && k.fundstelle.page_id"
+                    @click.stop="$app.gotoPageById(k.fundstelle.page_id)"
+                    :data-tip="$app.t('motiv.consistency.gotoBeleg')"
+                    x-text="k.fundstelle && k.fundstelle.page_name ? $app.t('motiv.consistency.beleg', { seite: k.fundstelle.page_name }) : $app.t('motiv.consistency.belegGeneric')"></button>
+            <span class="history-chevron" :class="{ open: selectedKonfliktIdx === idx }" aria-hidden="true"></span>
+          </div>
+          <div x-show="selectedKonfliktIdx === idx && k.vorschlag" class="motiv-check-hint" x-cloak>
+            <span class="entity-meta-label" x-text="$app.t('motiv.consistency.suggestion')"></span>
+            <span x-text="k.vorschlag"></span>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <!-- Prüfungs-Verlauf: persistierte Läufe pro Buch (wie die Brainstorm-Historie).
+       Nur die KI-Läufe — die Messung oben ist immer der aktuelle Stand. -->
+  <div class="history-bar" x-show="consistencyRuns.length > 0" x-cloak>
+    <div class="history-heading" x-text="$app.t('motiv.consistency.runs', { count: consistencyRuns.length })"></div>
+    <template x-for="r in consistencyRuns" :key="r.id">
+      <div class="history-item" :class="{ 'history-item--open': selectedConsistencyRunId === r.id }"
+           @click="openConsistencyRun(r)">
+        <span class="history-date" x-text="formatRunDate(r.created_at)"></span>
+        <span class="tag" x-text="$app.t('motiv.consistency.konfliktCount', { n: r.konflikt_count })"></span>
+        <span x-show="r.model" class="tag" x-text="r.model"></span>
+        <span class="history-chevron" :class="{ open: selectedConsistencyRunId === r.id }" aria-hidden="true"></span>
+        <button type="button" class="history-item-delete"
+                @click.stop="deleteConsistencyRun(r.id)"
+                :data-tip="$app.t('common.deleteEntry')"
+                :aria-label="$app.t('common.deleteEntry')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#trash"/></svg></button>
+      </div>
+    </template>
+  </div>
+</div>

@@ -25,6 +25,12 @@
   align-items: center;
   gap: var(--space-sm);
 }
+/* Die beiden Filter-Comboboxen bekommen die Mindestbreite, die das compact-
+   Dropdown ohnehin hat (combobox.js: `Math.max(triggerWidth, 180)`). Ohne sie ist
+   das Panel breiter als sein Trigger und x-anchor zentriert es darunter — es haengt
+   dann sichtbar schief unter dem Pfeil. Gleiche Breite = buendige Kante. */
+.figur-alter .filter-bar .combobox-wrap { min-width: 180px; }
+
 .figur-alter-hint {
   font-size: var(--font-size-mini);
   color: var(--color-muted);
@@ -44,6 +50,12 @@
   border-bottom: 0.5px solid var(--color-border);
   white-space: nowrap;
 }
+/* Platz fuer das Sortier-Chevron zurueckholen. `.sortable-th` reserviert ihn per
+   `padding-right`, liegt aber in `@layer components` — die Padding-Shorthand oben
+   ist ungelayert und gewinnt damit unabhaengig von der Reihenfolge, worauf das
+   Chevron im Spaltentitel sitzt. Wer hier die Shorthand anfasst, muss diese Zeile
+   mitdenken. */
+.figur-alter-table th.sortable-th { padding-right: calc(var(--space-md) + 14px); }
 .figur-alter-table td {
   padding: var(--space-xs) 12px 4px 0;
   border-bottom: 0.5px solid var(--color-separator-on-dark);
@@ -60,12 +72,21 @@
   box-shadow: inset 3px 0 0 0 var(--color-warn-text);
 }
 
-.figur-alter-name {
-  white-space: nowrap;
+/* Flex liegt auf dem INNEREN Span, nicht auf dem <td>: eine Zelle mit
+   `display:flex` ist kein `table-cell` mehr, der Browser wickelt sie in eine
+   anonyme Zelle — die Spalte verrutscht gegen ihren Kopf und der Zellrahmen
+   bricht aus der Zeile. Gebraucht wird der Flex-Kontext nur, damit
+   `.figur-typ-dot` (inline <span> ohne eigenes `display`) seine 8x8 bekommt. */
+.figur-alter-name { white-space: nowrap; }
+.figur-alter-name-inner,
+.figur-alter-tags {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--space-2xs);
 }
+.figur-alter-tags { flex-wrap: wrap; }
+/* Zeile ohne Belege: Chevron unsichtbar, Platz bleibt (siehe Partial). */
+.figur-alter-chevron--empty { visibility: hidden; }
 .figur-alter-kurzname {
   font-size: var(--font-size-mini);
   color: var(--color-muted);
@@ -81,12 +102,11 @@
   font-size: var(--font-size-mini);
   color: var(--color-muted);
 }
-.figur-alter-quelle {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2xs);
-}
-.figur-alter-konf--hoch { color: var(--color-text); }
+
+/* Ton der Herkunfts-Plakette = Sicherheit der Angabe. „hoch" bleibt die normale
+   Plakette (belegt ist der Normalfall, kein Auszeichnungsgrund), „niedrig" wird
+   getoent, weil eine unsichere Zahl in einer Tabelle sonst wie eine Messung
+   aussieht. */
 .figur-alter-konf--mittel { color: var(--color-muted); }
 .figur-alter-konf--niedrig {
   color: var(--color-warn-text);

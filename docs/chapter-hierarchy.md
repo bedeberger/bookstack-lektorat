@@ -107,24 +107,27 @@ Frontend [public/js/cards/kapitel-review-card.js](../public/js/cards/kapitel-rev
 [lib/pdf-export-defaults.js](../lib/pdf-export-defaults.js):
 
 - **`chapter.numberingMode: 'nested' | 'flat'`** — Default `'nested'` (1, 1.1, 1.1.1). `'flat'` zählt durchlaufend (1, 2, 3).
-- **`chapter.breakBeforeSubchapter: boolean`** — Default `false`. Sub-Kapitel bleiben inline; `true` erzwingt Pagebreak vor jeder Tiefe.
-- **`toc.depth: [1, 2, 3]`** — TOC-Tiefe steuert, bis welche Ebene Einträge in das Inhaltsverzeichnis kommen.
+- **`chapter.breakBeforeSubchapter: boolean`** — Default `true`. Sub-Kapitel beginnen wie Top-Kapitel auf einer neuen Seite; `false` laesst sie inline. **Why Default `true`:** die ERSTE Seite eines Sub-Kapitels folgt seiner Ueberschrift — inline stuende sie unter dem Text der vorigen Seite, und die Zusage „jede Seite beginnt neu" (`pageBreakBetweenPages`) waere in einer Hierarchie gebrochen.
+- **`toc.depth: [1, 2, 3]`** — zaehlt **Kapitelebenen**, nicht Einrueckungsstufen.
+- **`toc.includePages: boolean`** — Default `true`, eigene Achse fuer die **Seiten**-Eintraege. **Why getrennt:** eine Seite in einem Sub-Sub-Kapitel liegt auf Einrueckungsebene 4 und faellt sonst durch jede erlaubte Kapiteltiefe. Praedikat als SSoT: `tocEntryVisible` in [lib/pdf-render/pages.js](../lib/pdf-render/pages.js); eine Seite ist zusaetzlich an die Sichtbarkeit **ihres** Kapitels gebunden.
+- **`font.heading.sizes.h1`..`h6`** — EINE absteigende Kette: `h1`–`h3` Kapitelebenen, `h4` **Seitentitel**, `h5`/`h6` die Ueberschriften, die der **Autor im Seitentext** setzt. Die Reihenfolge muss absteigend bleiben (`h1 > h2 > h3 > h4 > h5 > h6 >= body`), gegated in [tests/unit/pdf-export-defaults.test.js](../tests/unit/pdf-export-defaults.test.js).
+- **Autoren-Ueberschriften sind kontextabhaengig skaliert** (`subHeadings` in [lib/pdf-render/blocks.js](../lib/pdf-render/blocks.js), pro Item gesetzt in [body.js](../lib/pdf-render/body.js)): mit gezeichnetem Seitentitel → h5/h6; ohne (flatten, kapitellose Seite) → h1/h2/h3, weil sie dann die oberste Marke im Fluss sind. Word-Pendant: Heading 5/6 statt 2/3 — dort zusaetzlich noetig, weil Heading 2/3 im `\o "1-4"`-Bereich des TOC-Felds liegen und im Verzeichnis ueber ihrer eigenen Seite stuenden.
 
 [lib/pdf-render/layout.js](../lib/pdf-render/layout.js#_chapterLabelNested): Roman/Word-Numbering nur für Top-Level; Sub-Ebenen sind immer arabisch (Lesbarkeit). Beispiel `nested`+`roman`: `IV.2.1`.
 
-[lib/pdf-render/coalesce.js](../lib/pdf-render/coalesce.js): jedes Block-Element trägt `depth`, berechnet via `_depthByChapterId` aus `parent_chapter_id`-Kette.
+[lib/pdf-render/coalesce.js](../lib/pdf-render/coalesce.js): jedes Block-Element trägt `depth`, berechnet via `_depthByChapterId` aus `parent_chapter_id`-Kette. Bei `pageStructure: 'nested'` (Default) wird **jede** Seite ein eigenes Item mit `heading` — kein `pages.length > 1`-Vorbehalt, sonst fiele genau das einseitige Sub-Kapitel aus der Gliederung. Traegt die erste Seite den Namen ihres Kapitels, entfaellt ihre Ueberschrift (`sameStructureTitle`, SSoT mit dem Word-Export).
 
 [lib/pdf-render/index.js](../lib/pdf-render/index.js):
 
-- **TOC-Plan**: `tocCounters[3]`; bei depth d → `counters[d-1]++`, tiefere reset; Label via `_chapterLabelNested`; TOC-Level = `depth - 1`.
-- **Body-Loop**: depth → Heading-Größe (h1/h2/h3), Align (centered nur depth=1), `spaceBeforeMm`-Faktor (1.0 / 0.4 / 0.2), Break-Verhalten (depth>1 nur bei `breakBeforeSubchapter`), DropCap nur depth=1, `titleRule` nur depth=1.
+- **TOC-Plan**: `tocCounters[3]`; bei depth d → `counters[d-1]++`, tiefere reset; Label via `_chapterLabelNested`; TOC-Level = `depth - 1`. Seiten-Eintraege kommen mit `isPage: true` + `parentLevel` dazu (Level = `depth`).
+- **Body-Loop** ([lib/pdf-render/body.js](../lib/pdf-render/body.js)): depth → Heading-Größe (h1/h2/h3), Align (centered nur depth=1), `spaceBeforeMm`-Faktor (1.0 / 0.4 / 0.2), Break-Verhalten (depth>1 nur bei `breakBeforeSubchapter`), DropCap nur depth=1, `titleRule` nur depth=1. Seitentitel = h4, linksbuendig, `pageTitleRule`. PDF-Lesezeichen sind ein echter Baum (`outlineStack`: Kapitel der Tiefe d haengt an `stack[d-1]`, die Seite an `stack[depth]`) — die Leiste spiegelt damit dieselbe Gliederung wie das Verzeichnis.
 
 ## Andere Export-Builder
 
 [lib/export-builders/shared.js](../lib/export-builders/shared.js) exportiert `chapterDepth(chapter, byId, max=3)` + `buildChaptersById(groups)` als gemeinsamen Helper.
 
 - **HTML/MD**: Kapitel-Heading via depth+1 (Top = h2 / `##`, depth 2 = h3 / `###`, depth 3 = h4 / `####`); Page-Heading eine Stufe tiefer, gecapped bei 6.
-- **DOCX**: depth → `h${depth}`; `page-break-before: always` nur für depth=1.
+- **DOCX** ([lib/export-builders/docx.js](../lib/export-builders/docx.js)): depth → Word-Heading 1..3, **Seitentitel auf Heading 4** (`PAGE_HEADING_LEVEL`); Umbruch vor Kapiteln via `chapter.pageBreakBefore` (+ `breakBeforeSubchapter` fuer depth>1) und vor Seiten via `chapter.pageBreakBetweenPages` — immer am Ueberschriften-Absatz selbst, nie als vorangestellter Leerabsatz. `toc.includePages` wie im PDF; das Word-TOC-**Feld** kann nur einen zusammenhaengenden `\o "1-N"`-Bereich, exakt schneiden kann nur `mode: 'static'`.
 - **EPUB**: NavMap-NCX hat 2 Ebenen — depth-1 wird auf `__level: min(1, depth-1)` gemapped (Sub-Sub-Kapitel kollabiert in Outline auf Level 1, Content vollständig erhalten).
 - **TXT**: unverändert (Plain-Text ohne Heading-Markup).
 

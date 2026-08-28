@@ -251,15 +251,16 @@
       <div class="motiv-chip-row">
         <template x-for="r in relationsForSelected()" :key="r.id">
           <span class="motiv-chip">
-            <span x-text="(r.outgoing ? '→ ' : '← ') + r.otherName + ' (' + r.typ + ')'"></span>
+            <span x-text="(r.outgoing ? '→ ' : '← ') + r.otherName + ' (' + motifRelLabel(r.typ) + ')'"></span>
             <button type="button" @click="deleteRelation(r)" :aria-label="$app.t('common.delete')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#x"/></svg></button></span>
         </template>
       </div>
       <div class="motiv-relation-add">
         <div x-data="combobox($app.t('motiv.relations.target'), '')" x-modelable="value" x-model="newRelationTargetId"
              x-effect="options = motifs.filter(m=>m.id!==selectedMotifId).map(m=>({value:String(m.id),label:m.name}))"></div>
-        <input type="text" class="motiv-inline-input" x-model="newRelationTyp" data-spellcheck="spelling"
-               :placeholder="$app.t('motiv.relations.typPlaceholder')" @keydown.enter="addRelation()">
+        <div class="motiv-rel-typ" x-data="combobox($app.t('motiv.relations.typPick'))"
+             x-modelable="value" x-model="newRelationTyp"
+             x-effect="options = motifRelTypes().map(tp => ({ value: tp, label: motifRelLabel(tp) }))"></div>
         <button type="button" class="btn-compact" @click="addRelation()"
                 :disabled="!newRelationTargetId || !newRelationTyp.trim()" x-text="$app.t('motiv.relations.add')"></button>
       </div>

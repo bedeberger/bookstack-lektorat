@@ -3,7 +3,12 @@
 // Schreib-Pfad: content-store-Facade ruft `insert()` nach jedem erfolgreichen
 //   Backend-Save und legt den gerade geschriebenen Stand als Snapshot ab (jede
 //   Revision = Inhalt NACH ihrem Save, nicht der Vorzustand).
-// Lese-Pfad: routes/content.js Revisions-Endpoints.
+// Lese-Pfad: routes/content.js Revisions-Endpoints. Die Liste im Editor ist ein
+//   FENSTER (Default 100 juengste, Deckel 500), nicht die ganze Historie —
+//   Keyset-Nachladen ueber `listForPageKeyset`. Grund steht direkt in der
+//   Retention darunter: das `raw`-Bucket haelt jeden Autosave der letzten 24 h,
+//   ein Schreibtag fuellt das erste Fenster also allein und die getierte
+//   Historie dahinter waere ohne Nachladen unerreichbar.
 // Retention: lib/cache-cleanup.js POLICIES ruft `pruneTiered()` taeglich.
 // Strategie: Grandfather-Father-Son (GFS).
 //   <=1 Tag:  alle behalten
@@ -95,6 +100,38 @@ function listForPage(pageId, limit = 100) {
   return _listForPageStmt.all(pageId, Math.min(Math.max(limit, 1), 500));
 }
 
+const _listBeforeStmt = db.prepare(`
+  SELECT id, page_id, book_id, chars, words, tok,
+         source, user_email, client, created_at, summary
+    FROM page_revisions
+   WHERE page_id = @page_id
+     AND (created_at < @before
+          OR (created_at = @before AND id < @before_id))
+   ORDER BY created_at DESC, id DESC
+   LIMIT @limit
+`);
+
+// Keyset-Seite fuer die Revisionsliste im Editor. `before`/`beforeId` zeigen auf
+// die letzte bereits gelieferte Revision, `hasMore` sagt, ob dahinter noch etwas
+// liegt (ohne zweites COUNT: es wird limit+1 geholt und die Zusatzzeile
+// verworfen).
+// Keyset statt OFFSET: das `raw`-Bucket der Retention (pruneTiered) haelt jeden
+// Autosave der letzten 24 h, und die Liste ist DESC. Zwischen zwei Klicks fuegt
+// ein Autosave also vorne ein bzw. der naechtliche Prune loescht hinten — ein
+// OFFSET wuerde dann Revisionen doppelt liefern bzw. ueberspringen. Der Cursor
+// haengt am Datenpunkt, nicht an der Position.
+// `id` als zweites Cursor-Feld, weil `created_at` bei Autosave-Bursts kollidieren
+// kann (Millisekunden-Aufloesung) — sonst blieben kollidierende Revisionen
+// unerreichbar.
+function listForPageKeyset(pageId, { limit = 100, before = null, beforeId = null } = {}) {
+  const n = Math.min(Math.max(parseInt(limit, 10) || 100, 1), 500);
+  const rows = (typeof before === 'string' && before && Number.isInteger(beforeId))
+    ? _listBeforeStmt.all({ page_id: pageId, before, before_id: beforeId, limit: n + 1 })
+    : _listForPageStmt.all(pageId, n + 1);
+  const hasMore = rows.length > n;
+  return { revisions: hasMore ? rows.slice(0, n) : rows, hasMore };
+}
+
 const _getStmt = db.prepare(`
   SELECT id, page_id, book_id, body_html, chars, words, tok,
          source, user_email, client, created_at, summary
@@ -165,6 +202,7 @@ function pruneTiered({ floor, now = null } = {}) {
 module.exports = {
   insert,
   listForPage,
+  listForPageKeyset,
   get,
   countForPage,
   pruneTiered,

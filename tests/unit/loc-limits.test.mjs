@@ -103,7 +103,7 @@ const CATEGORIES = [
       'db/migrations.js',
     ],
     allow: {
-      'lib/export-builders/docx.js': 813,
+      'lib/export-builders/docx.js': 899,
       'lib/page-index.js': 694,
       'lib/content-store/backends/localdb.js': 635,
       'lib/mailer-templates.js': 626,

@@ -1,22 +1,77 @@
-<!-- Hilfe & Funktionen: statischer Funktionsueberblick fuer den Einstieg.
-     Alpine.data-Sub-Komponente — siehe public/js/cards/help-card.js.
-     Buch-unabhaengig. Feature-Texte sind die Landing-Page-Bloecke
-     (landing.featNTitle/Desc) — SSoT mit der oeffentlichen Landing. -->
+<!-- Hilfe & Funktionen: zwei Reiter — statischer Funktionsueberblick fuer den
+     Einstieg und die Release-Notizen („Neuigkeiten"). Alpine.data-Sub-Komponente
+     — siehe public/js/cards/help-card.js. Buch-unabhaengig.
+     Feature-Texte sind die Landing-Page-Bloecke (landing.featNTitle/Desc) —
+     SSoT mit der oeffentlichen Landing. Neuigkeiten kommen aus changelog/. -->
 <div class="card card--help" x-data="helpCard" x-show="$app.showHelpCard" x-cloak>
   <div class="card-header">
     <span class="card-title" x-text="$app.t('help.title')"></span>
   </div>
 
-  <p class="help-intro" x-text="$app.t('help.intro')"></p>
+  <div x-data="tabs(['features','changelog'])" x-modelable="value" x-model="helpTab">
+    <div class="tabs tabs--scrollable" x-bind="tablist">
+      <template x-for="tab in tabs" :key="tab">
+        <button class="tabs-btn" x-bind="tabBtn(tab)">
+          <span x-text="$app.t('help.tab.' + tab)"></span>
+          <span class="tabs-btn-count help-tab-new"
+                x-show="tab === 'changelog' && isNewRelease($store.shell.changelogLatest)"
+                x-text="$app.t('changelog.newBadge')"></span>
+        </button>
+      </template>
+    </div>
 
-  <ul class="help-features">
-    <template x-for="f in helpFeatures" :key="f.titleKey">
-      <li class="help-feature">
-        <h3 class="help-feature-title" x-text="$app.t(f.titleKey)"></h3>
-        <p class="help-feature-desc" x-text="$app.t(f.descKey)"></p>
-      </li>
-    </template>
-  </ul>
+    <!-- Reiter „Funktionen" -->
+    <div class="help-tab-panel" x-bind="panel('features')">
+      <p class="help-intro" x-text="$app.t('help.intro')"></p>
 
-  <p class="help-palette-hint" x-text="$app.t('help.paletteHint')"></p>
+      <ul class="help-features">
+        <template x-for="f in helpFeatures" :key="f.titleKey">
+          <li class="help-feature">
+            <h3 class="help-feature-title" x-text="$app.t(f.titleKey)"></h3>
+            <p class="help-feature-desc" x-text="$app.t(f.descKey)"></p>
+          </li>
+        </template>
+      </ul>
+
+      <p class="help-palette-hint" x-text="$app.t('help.paletteHint')"></p>
+    </div>
+
+    <!-- Reiter „Neuigkeiten" -->
+    <div class="help-tab-panel" x-bind="panel('changelog')">
+      <p class="help-intro">
+        <span x-text="$app.t('changelog.intro')"></span>
+        <span class="changelog-current" x-show="$store.shell.appVersion" x-cloak
+              x-text="$app.t('changelog.current', { version: $store.shell.appVersion })"></span>
+      </p>
+
+      <p class="changelog-status" x-show="changelogLoading" x-cloak
+         x-text="$app.t('changelog.loading')"></p>
+      <p class="card-form-error" x-show="changelogError" x-cloak x-text="changelogError"></p>
+      <div class="card-empty"
+           x-show="!changelogLoading && !changelogError && changelogReleases.length === 0" x-cloak>
+        <p class="card-empty-text" x-text="$app.t('changelog.empty')"></p>
+      </div>
+
+      <ol class="changelog-list" x-show="changelogReleases.length > 0" x-cloak>
+        <template x-for="rel in changelogReleases" :key="rel.version">
+          <li class="changelog-release">
+            <div class="changelog-release-head">
+              <h3 class="changelog-version" x-text="'v' + rel.version"></h3>
+              <span class="changelog-date" x-text="changelogDate(rel.date)"></span>
+              <span class="badge-ok changelog-new" x-show="isNewRelease(rel.version)"
+                    x-text="$app.t('changelog.newBadge')"></span>
+            </div>
+            <ul class="changelog-entries">
+              <template x-for="(e, i) in rel.entries" :key="i">
+                <li class="changelog-entry" :class="'changelog-entry--' + e.kind">
+                  <span class="changelog-kind" x-text="$app.t('changelog.kind.' + e.kind)"></span>
+                  <span class="changelog-text" x-text="changelogText(e)"></span>
+                </li>
+              </template>
+            </ul>
+          </li>
+        </template>
+      </ol>
+    </div>
+  </div>
 </div>

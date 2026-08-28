@@ -11,6 +11,7 @@ export const hashBuildMethods = {
   _computeHash() {
     if (this.showUserSettingsCard) return '#profil';
     if (this.showMyStatsCard) return '#meine-statistik';
+    if (this.showMyBooksCard) return '#meine-buecher';
     if (this.showHelpCard) return '#hilfe';
     if (this.showOnboardingCard) return '#erste-schritte';
     // Volltextsuche: buch-skopiert (#book/:id/suche) wenn ein Buch gewählt ist

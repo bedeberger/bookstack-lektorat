@@ -32,7 +32,11 @@ export function computeAlterRows(figuren, ages, { suche = '', typ = '', nur = ''
     // Spalte stehen, damit die Abweichung sichtbar ist statt geglaettet.
     const alterVon = a?.alter_von ?? null;
     const alterBis = a?.alter_bis ?? alterVon;
-    const abgeleitet = f.alter_im_roman ?? null;
+    // Der gerechnete Wert kommt aus dem Index, wenn es einen gibt: der Server
+    // kennt dort auch ein NUR IM TEXT gefundenes Geburtsjahr, das `alter_im_roman`
+    // am Katalog per Definition nicht kennt (das liest nur das kuratierte Feld).
+    // Ohne Lauf bleibt der Katalog-Wert — die Tabelle soll ohne Analyse arbeiten.
+    const abgeleitet = a?.gerechnet ?? f.alter_im_roman ?? null;
     const row = {
       id: f.id,
       name: f.name,
@@ -192,7 +196,12 @@ export const figurenAlterMethods = {
     return t ? t('figuren.alter.unknown') : '–';
   },
 
+  // Bezugsjahr nur, wenn es ueberhaupt ein Alter gibt. Eine Jahreszahl neben
+  // „unbekannt" liest sich wie eine Teilantwort, ist aber bloss das Buchende:
+  // `jahr_im_roman` fällt für eine undatierte Figur auf das späteste Jahr des
+  // Buchs zurück (lib/figure-years.js).
   figurenAlterBezugLabel(row) {
+    if (!row.hatAlter) return '';
     const von = row.bezugsjahr_von, bis = row.bezugsjahr_bis;
     if (von != null && bis != null && von !== bis) return `${von}–${bis}`;
     if (von != null) return String(von);
@@ -220,6 +229,14 @@ export const figurenAlterMethods = {
     const stufe = this.figurenAlterKonfidenzStufe(row);
     if (stufe === 'none') return '';
     return window.__app?.t?.('figuren.alter.konfidenz.' + stufe) || '';
+  },
+
+  // Die Sicherheit steht als Ton an der Herkunfts-Plakette, ihr Wort im Tooltip —
+  // eine eigene Plakette daneben las sich wie eine zweite Quellenangabe.
+  figurenAlterKonfidenzTip(row) {
+    const label = this.figurenAlterKonfidenzLabel(row);
+    if (!label) return '';
+    return window.__app?.t?.('figuren.alter.konfidenzTip', { level: label }) || label;
   },
 
   figurenAlterWiderspruchText(w) {

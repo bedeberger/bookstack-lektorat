@@ -50,6 +50,11 @@ export const appNavigationMethods = {
     this._beginNavigation();
     try {
       const fid = _coerceId(figId);
+      // Alle drei Filter zuruecksetzen wie bei Ort/Szene/Ereignis: eine stehende
+      // Namenssuche schneidet die Zielfigur aus `filteredFiguren()`, die Zeile
+      // wird nie gerendert und der Sprung endet sichtbar im Nichts — die Karte
+      // ist offen, aber die geklickte Figur fehlt.
+      this.$store.catalogUi.figurenFilters.suche = '';
       this.$store.catalogUi.figurenFilters.kapitel = '';
       this.$store.catalogUi.figurenFilters.seite = '';
       if (!this.showFiguresCard) {
@@ -67,6 +72,7 @@ export const appNavigationMethods = {
     this._beginNavigation();
     try {
       const fid = _coerceId(figId);
+      this.$store.catalogUi.figurenFilters.suche = '';
       this.$store.catalogUi.figurenFilters.kapitel = kapitelName || '';
       this.$store.catalogUi.figurenFilters.seite = '';
       if (!this.showFiguresCard) {

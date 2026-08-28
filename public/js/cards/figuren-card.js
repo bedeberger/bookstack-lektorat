@@ -4,6 +4,8 @@
 //   - Graph-Modus (figurenGraphModus, figurenGraphKapitel, figurenGraphFullscreen)
 //   - Alterstabelle (figurenAlterData/-Filters/-Loading/-Progress/-Status,
 //     figurenAlterOpenId) — der Index wird erst beim Oeffnen des Reiters geholt
+//   - Lebenslauf (figurenLebenslaufIds/-Filters) — reine Anzeige-Wahl; die Daten
+//     kommen aus dem Katalog, der Alters-Index liefert nur bessere Geburtsjahre
 //   - vis-network-Internals (_figurenNetwork, _figurenHash, _figurenNodes, _figurenEdges)
 //   - aufgelöste Canvas-Farben (_graphTheme) + Theme-Observer (_themeObserver)
 //   - figurenUpdatedAt (Render-Timestamp im Card-Header)
@@ -19,6 +21,7 @@
 import { graphMethods } from '../graph.js';
 import { presenceMethods } from '../book/figuren-presence.js';
 import { figurenAlterMethods } from '../book/figuren-alter.js';
+import { figurenLebenslaufMethods } from '../book/figuren-lebenslauf.js';
 import { setupCardLifecycle } from './card-lifecycle.js';
 import { attachFullscreenSync } from '../fullscreen.js';
 import { observeThemeChange } from '../graph-kit.js';
@@ -89,6 +92,12 @@ export function registerFigurenCard() {
     figurenAlterOpenId: null,
     _figurenAlterPollTimer: null,
     _figurenAlterLoadedBookId: null,
+    // Lebenslauf (6. Reiter): NUR die Anzeige-Wahl. Die Matrix selbst faellt aus
+    // `catalog.figuren` — kein eigener Fetch, kein eigener Index, kein Job.
+    // Leeres `figurenLebenslaufIds` heisst „noch nichts gewaehlt"; die erste
+    // Oeffnung fuellt es mit den praesentesten Figuren.
+    figurenLebenslaufIds: [],
+    figurenLebenslaufFilters: { suche: '', typ: '' },
     _figurenNetwork: null,
     _figurenHash: null,
     _figurenNodes: null,
@@ -162,6 +171,13 @@ export function registerFigurenCard() {
       // dem Graph-Modul und weiss nichts von der Tabelle.
       this.$watch('figurenGraphModus', (mode) => {
         if (mode === 'alter') this.ensureFigurenAlter();
+        if (mode === 'lebenslauf') {
+          // Derselbe Index wie der Alter-Reiter, aus demselben einen GET: er
+          // kennt auch ein NUR im Text gefundenes Geburtsjahr und macht damit
+          // Figuren einsortierbar, die der Katalog allein nicht platzieren kann.
+          // Non-fatal — ohne Lauf traegt der Katalog die Matrix allein.
+          this.ensureFigurenAlter().then(() => this.figurenLebenslaufEnsureAuswahl());
+        }
       });
 
       // Sprachwechsel → Graph-Labels neu rendern (uiLocale Teil des Hash).
@@ -278,10 +294,15 @@ export function registerFigurenCard() {
       this.figurenAlterStatus = '';
       this.figurenAlterOpenId = null;
       this.figurenAlterFilters = { suche: '', typ: '', nur: '' };
+      // Die Spaltenwahl zeigt auf Figuren des alten Buchs — sie muss mit, sonst
+      // steht die Matrix beim naechsten Oeffnen leer da, ohne zu sagen warum.
+      this.figurenLebenslaufIds = [];
+      this.figurenLebenslaufFilters = { suche: '', typ: '' };
     },
 
     ...graphMethods,
     ...presenceMethods,
     ...figurenAlterMethods,
+    ...figurenLebenslaufMethods,
   }));
 }

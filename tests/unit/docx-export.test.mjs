@@ -50,6 +50,17 @@ test('validateConfig: strips unknown top-level keys', () => {
 });
 
 // ── Builder ──────────────────────────────────────────────────────────────────
+// document.xml liegt DEFLATE-komprimiert im ZIP — fuer Struktur-Asserts (welche
+// Heading-Stufe traegt welcher Titel, wo sitzt ein Seitenumbruch) muss es
+// entpackt werden. jszip ist ohnehin eine transitive Abhaengigkeit der
+// docx-Lib, hier also kein neues Test-Werkzeug.
+async function documentXml(config) {
+  const buf = await buildDocxProfile(bundle, { author: 'Franz Kafka', lang: 'de', meta, config });
+  const JSZip = require('jszip');
+  const zip = await JSZip.loadAsync(buf);
+  return zip.file('word/document.xml').async('string');
+}
+
 async function build(config) {
   const buf = await buildDocxProfile(bundle, { author: 'Franz Kafka', lang: 'de', meta, config });
   assert.equal(buf[0], 0x50); // PK
@@ -215,4 +226,115 @@ test('builder: notesMode=inline bleibt bei der Klammerform, ohne Apparat', async
   assert.ok(doc.includes('[1, S. 44]'));
   assert.equal(doc.includes('w:pStyle w:val="Endnotes"'), false);
   assert.equal(doc.includes('Anmerkungen'), false);
+});
+
+// ── Seite als Strukturelement ────────────────────────────────────────────────
+// Pendant zu den PDF-Tests in tests/unit/pdf-render.test.mjs: derselbe Buchstand
+// muss in beiden Manuskript-Formaten dieselbe Gliederung ergeben.
+
+// Zaehlt, wie oft ein Text in einem Absatz des angegebenen Heading-Styles steht.
+function headingCount(xml, styleId, text) {
+  const paras = xml.split('<w:p>').slice(1);
+  return paras.filter(p => p.includes(`w:val="${styleId}"`) && p.includes(`>${text}<`)).length;
+}
+
+test('nested: jede Seite traegt ihren Titel als Heading 4 (vierte Stufe unter den Kapiteln)', async () => {
+  const xml = await documentXml(validateConfig({ chapter: { pageStructure: 'nested' } }));
+  // Kapitel bleiben auf Heading 1, die Seiten sitzen darunter auf Heading 4.
+  assert.equal(headingCount(xml, 'Heading1', 'Verhaftung'), 1);
+  assert.equal(headingCount(xml, 'Heading4', 'Szene 1'), 1);
+  assert.equal(headingCount(xml, 'Heading4', 'Szene 2'), 1);
+});
+
+test('nested greift auch beim EINSEITIGEN Kapitel (kein pages.length>1-Vorbehalt)', async () => {
+  const xml = await documentXml(validateConfig({ chapter: { pageStructure: 'nested' } }));
+  // Kapitel "Anhang" hat genau eine Seite ("A") — sie muss trotzdem als
+  // eigene Gliederungsstufe erscheinen.
+  assert.equal(headingCount(xml, 'Heading1', 'Anhang'), 1);
+  assert.equal(headingCount(xml, 'Heading4', 'A'), 1);
+});
+
+test('flatten: Seiten bekommen keine eigene Ueberschrift', async () => {
+  const xml = await documentXml(validateConfig({ chapter: { pageStructure: 'flatten' } }));
+  assert.equal(headingCount(xml, 'Heading1', 'Verhaftung'), 1);
+  assert.equal(headingCount(xml, 'Heading4', 'Szene 1'), 0);
+});
+
+test('Seitenname gleich Kapitelname: keine doppelte Ueberschrift untereinander', async () => {
+  const dupBundle = {
+    ...bundle,
+    groups: [{
+      chapterId: 30, chapter: { id: 30, name: 'Nachwort', parent_chapter_id: null },
+      pages: [{ p: { id: 9, name: 'Nachwort' }, pd: { html: '<p>Text.</p>' } }],
+    }],
+  };
+  const buf = await buildDocxProfile(dupBundle, {
+    author: 'X', lang: 'de', meta, config: validateConfig({ chapter: { pageStructure: 'nested' } }),
+  });
+  const JSZip = require('jszip');
+  const xml = await (await JSZip.loadAsync(buf)).file('word/document.xml').async('string');
+  assert.equal(headingCount(xml, 'Heading1', 'Nachwort'), 1);
+  assert.equal(headingCount(xml, 'Heading4', 'Nachwort'), 0, 'Kapiteltitel darf nicht als Seitentitel wiederholt werden');
+});
+
+test('pageBreakBetweenPages: Umbruch haengt am Seitentitel, nicht an einem Leerabsatz', async () => {
+  const withBreak = await documentXml(validateConfig({
+    chapter: { pageStructure: 'nested', pageBreakBetweenPages: true },
+  }));
+  const noBreak = await documentXml(validateConfig({
+    chapter: { pageStructure: 'nested', pageBreakBetweenPages: false },
+  }));
+  const breaks = x => (x.match(/<w:pageBreakBefore\/>/g) || []).length;
+  // Genau ein zusaetzlicher Umbruch: "Szene 2" ist die einzige Folgeseite in
+  // einem Kapitel des Fixtures.
+  assert.equal(breaks(withBreak), breaks(noBreak) + 1);
+  // Der Umbruch sitzt am Heading-4-Absatz der Folgeseite.
+  const szene2 = withBreak.split('<w:p>').find(p => p.includes('>Szene 2<') && p.includes('Heading4'));
+  assert.ok(szene2 && szene2.includes('<w:pageBreakBefore/>'), 'Umbruch nicht am Seitentitel');
+});
+
+test('statisches TOC: Seiten als eigene Ebene, abschaltbar ueber toc.includePages', async () => {
+  const withPages = await documentXml(validateConfig({
+    toc: { mode: 'static', includePages: true }, chapter: { pageStructure: 'nested' },
+  }));
+  const withoutPages = await documentXml(validateConfig({
+    toc: { mode: 'static', includePages: false }, chapter: { pageStructure: 'nested' },
+  }));
+  const listed = (xml, name) => (xml.match(new RegExp(`>${name}<`, 'g')) || []).length;
+  // "Szene 1" steht mit Verzeichnis-Eintrag zweimal im Dokument (Verzeichnis +
+  // Seitentitel im Body), ohne Eintrag nur einmal.
+  assert.equal(listed(withPages, 'Szene 1'), listed(withoutPages, 'Szene 1') + 1);
+});
+
+test('Autoren-Ueberschrift im Seitentext liegt UNTER dem Seitentitel (Heading 5/6)', async () => {
+  const authorBundle = {
+    ...bundle,
+    groups: [{
+      chapterId: 40, chapter: { id: 40, name: 'Kapitel', parent_chapter_id: null },
+      pages: [{ p: { id: 5, name: 'Beitrag' }, pd: { html: '<h1>Gross</h1><p>x</p><h2>Klein</h2><p>y</p>' } }],
+    }],
+  };
+  const xmlFor = async (pageStructure) => {
+    const buf = await buildDocxProfile(authorBundle, {
+      author: 'X', lang: 'de', meta, config: validateConfig({ chapter: { pageStructure } }),
+    });
+    const JSZip = require('jszip');
+    return (await JSZip.loadAsync(buf)).file('word/document.xml').async('string');
+  };
+
+  // Der Beitrag hat einen eigenen Titel (Heading 4) → die Autoren-Ueberschriften
+  // rutschen auf Heading 5/6. Auf Heading 2/3 stuenden sie im TOC-Feld-Bereich
+  // UEBER der Seite, in der sie stehen.
+  const nested = await xmlFor('nested');
+  assert.equal(headingCount(nested, 'Heading4', 'Beitrag'), 1);
+  assert.equal(headingCount(nested, 'Heading5', 'Gross'), 1);
+  assert.equal(headingCount(nested, 'Heading6', 'Klein'), 1);
+  assert.equal(headingCount(nested, 'Heading2', 'Gross'), 0);
+
+  // Ohne gezeichneten Seitentitel ist die Autoren-Ueberschrift die oberste Marke
+  // im Fluss und behaelt Heading 2/3.
+  const flat = await xmlFor('flatten');
+  assert.equal(headingCount(flat, 'Heading2', 'Gross'), 1);
+  assert.equal(headingCount(flat, 'Heading3', 'Klein'), 1);
+  assert.equal(headingCount(flat, 'Heading5', 'Gross'), 0);
 });

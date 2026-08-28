@@ -5,6 +5,7 @@
 import { fetchJson, sendJson } from '../../utils.js';
 import { THEME_COLOR_KEYS, defaultThemeColorKey } from './graph.js';
 import { highlightOccurrenceOnPage } from './highlight.js';
+import { MOTIF_REL_TYPES } from './constants.js';
 
 export const crudMethods = {
   _bookId() { return this.$store.nav.selectedBookId; },
@@ -278,6 +279,16 @@ export const crudMethods = {
   },
 
   // ── Beziehungen (Motiv ↔ Motiv) ──────────────────────────────────────────
+  // Kuratierte Typ-Auswahl fürs Beziehungs-Picker (stabile Schlüssel, Reihenfolge).
+  // Freitext-Alt-Kanten bleiben lesbar: motifRelLabel fällt auf den rohen Wert zurück.
+  motifRelTypes() { return MOTIF_REL_TYPES; },
+
+  motifRelLabel(typ) {
+    const key = 'motiv.relation.type.' + typ;
+    const label = window.__app.t(key);
+    return label === key ? typ : label;
+  },
+
   async addRelation() {
     const from = this.selectedMotifId;
     const to = this.newRelationTargetId ? Number(this.newRelationTargetId) : null;

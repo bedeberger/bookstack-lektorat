@@ -3,7 +3,7 @@ const express = require('express');
 const {
   getBookSettings, saveBookSettings, setBookEntitiesEnabled,
   setBookCitationSettings, VALID_CITATION_STYLES, VALID_BIBLIOGRAPHY_SCOPES, VALID_CITATION_NOTES,
-  setBookXrefSettings, setBookTextsorte,
+  setBookXrefSettings, setBookTextsorte, setBookIsFinished,
 } = require('../db/schema');
 const { isValidTextsorte } = require('../db/textsorte');
 const { aclParamGuard, sessionEmail } = require('../lib/acl');
@@ -160,6 +160,24 @@ router.put('/:book_id/entities-enabled', aclParamGuard('editor'), jsonBody, (req
   const enabled = req.body?.enabled ? 1 : 0;
   setBookEntitiesEnabled(bookId, enabled);
   res.json({ ok: true, entities_enabled: enabled });
+});
+
+/** Quick-Toggle „fertig" aus der Regal-Karte („Meine Buecher") — patcht nur
+ *  is_finished, ohne dass der ganze Settings-Body uebertragen werden muss
+ *  (Muster entities-enabled). Der 0→1-Uebergang haelt dieselbe Auto-Fassung
+ *  fest wie das Formular; die Logik darf hier nicht abweichen, sonst haengt
+ *  der Publikations-Meilenstein davon ab, WO geklickt wurde. */
+router.put('/:book_id/finished', aclParamGuard('editor'), jsonBody, (req, res) => {
+  const bookId = req.bookId;
+  const finished = req.body?.is_finished ? 1 : 0;
+  const wasFinished = getBookSettings(bookId, sessionEmail(req))?.is_finished ? 1 : 0;
+  setBookIsFinished(bookId, finished);
+  if (finished && !wasFinished) {
+    captureSnapshot(bookId, req, {
+      label: AUTO_FINISH_LABEL, dedup: true, userEmail: sessionEmail(req),
+    }).catch((e) => logger.warn(`Auto-Fassung beim Fertig-Markieren fehlgeschlagen (book=${bookId}): ${e.message}`));
+  }
+  res.json({ ok: true, is_finished: finished });
 });
 
 /** Quellenverzeichnis-Einstellungen (Quellen-Tab). Eigener Endpunkt statt

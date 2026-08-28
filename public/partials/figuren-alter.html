@@ -96,13 +96,26 @@
               @keydown.enter.prevent="row.belege.length && figurenAlterToggleBelege(row)"
               @keydown.space.prevent="row.belege.length && figurenAlterToggleBelege(row)">
             <td class="figur-alter-name">
-              <span class="history-chevron" :class="{ open: figurenAlterOpenId === row.id }"
-                    x-show="row.belege.length" aria-hidden="true">›</span>
-              <span class="figur-typ-dot" :class="'figur-typ-dot--' + row.typ"></span>
-              <span class="internal-link" @click.stop="$app.openFigurById(row.id)"
-                    :data-tip="$app.t('figuren.alter.openFigur')" x-text="row.name"></span>
-              <span class="figur-alter-kurzname" x-show="row.kurzname && row.kurzname !== row.name"
-                    x-text="row.kurzname"></span>
+              <!-- Flex gehoert auf den INNEREN Span, nie auf das <td>: ein
+                   `display:flex` an der Zelle nimmt sie aus dem Tabellen-Boxmodell
+                   (der Browser wickelt sie in eine anonyme Zelle) und die Spalte
+                   verrutscht gegen ihren Kopf. Gebraucht wird der Flex-Kontext nur
+                   fuer .figur-typ-dot — ein inline <span>, dessen width/height
+                   sonst nicht greifen. -->
+              <span class="figur-alter-name-inner">
+                <!-- Der Chevron-Platz bleibt IMMER reserviert (visibility statt
+                     x-show): sonst beginnen Punkt und Name in Zeilen ohne Belege
+                     weiter links als in Zeilen mit, und die Namensspalte franst
+                     aus. -->
+                <span class="history-chevron"
+                      :class="{ open: figurenAlterOpenId === row.id, 'figur-alter-chevron--empty': !row.belege.length }"
+                      aria-hidden="true">›</span>
+                <span class="figur-typ-dot" :class="'figur-typ-dot--' + row.typ"></span>
+                <span class="internal-link" @click.stop="$app.openFigurById(row.id)"
+                      :data-tip="$app.t('figuren.alter.openFigur')" x-text="row.name"></span>
+                <span class="figur-alter-kurzname" x-show="row.kurzname && row.kurzname !== row.name"
+                      x-text="row.kurzname"></span>
+              </span>
             </td>
             <td><span class="tag" x-text="$app.t('figuren.type.' + row.typ)"></span></td>
             <td class="figur-alter-num figur-alter-age" x-text="figurenAlterLabel(row)"></td>
@@ -114,14 +127,20 @@
             </td>
             <td class="figur-alter-num" x-text="row.alter_abgeleitet != null ? row.alter_abgeleitet : '–'"></td>
             <td class="figur-alter-num" x-text="figurenAlterBezugLabel(row) || '–'"></td>
-            <td class="figur-alter-quelle">
-              <span class="tag" x-show="row.quelle" x-text="figurenAlterQuelleLabel(row)"></span>
-              <span class="tag figur-alter-konf" x-show="figurenAlterKonfidenzLabel(row)"
-                    :class="'figur-alter-konf--' + figurenAlterKonfidenzStufe(row)"
-                    x-text="figurenAlterKonfidenzLabel(row)"></span>
-              <span class="tag tag--stale" x-show="row.widerspruch"
-                    :data-tip="figurenAlterWiderspruchTip(row)"
-                    x-text="$app.t('figuren.alter.conflictBadge')"></span>
+            <td>
+              <!-- EINE Herkunfts-Plakette, ihre Sicherheit steckt im Ton (plus
+                   Tooltip). Eine zweite Plakette daneben las sich wie eine zweite
+                   Quelle: „aus dem Text" + „gerechnet" widersprechen sich als
+                   Beschriftung, und drei Plaketten brechen die Spalte um. -->
+              <span class="figur-alter-tags">
+                <span class="tag" x-show="row.quelle"
+                      :class="'figur-alter-konf--' + figurenAlterKonfidenzStufe(row)"
+                      :data-tip="figurenAlterKonfidenzTip(row)"
+                      x-text="figurenAlterQuelleLabel(row)"></span>
+                <span class="tag tag--stale" x-show="row.widerspruch"
+                      :data-tip="figurenAlterWiderspruchTip(row)"
+                      x-text="$app.t('figuren.alter.conflictBadge')"></span>
+              </span>
             </td>
             <td class="figur-alter-num">
               <span x-show="row.belege.length" x-text="row.belege.length"></span>

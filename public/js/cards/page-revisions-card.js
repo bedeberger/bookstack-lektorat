@@ -14,6 +14,14 @@ export function registerPageRevisionsCard() {
   if (typeof window === 'undefined' || !window.Alpine) return;
   window.Alpine.data('pageRevisionsCard', () => ({
     revisions: [],
+    // `total` = Gesamtzahl auf dem Server, `revisions` nur das geladene Fenster.
+    // Beides auseinanderzuhalten ist der Kern dieser Karte: das `raw`-Bucket der
+    // Retention haelt jeden Autosave der letzten 24 h, ein Schreibtag fuellt das
+    // erste Fenster also allein — die getierte Historie dahinter kommt erst per
+    // `loadMore()`.
+    total: 0,
+    hasMore: false,
+    loadingMore: false,
     open: false,
     loading: false,
     restoringId: null,
@@ -43,7 +51,10 @@ export function registerPageRevisionsCard() {
       this._onRevisionsChanged = (e) => {
         const pid = e?.detail?.pageId;
         if (!pid || pid !== this._pageId) return;
-        this.loadRevisions(pid, { fresh: true });
+        // `keepDepth`: ein Autosave darf ein nachgeladenes Fenster nicht wieder
+        // auf die jueng­sten 100 zusammenfallen lassen — der Autosave feuert im
+        // Minutentakt, das Blaettern waere sonst nicht haltbar.
+        this.loadRevisions(pid, { fresh: true, keepDepth: true });
       };
       window.addEventListener(EVT.PAGE_REVISIONS_CHANGED, this._onRevisionsChanged);
     },
@@ -56,6 +67,9 @@ export function registerPageRevisionsCard() {
 
     reset() {
       this.revisions = [];
+      this.total = 0;
+      this.hasMore = false;
+      this.loadingMore = false;
       this.open = false;
       this.loading = false;
       this.restoringId = null;
@@ -63,19 +77,61 @@ export function registerPageRevisionsCard() {
       this.closeViewer();
     },
 
-    async loadRevisions(pageId, { fresh = false } = {}) {
+    // `keepDepth` haelt die bereits nachgeladene Tiefe: statt des Default-Fensters
+    // wird so viel angefordert, wie geladen war. Server-Deckel ist 500 — bei mehr
+    // Tiefe faellt die Liste bewusst auf 500 zurueck (der Rest ist einen Klick
+    // entfernt) statt eine unbegrenzte Antwort zu verlangen.
+    async loadRevisions(pageId, { fresh = false, keepDepth = false } = {}) {
       if (!pageId) return;
+      const depth = keepDepth && pageId === this._pageId
+        ? Math.min(500, this.revisions.length)
+        : 0;
       this._pageId = pageId;
       this.loading = true;
       try {
-        const url = `/content/pages/${pageId}/revisions${fresh ? '?__fresh=1' : ''}`;
+        const qs = [];
+        if (depth > 100) qs.push(`limit=${depth}`);
+        if (fresh) qs.push('__fresh=1');
+        const url = `/content/pages/${pageId}/revisions${qs.length ? '?' + qs.join('&') : ''}`;
         const data = await fetchJson(url);
         this.revisions = Array.isArray(data?.revisions) ? data.revisions : [];
+        this.hasMore = !!data?.has_more;
+        this.total = Number.isFinite(data?.total) ? data.total : this.revisions.length;
       } catch (e) {
         console.error('[pageRevisions:load]', e);
         this.revisions = [];
+        this.hasMore = false;
+        this.total = 0;
       } finally {
         this.loading = false;
+      }
+    },
+
+    // Naechstes Fenster anhaengen. Cursor ist die aelteste bereits geladene
+    // Revision (Keyset), nicht ein Offset — waehrend der User liest, schreibt
+    // der Autosave vorne weiter.
+    async loadMore() {
+      const pageId = this._pageId;
+      if (!pageId || this.loadingMore || !this.hasMore) return;
+      const last = this.revisions[this.revisions.length - 1];
+      if (!last?.created_at || !last?.id) return;
+      this.loadingMore = true;
+      try {
+        const url = `/content/pages/${pageId}/revisions`
+          + `?before=${encodeURIComponent(last.created_at)}&before_id=${last.id}`;
+        const data = await fetchJson(url);
+        const more = Array.isArray(data?.revisions) ? data.revisions : [];
+        // Dedup gegen bereits geladene IDs: ein Restore waehrend des Blaetterns
+        // laedt die Liste neu, die Antwort hier kann dann ueberlappen.
+        const seen = new Set(this.revisions.map(r => r.id));
+        this.revisions = this.revisions.concat(more.filter(r => !seen.has(r.id)));
+        this.hasMore = !!data?.has_more;
+        if (Number.isFinite(data?.total)) this.total = data.total;
+      } catch (e) {
+        console.error('[pageRevisions:loadMore]', e);
+        window.__app?.setStatus?.(window.__app.t('editor.revisions.loadMoreFailed'), true, 5000);
+      } finally {
+        this.loadingMore = false;
       }
     },
 
@@ -92,11 +148,15 @@ export function registerPageRevisionsCard() {
       return out && out !== key ? out : src;
     },
 
+    // Nummer gegen `total`, nicht gegen die Fenstergroesse: die Liste ist DESC
+    // und beginnt immer bei der juengsten Revision, Index 0 ist also Nummer
+    // `total`. Gegen `revisions.length` gerechnet wuerde dieselbe Revision nach
+    // jedem `loadMore()` eine andere Nummer tragen.
     revisionNumber(rev) {
       if (!rev?.id) return null;
       const idx = this.revisions.findIndex(r => r.id === rev.id);
       if (idx < 0) return null;
-      return this.revisions.length - idx;
+      return Math.max(this.total, this.revisions.length) - idx;
     },
 
     formatChars(n) {

@@ -2,6 +2,12 @@
 
 Schreiben, Lektorat und Buchanalyse mit KI. Eigenständiger Node.js-Service, Multi-User mit Rollen-ACL pro Buch. Inhalte (Bücher/Kapitel/Seiten) liegen lokal in SQLite — keine externe Storage-Abhängigkeit.
 
+## Gehostete Version
+
+Wer nicht selbst hosten will, kann die betriebene Instanz unter **[schreibwerkstatt.app](https://schreibwerkstatt.app)** nutzen — gleicher Stand wie dieses Repository, ohne eigene Installation, Reverse-Proxy-Konfiguration oder API-Keys. Zugang über Selbst-Registrierung mit Admin-Freigabe (siehe [Registrierung mit Approval](#multi-user--kollaboration)); die nativen Clients für macOS und Android verbinden sich ebenfalls dorthin.
+
+Das übrige README beschreibt das **Selbst-Hosting** — für die gehostete Version ist davon nichts nötig.
+
 ## Features
 
 ### Schreiben & Editor
@@ -75,6 +81,8 @@ Schreiben, Lektorat und Buchanalyse mit KI. Eigenständiger Node.js-Service, Mul
 - Login-Pfad: **Admin-Bootstrap** (Email+Passwort via ENV) und/oder **Google OAuth2** (Callback `https://<domain>/auth/callback`). Mindestens einer muss konfiguriert sein.
 
 ## Quick Start
+
+Nur fürs Selbst-Hosting — die gehostete Instanz läuft unter [schreibwerkstatt.app](https://schreibwerkstatt.app).
 
 ```bash
 git clone https://github.com/<user>/schreibwerkstatt.git

@@ -45,6 +45,7 @@ import { registerTagebuchRueckblickCard } from '../cards/tagebuch-rueckblick-car
 import { registerBookSettingsCard } from '../cards/book-settings-card.js';
 import { registerUserSettingsCard } from '../cards/user-settings-card.js';
 import { registerMyStatsCard } from '../cards/my-stats-card.js';
+import { registerMyBooksCard } from '../cards/my-books-card.js';
 import { registerHelpCard } from '../cards/help-card.js';
 import { registerOnboardingCard } from '../cards/onboarding-card.js';
 import { registerAdminUsersCard } from '../cards/admin-users-card.js';
@@ -155,6 +156,7 @@ export function registerAllCards() {
   registerBookSettingsCard();
   registerUserSettingsCard();
   registerMyStatsCard();
+  registerMyBooksCard();
   registerHelpCard();
   registerOnboardingCard();
   registerAdminUsersCard();

@@ -11,7 +11,7 @@
           @click="open = !open"
           :aria-expanded="open">
     <span class="history-chevron" :class="{ open }" aria-hidden="true">›</span>
-    <span x-text="$app.t('editor.revisions.count', { n: revisions.length })"></span>
+    <span x-text="$app.t('editor.revisions.count', { n: total || revisions.length })"></span>
   </button>
   <div x-show="open" x-cloak class="page-revisions-list">
     <template x-for="(rev, idx) in revisions" :key="rev.id">
@@ -59,6 +59,23 @@
                 x-text="$app.t('editor.revisions.restorePrev')"></button>
       </div>
     </template>
+
+    <!-- Nachladen. Die Liste ist ein Fenster (Default 100 juengste), nicht die
+         ganze Historie: das `raw`-Bucket der Retention haelt jeden Autosave der
+         letzten 24 h, ein Schreibtag fuellt das Fenster also allein. Ohne diesen
+         Knopf bleibt die getierte Historie (Tage/Wochen/Monate/Jahre) dahinter
+         unerreichbar. Reihenfolge Hinweis-vor-Knopf ist Absicht: .btn-toggle-saved
+         traegt in dieser Liste `margin-left: auto`. -->
+    <div class="history-item" x-show="hasMore" x-cloak>
+      <span class="tag"
+            x-text="$app.t('editor.revisions.windowHint', { shown: revisions.length, total: total })"></span>
+      <button type="button"
+              class="btn-toggle-saved btn-toggle-saved--off"
+              @click="loadMore()"
+              :disabled="loadingMore"
+              :data-tip="$app.t('editor.revisions.loadMoreTitle')"
+              x-text="loadingMore ? $app.t('editor.revisions.loadingMore') : $app.t('editor.revisions.loadMore')"></button>
+    </div>
   </div>
 
   <!-- Viewer: natives <dialog>, geoeffnet via showModal() im openViewer(). -->

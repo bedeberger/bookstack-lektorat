@@ -1,0 +1,138 @@
+@layer components {
+/* „Meine Buecher" (Buecherregal): Verwaltungstabelle ueber alle sichtbaren
+   Buecher. Geteilte Bausteine kommen aus den bestehenden Patterns —
+   `.card-toolbar`, `.tabs`/`.tabs-btn`, `.filter-bar`, `.table-scroll`,
+   `.sortable-th` (sortable-table.css), `.icon-btn icon-btn--ghost`,
+   `.badge-ok`/`.badge-warn`/`.badge-neutral`. Hier nur das Regal-Eigene:
+   Summenzeile, Tabellenzellen-Typografie und die zwei Zeilen-Zustaende.
+   Markup: public/partials/my-books.html. */
+
+.mybooks-note {
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+  margin: calc(-1 * var(--space-xs)) 0 var(--space-md);
+}
+
+/* ── Summenzeile ─────────────────────────────────────────────────────────── */
+/* Nur der Rahmen — Wert/Einheit kommen aus .overview-substat* (book-overview/
+   stats.css), damit die Kennzahl-Typografie der App nicht ein zweites Mal
+   definiert wird. */
+.mybooks-summary {
+  padding: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-md);
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  border-left: 3px solid var(--card-accent, var(--color-accent));
+  background: var(--color-bg);
+}
+
+/* Zaehler im Reiter — dieselbe Rolle wie `.filter-count`, nur im Tab. */
+.mybooks-tab-count {
+  margin-left: var(--space-xs);
+  font-size: var(--font-size-mini);
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Tabelle ─────────────────────────────────────────────────────────────── */
+.mybooks-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+.mybooks-table th,
+.mybooks-table td {
+  /* Schmales Zellen-Padding mit Absicht: die Tabelle hat zehn Spalten und soll
+     auf einem normalen Desktop OHNE horizontales Scrollen lesbar sein. */
+  padding: var(--space-sm);
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+.mybooks-table th {
+  font-size: var(--font-size-mini);
+  color: var(--color-muted);
+  font-weight: 600;
+}
+/* Chevron-Platz zurueckholen: das Padding-Shorthand oben ueberschreibt die
+   Reserve aus `.sortable-th` (siehe DESIGN.md → Sortierbare Tabelle). */
+.mybooks-table th.sortable-th { padding-right: calc(var(--space-sm) + 14px); }
+
+.mybooks-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.mybooks-table th.mybooks-num { text-align: right; }
+
+/* Zweitzeile in einer Zelle (Normseiten, Kapitelzahl, letztes Datum). */
+.mybooks-sub {
+  display: block;
+  font-size: var(--font-size-mini);
+  color: var(--color-muted);
+}
+
+.mybooks-book { white-space: normal; min-width: 10rem; }
+.mybooks-book-name {
+  display: inline-block;
+  color: var(--color-text);
+  font-weight: 600;
+  background: none;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+.mybooks-book-name:hover { color: var(--card-accent, var(--color-accent)); }
+.mybooks-book-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  margin-top: 2px;
+}
+.mybooks-chip {
+  font-size: var(--font-size-mini);
+  color: var(--color-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-xs);
+}
+
+.mybooks-unread { margin-left: var(--space-xs); }
+
+/* Aktions-Spalte bleibt am rechten Rand stehen, wenn die Tabelle horizontal
+   scrollt (`.table-scroll`). Ohne das liegen Anheften/Archivieren/Fertig auf
+   einem breiten Bildschirm knapp, auf einem schmalen sicher aussserhalb des
+   Sichtfelds — und genau dafuer oeffnet man das Regal. */
+.mybooks-table th:last-child,
+.mybooks-actions {
+  position: sticky;
+  right: 0;
+  background: var(--color-card-bg);
+  border-left: 0.5px solid var(--color-border);
+}
+.mybooks-actions {
+  display: flex;
+  gap: 2px;
+  justify-content: flex-end;
+}
+
+/* ── Zeilen-Zustaende ────────────────────────────────────────────────────── */
+/* Archiviert: zurueckgenommen, aber lesbar — die Zeile ist bewusst noch da
+   (Reiter „Archiviert"/„Alle"), sie soll nur nicht mehr um Aufmerksamkeit
+   konkurrieren. Kein `opacity` auf der ganzen Zeile: das dimmt auch die
+   Aktions-Knoepfe, mit denen man sie zurueckholt. */
+.mybooks-row--archived .mybooks-book-name,
+.mybooks-row--archived td:not(.mybooks-actions) {
+  color: var(--color-muted);
+}
+/* Angeheftet: schmale Akzent-Kante am Zeilenanfang. */
+.mybooks-row--pinned > td:first-child {
+  box-shadow: inset 3px 0 0 0 var(--card-accent, var(--color-accent));
+}
+
+@media (max-width: 600px) {
+  .mybooks-table th,
+  .mybooks-table td { padding: var(--space-xs); }
+}
+}

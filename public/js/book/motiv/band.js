@@ -1,4 +1,5 @@
-// Motiv-Werkstatt — Kapitel-Verlaufsband (zweite Ansicht neben der Konstellation).
+// Motiv-Werkstatt — Kapitel-Verlaufsband (zweite Ansicht neben Konstellation und
+// Konsistenz-Befunden; die Ansichts-Umschaltung selbst liegt hier).
 // Motiv × Kapitel als Heatmap: jede Zeile ein Motiv, jede Spalte ein Kapitel in
 // Lesereihenfolge, Zell-Intensität = Ist-Dichte (Fundstellen aus motif_occurrences,
 // bereits im Graph-Payload als m.occChapters aggregiert). Zeigt, wo über den
@@ -12,7 +13,7 @@ export const bandMethods = {
   // Ansicht umschalten (Konstellation ↔ Verlaufsband). Zurück auf den Graph muss
   // neu gezeichnet + eingepasst werden (Canvas war ausgeblendet → 0-Grösse).
   setMotivView(mode) {
-    const next = mode === 'band' ? 'band' : 'graph';
+    const next = (mode === 'band' || mode === 'checks') ? mode : 'graph';
     if (this.motivView === next) return;
     this.motivView = next;
     if (next === 'graph') this.$nextTick(() => { this.renderMotivGraph(); this.fitGraph(); });

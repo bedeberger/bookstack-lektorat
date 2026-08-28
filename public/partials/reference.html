@@ -73,6 +73,7 @@
             <span x-show="fig.typ" class="tag" x-text="$app.t('figuren.type.' + fig.typ)"></span>
             <span x-show="$app.figurJahrLabel(fig)" class="tag" :data-tip="$app.t('figuren.jahrAlterTip')" x-text="$app.figurJahrLabel(fig)"></span>
             <span x-show="fig.geburtstag" class="tag" :data-tip="$app.t('figuren.birthYearTip')" x-text="$app.t('figuren.birthYear', { jahr: fig.geburtstag })"></span>
+            <span x-show="fig.refCtx === 'chapter'" class="tag" :data-tip="$app.t('reference.ctx.chapterTip')" x-text="$app.t('reference.ctx.chapter')"></span>
           </div>
           <div class="reference-row-sub" x-show="fig.rolle" x-text="fig.rolle"></div>
           <div class="reference-row-desc" x-show="fig.beschreibung" x-text="fig.beschreibung"></div>
@@ -89,6 +90,7 @@
         <div class="reference-row">
           <div class="reference-row-head">
             <span class="reference-row-title" x-text="ort.name"></span>
+            <span x-show="ort.refCtx === 'chapter'" class="tag" :data-tip="$app.t('reference.ctx.chapterTip')" x-text="$app.t('reference.ctx.chapter')"></span>
           </div>
           <div class="reference-row-desc" x-show="ort.beschreibung" x-text="ort.beschreibung"></div>
         </div>
@@ -105,8 +107,10 @@
           <div class="reference-row-head">
             <span class="reference-row-title" x-text="s.titel || $app.t('entities.scene')"></span>
             <span x-show="s.wertung" class="tag" :class="'badge--wertung-' + s.wertung" x-text="s.wertung"></span>
+            <span x-show="s.refCtx === 'chapter'" class="tag" :data-tip="$app.t('reference.ctx.chapterTip')" x-text="$app.t('reference.ctx.chapter')"></span>
           </div>
           <div class="reference-row-desc" x-show="s.zusammenfassung || s.beschreibung" x-text="s.zusammenfassung || s.beschreibung"></div>
+          <div class="reference-row-sub" x-show="referenceRowWhere(s)" x-text="referenceRowWhere(s)"></div>
         </div>
       </template>
     </div>
@@ -121,8 +125,10 @@
           <div class="reference-row-head">
             <span class="reference-row-title" x-text="ev.ereignis"></span>
             <span x-show="referenceEventDate(ev)" class="tag" x-text="referenceEventDate(ev)"></span>
+            <span x-show="ev.refCtx === 'chapter'" class="tag" :data-tip="$app.t('reference.ctx.chapterTip')" x-text="$app.t('reference.ctx.chapter')"></span>
           </div>
           <div class="reference-row-sub" x-show="ev.kapitel" x-text="Array.isArray(ev.kapitel) ? ev.kapitel.join(', ') : ev.kapitel"></div>
+          <div class="reference-row-sub" x-show="referenceRowWhere(ev)" x-text="referenceRowWhere(ev)"></div>
         </div>
       </template>
     </div>
@@ -143,6 +149,7 @@
                     :class="{ open: refIvOpenId === item.id }" aria-hidden="true"></span>
               <span class="reference-row-title" x-text="referenceRechercheText(item)"></span>
               <span class="tag" x-text="referenceRechercheKind(item)"></span>
+              <span x-show="item.refCtx === 'chapter'" class="tag" :data-tip="$app.t('reference.ctx.chapterTip')" x-text="$app.t('reference.ctx.chapter')"></span>
             </div>
             <div class="reference-row-desc" x-show="item.title && item.body" x-text="item.body"></div>
             <div class="reference-row-sub" x-show="item.source" x-text="item.source"></div>

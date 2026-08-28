@@ -7,7 +7,27 @@
 // Datenquellen: Figuren/Orte/Szenen/globalZeitstrahl aus Alpine.store('catalog');
 // Figuren-Kontext bevorzugt aus $app.chapterFigures (server-geladene Kapitel-
 // Figuren, gleiche Quelle wie der Editor-Highlighter), sonst Namens-Treffer im
-// Seitentext; Szenen-Kontext aus selectScenesForView (geteilt mit dem Highlighter);
+// Seitentext.
+//
+// KONTEXT-SCOPE — eine Regel fuer alle Reiter: eine Zeile gehoert zur offenen
+// Seite ODER zu deren Kapitel, und die Karte sagt, welches von beidem. Jede
+// Liste ist entsprechend zweigeteilt (Seite zuerst) und markiert ihre Zeilen mit
+// `refCtx`; `refPageName` nennt die fremde Seite, wo es eine gibt. Woran die
+// Zugehoerigkeit haengt, ist pro Reiter verschieden — IMMER an IDs, nie an
+// Namen, ausser wo es keine ID gibt:
+//   Figuren    `$app.chapterFigures` (figure_appearances) ∪ Namens-Treffer
+//   Orte       `ort.kapitel` (location_chapters) ∪ Namens-Treffer
+//   Szenen     selectScenesForView — alle drei Toepfe, inkl. der seiten-
+//              gebundenen Szenen desselben Kapitels
+//   Ereignisse `page_ids`/`chapter_ids` (zeitstrahl_event_pages/_chapters)
+//   Recherche  `links[].target_kind/target_id`
+//   Quellen    groupCitedSources (eigene, aeltere Auspraegung derselben Idee:
+//              `row.onPage` + Seitennamen statt refCtx)
+//   Verwandt   kein Kontext-Begriff — Semantik ueber das ganze Buch
+// Der Namens-Treffer ist Ergaenzung, nie Ersatz: der Index kennt eine eben
+// geschriebene Erwaehnung noch nicht, und eine nur umschriebene Figur steht
+// nicht im Text.
+//
 // Recherche lazy via /research; Quellen lazy via /sources + /sources/citations
 // (Gruppierung pure in sources/cited-index.js). Löst das alte „Auf dieser Seite"-
 // Panel ab; die Inline-Highlights + Popover bleiben im editorEntitiesCard.
@@ -15,10 +35,10 @@
 import { fetchJson } from '../utils.js';
 import { EVT } from '../events.js';
 import { setupCardLifecycle } from './card-lifecycle.js';
-import { selectScenesForView } from '../editor/notebook/entities.js';
 import { groupCitedSources } from '../sources/cited-index.js';
 import { primaryPersonLabel } from '../sources/fields.js';
 import { referenceInterviewMethods, referenceInterviewState } from './reference-interview.js';
+import { referenceContextMethods } from './reference-context.js';
 
 const TABS = ['figuren', 'orte', 'szenen', 'ereignisse', 'recherche', 'quellen', 'verwandt'];
 
@@ -268,118 +288,6 @@ export function registerReferenceCard() {
     // sonst wird immer das ganze Buch gezeigt (nichts zu filtern).
     _contextActive() { return this.referenceScope === 'page' && this.referenceHasContext(); },
 
-    // ── Memo (ein Helper pro Modul, Array-Deps mit ===) ──────────────────────
-    _memo(key, deps, fn) {
-      const prev = this._memos[key];
-      if (prev && prev.deps.length === deps.length && prev.deps.every((d, i) => d === deps[i])) {
-        return prev.val;
-      }
-      const val = fn();
-      this._memos[key] = { deps, val };
-      return val;
-    },
-
-    _pageKey() {
-      const p = window.__app?.currentPage;
-      return p ? (p.id + ':' + (p.updated_at || '')) : '';
-    },
-
-    // Plaintext der aktuellen Seite (Namens-Treffer für Figuren/Orte im Kontext).
-    _pageText() {
-      const app = window.__app;
-      if (!app?.currentPage) return '';
-      const key = this._pageKey();
-      if (this._refPageTextKey === key) return this._refPageText;
-      const html = app.originalHtml || '';
-      this._refPageText = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').toLowerCase();
-      this._refPageTextKey = key;
-      return this._refPageText;
-    },
-
-    _nameInPage(names) {
-      const txt = this._pageText();
-      if (!txt) return false;
-      return names.some(n => n && txt.includes(String(n).toLowerCase()));
-    },
-
-    _currentChapterName() {
-      const cid = window.__app?.currentPage?.chapter_id;
-      if (!cid) return '';
-      const ch = (Alpine.store('nav').tree || []).find(c => c.id === cid);
-      return ch?.name || '';
-    },
-
-    // ── Gefilterte Listen (memoized — im Template + in referenceCount genutzt) ─
-    referenceFiguren() {
-      const app = window.__app;
-      const all = Alpine.store('catalog').figuren || [];
-      const chapterFigs = app?.chapterFigures || [];
-      return this._memo('figuren', [this.referenceScope, this._pageKey(), all, chapterFigs], () => {
-        if (!this._contextActive()) return all;
-        if (chapterFigs.length) return chapterFigs;
-        return all.filter(f => this._nameInPage([f.name, f.kurzname]));
-      });
-    },
-
-    referenceOrte() {
-      const all = Alpine.store('catalog').orte || [];
-      return this._memo('orte', [this.referenceScope, this._pageKey(), all], () => {
-        if (!this._contextActive()) return all;
-        return all.filter(o => this._nameInPage([o.name]));
-      });
-    },
-
-    referenceSzenen() {
-      const all = Alpine.store('catalog').szenen || [];
-      const app = window.__app;
-      const pid = app?.currentPage?.id;
-      const cid = app?.currentPage?.chapter_id;
-      return this._memo('szenen', [this.referenceScope, pid, cid, all], () => {
-        if (!this._contextActive()) return all;
-        const v = selectScenesForView(all, pid, cid);
-        return [...v.onPage, ...v.inChapter];
-      });
-    },
-
-    referenceEreignisse() {
-      const all = Alpine.store('catalog').globalZeitstrahl || [];
-      const chapName = this._currentChapterName();
-      return this._memo('ereignisse', [this.referenceScope, chapName, all], () => {
-        if (!this._contextActive() || !chapName) return all;
-        const cl = chapName.toLowerCase();
-        return all.filter(ev => {
-          const kap = Array.isArray(ev.kapitel) ? ev.kapitel : (ev.kapitel ? [ev.kapitel] : []);
-          return kap.some(k => String(k).toLowerCase() === cl);
-        });
-      });
-    },
-
-    referenceRechercheItems() {
-      const all = this.referenceRecherche || [];
-      const app = window.__app;
-      const pid = app?.currentPage?.id;
-      const cid = app?.currentPage?.chapter_id;
-      return this._memo('recherche', [this.referenceScope, pid, cid, all], () => {
-        if (!this._contextActive()) return all;
-        return all.filter(it => (it.links || []).some(l =>
-          (l.target_kind === 'page' && l.target_id === pid) ||
-          (l.target_kind === 'chapter' && cid != null && l.target_id === cid)));
-      });
-    },
-
-    referenceCount(tab) {
-      switch (tab) {
-        case 'figuren':    return this.referenceFiguren().length;
-        case 'orte':       return this.referenceOrte().length;
-        case 'szenen':     return this.referenceSzenen().length;
-        case 'ereignisse': return this.referenceEreignisse().length;
-        case 'recherche':  return this.referenceRechercheItems().length;
-        case 'quellen':    return this.referenceQuellen().length;
-        case 'verwandt':   return this.verwandtResults().length;
-        default:           return 0;
-      }
-    },
-
     // ── Verwandt-Tab (Semantik) ───────────────────────────────────────────────
     // Ergebnisse sind seiten-spezifisch: bei Seitenwechsel gaten wir über den
     // _pageKey() (keine Watcher — konsistent mit dem Memo-Pattern der Karte).
@@ -519,5 +427,7 @@ export function registerReferenceCard() {
     },
 
     ...referenceInterviewMethods,
+    // Kontext-Regel + gefilterte Listen (Slice cards/reference-context.js).
+    ...referenceContextMethods,
   }));
 }

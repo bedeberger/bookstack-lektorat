@@ -322,11 +322,15 @@ async function runFigurAlterJob(jobId, bookId, userEmail, { force = false } = {}
     updateJob(jobId, { statusText: 'job.phase.figurAlterConsolidate', progress: AI_TO + 2 });
     const rows = [];
     for (const f of figuren) {
+      // `buchJahre` geht NICHT in die Verdichtung: die Jahresspanne des ganzen
+      // Buchs ist der Rahmen fuer das Modell, nicht der Bezugspunkt einer Figur.
+      // Deren Alter haengt an ihrem eigenen Ankerjahr (lib/figure-years.js) — sonst
+      // ist eine Figur, die 1987 aus der Geschichte verschwindet, so alt, wie sie
+      // am Buchende waere.
       const row = consolidateFigure({
         funde: fundeByFigur.get(f.id) || [],
         kuratiert: { geburtstag: f.geburtstag },
         zeitstrahl: yearMap?.get(f.id) || null,
-        buchJahre,
       });
       // Eine Figur ohne jede Angabe braucht keine Zeile — „unbekannt" ist der
       // Default der Tabelle, und eine leere Zeile behauptete, es sei gemessen.

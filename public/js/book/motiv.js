@@ -9,6 +9,7 @@ import { scanMethods } from './motiv/scan.js';
 import { brainstormMethods } from './motiv/brainstorm.js';
 import { dndMethods } from './motiv/dnd.js';
 import { bandMethods } from './motiv/band.js';
+import { consistencyMethods } from './motiv/consistency.js';
 
 export const motivMethods = {
   ...lifecycleMethods,
@@ -18,4 +19,5 @@ export const motivMethods = {
   ...brainstormMethods,
   ...dndMethods,
   ...bandMethods,
+  ...consistencyMethods,
 };

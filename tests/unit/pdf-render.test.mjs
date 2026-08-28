@@ -15,6 +15,7 @@ process.env.DB_PATH = path.join('/tmp', `pdfx-render-test-${process.pid}-${Date.
 await import('../../db/schema.js');
 const { renderPdfBuffer } = await import('../../lib/pdf-render.js');
 const { defaultConfig } = await import('../../lib/pdf-export-defaults.js');
+const { tocEntryVisible } = await import('../../lib/pdf-render/pages.js');
 
 const para = '<p>' + 'Es war einmal ein König. '.repeat(10) + '</p>';
 const html = '<h1>Vorgeschichte</h1>' + para.repeat(2);
@@ -782,4 +783,161 @@ test('Anmerkungsmodus: Notenziffer im Text, Notenliste hinter dem Kapitel', asyn
   // steht die Vollform zweimal im Dokument (einmal je Kapitel).
   assert.ok(text.includes('Ebd.'), `Wiederholungs-Kurzform fehlt: ${text.slice(0, 600)}`);
   assert.ok(text.split('Die Verwandlung').length - 1 >= 2, 'Erstnennung muss pro Kapitel voll stehen');
+});
+
+// ── Seite als Strukturelement ────────────────────────────────────────────────
+// Die BookStack-Seite traegt im Default eine eigene Ueberschrift (h4, vierte
+// Stufe unter den drei Kapitelebenen), einen eigenen Seitenumbruch und einen
+// eigenen Verzeichnis-Eintrag. Pendant im Word-Export:
+// tests/unit/docx-export.test.mjs.
+
+// Outline-Titel liegen als unkomprimierte ASCII-Literal-Strings im PDF (siehe
+// die Verzeichnis-Tests weiter oben) — darum sind sie zaehlbar.
+function occurrences(buf, needle) {
+  return buf.toString('binary').split(needle).length - 1;
+}
+
+function structCfg(over = {}) {
+  const cfg = parityOff(defaultConfig());
+  cfg.cover.enabled = false;
+  cfg.toc.enabled = false;
+  Object.assign(cfg.chapter, over);
+  return cfg;
+}
+
+const oneShortPage = '<p>Kurzer Absatz.</p>';
+
+test('nested: einseitiges Kapitel bekommt trotzdem einen eigenen Seitentitel', async () => {
+  const groups = [{ chapter: { id: 7, name: 'Anhang' }, pages: [
+    { p: { id: 70, name: 'Danksagung' }, pd: { html: oneShortPage } },
+  ]}];
+  const nested = await renderPdfBuffer({
+    book: baseBook, groups, profile: { config: structCfg({ pageStructure: 'nested' }) },
+    coverBuf: null, token: null, scope: 'book',
+  });
+  const flat = await renderPdfBuffer({
+    book: baseBook, groups, profile: { config: structCfg({ pageStructure: 'flatten' }) },
+    coverBuf: null, token: null, scope: 'book',
+  });
+  // Kein `pages.length > 1`-Vorbehalt mehr: der Seitentitel steht als
+  // Lesezeichen im Dokument, im flatten-Modus nicht.
+  assert.ok(occurrences(nested, 'Danksagung') > 0, 'Seitentitel fehlt als Outline-Eintrag');
+  assert.equal(occurrences(flat, 'Danksagung'), 0);
+});
+
+test('nested: Seitenname gleich Kapitelname → keine doppelte Ueberschrift', async () => {
+  const groups = [{ chapter: { id: 8, name: 'Nachwort' }, pages: [
+    { p: { id: 80, name: 'Nachwort' }, pd: { html: oneShortPage } },
+  ]}];
+  const buf = await renderPdfBuffer({
+    book: baseBook, groups, profile: { config: structCfg({ pageStructure: 'nested' }) },
+    coverBuf: null, token: null, scope: 'book',
+  });
+  // Genau ein Lesezeichen — der Kapiteltitel. Der gleichnamige Seitentitel
+  // stuende unmittelbar darunter und wird unterdrueckt.
+  assert.equal(occurrences(buf, 'Nachwort'), 1);
+});
+
+test('pageBreakBetweenPages: jede Folgeseite beginnt auf einer neuen PDF-Seite', async () => {
+  const groups = [{ chapter: { id: 9, name: 'Eins' }, pages: [
+    { p: { id: 91, name: 'A' }, pd: { html: oneShortPage } },
+    { p: { id: 92, name: 'B' }, pd: { html: oneShortPage } },
+    { p: { id: 93, name: 'C' }, pd: { html: oneShortPage } },
+  ]}];
+  const withBreak = await renderPdfBuffer({
+    book: baseBook, groups, profile: { config: structCfg({ pageStructure: 'nested', pageBreakBetweenPages: true }) },
+    coverBuf: null, token: null, scope: 'book',
+  });
+  const noBreak = await renderPdfBuffer({
+    book: baseBook, groups, profile: { config: structCfg({ pageStructure: 'nested', pageBreakBetweenPages: false }) },
+    coverBuf: null, token: null, scope: 'book',
+  });
+  // Zwei Folgeseiten → zwei zusaetzliche PDF-Seiten.
+  assert.equal(pageCount(withBreak), pageCount(noBreak) + 2);
+});
+
+test('TOC: includePages listet die Seiten und ist getrennt von toc.depth abschaltbar', async () => {
+  // Genug Seiten, damit die zusaetzlichen Verzeichnis-Zeilen eine weitere
+  // TOC-Seite fuellen — der Body ist in beiden Laeufen identisch, das
+  // Seiten-Delta stammt also allein aus dem Verzeichnis.
+  const pages = Array.from({ length: 40 }, (_, i) => ({
+    p: { id: 200 + i, name: `Seite ${i + 1}` }, pd: { html: oneShortPage },
+  }));
+  const groups = [{ chapter: { id: 11, name: 'Eins' }, pages }];
+  const cfgFor = (includePages) => {
+    const cfg = structCfg({ pageStructure: 'nested', pageBreakBetweenPages: false });
+    cfg.toc.enabled = true;
+    cfg.toc.includePages = includePages;
+    return cfg;
+  };
+  const withPages = await renderPdfBuffer({
+    book: baseBook, groups, profile: { config: cfgFor(true) }, coverBuf: null, token: null, scope: 'book',
+  });
+  const withoutPages = await renderPdfBuffer({
+    book: baseBook, groups, profile: { config: cfgFor(false) }, coverBuf: null, token: null, scope: 'book',
+  });
+  assert.ok(pageCount(withPages) > pageCount(withoutPages),
+    'Verzeichnis mit Seiten-Eintraegen muss mehr Platz brauchen');
+});
+
+test('tocEntryVisible: Kapitel haengen an toc.depth, Seiten an includePages', () => {
+  const chapter = (level) => ({ level });
+  const page = (parentLevel) => ({ isPage: true, level: parentLevel + 1, parentLevel });
+
+  // Kapitelebenen: depth schneidet ab.
+  assert.equal(tocEntryVisible(chapter(0), { depth: 1, includePages: true }), true);
+  assert.equal(tocEntryVisible(chapter(1), { depth: 1, includePages: true }), false);
+  assert.equal(tocEntryVisible(chapter(2), { depth: 3, includePages: true }), true);
+
+  // Seiten: eigene Achse — eine Seite im Sub-Sub-Kapitel (Einrueckungsebene 3)
+  // bleibt sichtbar, obwohl sie jede erlaubte Kapiteltiefe ueberschreitet.
+  assert.equal(tocEntryVisible(page(2), { depth: 3, includePages: true }), true);
+  assert.equal(tocEntryVisible(page(0), { depth: 3, includePages: false }), false);
+
+  // ... aber nie ohne ihr Kapitel: wird das Sub-Kapitel weggeschnitten, faellt
+  // seine Seite mit.
+  assert.equal(tocEntryVisible(page(1), { depth: 1, includePages: true }), false);
+  assert.equal(tocEntryVisible(page(0), { depth: 1, includePages: true }), true);
+});
+
+test('Autoren-Ueberschrift im Seitentext laeuft auf h5/h6, nicht auf der Kapitelskala', async () => {
+  // Der Content-Stream ist komprimiert, die Font-Groesse also nicht direkt
+  // lesbar. Gemessen wird stattdessen der PLATZ: 20 Autoren-Ueberschriften auf
+  // 60 pt brauchen deutlich mehr Seiten als auf 8 pt. Verglichen wird jeweils
+  // derselbe Modus mit nur EINEM geaenderten Wert — so isoliert der Test die
+  // Verdrahtung und nicht den Modus-Unterschied.
+  const html = '<h1>Ueberschrift</h1><p>Text.</p>'.repeat(20);
+  const groups = [{ chapter: { id: 31, name: 'Kap' }, pages: [
+    { p: { id: 310, name: 'Beitrag' }, pd: { html } },
+  ]}];
+  const pagesFor = async (pageStructure, sizes) => {
+    const cfg = structCfg({ pageStructure });
+    Object.assign(cfg.font.heading.sizes, sizes);
+    const buf = await renderPdfBuffer({
+      book: baseBook, groups, profile: { config: cfg }, coverBuf: null, token: null, scope: 'book',
+    });
+    return pageCount(buf);
+  };
+
+  // nested: der Beitrag hat einen gezeichneten Seitentitel → h5 regiert die
+  // Autoren-Ueberschriften. Wird h5 gross, wird das Dokument dicker.
+  const nestedSmall = await pagesFor('nested', { h1: 60, h5: 8, h6: 8 });
+  const nestedBig   = await pagesFor('nested', { h1: 60, h5: 44, h6: 44 });
+  assert.ok(nestedBig > nestedSmall,
+    `h5 muss im nested-Modus wirken (klein=${nestedSmall}, gross=${nestedBig})`);
+
+  // Der Gegenprobe-Weg laeuft ueber h5, nicht ueber h1: h1 setzt zugleich den
+  // KAPITELTITEL und veraendert die Seitenzahl darum auch dann, wenn die
+  // Autoren-Ueberschrift ihn ignoriert. Die Aussage „h1 regiert hier nicht"
+  // wird deshalb unten im flatten-Zweig von der anderen Seite geprueft.
+
+  // flatten: kein Seitentitel davor → die Autoren-Ueberschrift ist die oberste
+  // Marke im Fluss und haengt an h1, nicht an h5.
+  const flatSmall = await pagesFor('flatten', { h1: 12, h5: 8, h6: 8 });
+  const flatBig   = await pagesFor('flatten', { h1: 60, h5: 8, h6: 8 });
+  assert.ok(flatBig > flatSmall,
+    `h1 muss im flatten-Modus wirken (klein=${flatSmall}, gross=${flatBig})`);
+  const flatBigH5 = await pagesFor('flatten', { h1: 12, h5: 44, h6: 44 });
+  assert.equal(flatSmall, flatBigH5,
+    `h5 darf im flatten-Modus nicht wirken (${flatSmall} vs ${flatBigH5})`);
 });

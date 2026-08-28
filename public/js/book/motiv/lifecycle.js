@@ -29,6 +29,11 @@ export const lifecycleMethods = {
       this._memos = {};
       // Persistierte KI-Brainstorm-Läufe (Historie) mitladen.
       this.loadBrainstormRuns();
+      // Konsistenz-Befunde mitziehen (deterministisch + billig, kein KI-Lauf) —
+      // so trägt der Reiter seine Zahl, ohne dass man ihn erst öffnen muss.
+      this.loadMotifChecks();
+      // Persistierte KI-Prüfungs-Läufe (Historie) mitladen.
+      this.loadConsistencyRuns();
       // Figuren fürs Figuren-Layer + Verknüpfungs-Combobox bereitstellen.
       if (!this.$store.catalog.figuren?.length) window.__app.loadFiguren(bookId);
       this.$nextTick(() => this.renderMotivGraph());
@@ -53,6 +58,13 @@ export const lifecycleMethods = {
     this.selectedMotifId = null;
     this.selectedThemeId = null;
     this.motivView = 'graph';
+    this.checks = [];
+    this.checksScanned = true;
+    this.selectedCheckIdx = null;
+    this.consistencyResult = null;
+    this.consistencyRuns = [];
+    this.selectedConsistencyRunId = null;
+    this.selectedKonfliktIdx = null;
     this.occurrences = [];
     this.editThemeName = '';
     this.editThemeBeschreibung = '';

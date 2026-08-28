@@ -28,6 +28,9 @@
 //   appName         — App-Name (/config → app_settings.app.name); <title>, Header,
 //                   Locale-Platzhalter `{appName}`.
 //   appVersion      — App-Version (/config → VERSION); Anzeige in den UserSettings.
+//   changelogLatest — neueste Version mit Release-Notizen (/config → changelog/).
+//   changelogSeen   — vom User zuletzt quittierter Changelog-Stand ('' = nie).
+//                   changelogLatest > changelogSeen ⇒ Neu-Punkt am Hilfe-Knopf.
 //   isMac           — Plattform-Detect für Tasten-Hints (⌘ vs. Ctrl).
 //   promptConfig    — Prompt-Config-Rohdaten (/config); Quelle für configurePrompts().
 
@@ -43,6 +46,8 @@ export function registerShellStore() {
     appTimezone: 'Europe/Zurich',
     appName: 'Schreibwerkstatt',
     appVersion: '',
+    changelogLatest: '',
+    changelogSeen: '',
     isMac: false,
     promptConfig: {},
   });

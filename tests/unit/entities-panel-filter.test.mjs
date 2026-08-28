@@ -1,8 +1,12 @@
 // Unit-Tests fuer Entity-Linking-Panel-Selektoren.
 //
-// selectScenesForView / selectEventsForView teilen Eintraege in
+// selectEventsForView teilt Eintraege in
 //   - onPage: gleiche page_id
 //   - inChapter: gleiche chapter_id UND page_id leer
+// selectScenesForView hat einen dritten Topf
+//   - inChapterOtherPage: gleiche chapter_id, aber an eine ANDERE Seite gebunden
+// Ohne den faellt jede seitengebundene Szene des Kapitels aus beiden Listen und
+// das Referenz-Panel verschweigt sie.
 // Sortierung deterministisch.
 
 import { test } from 'node:test';
@@ -14,7 +18,7 @@ const { selectScenesForView, selectEventsForView } = await import('../../public/
 
 test('selectScenesForView: leere Liste', () => {
   const out = selectScenesForView([], 1, 10);
-  assert.deepEqual(out, { onPage: [], inChapter: [] });
+  assert.deepEqual(out, { onPage: [], inChapter: [], inChapterOtherPage: [] });
 });
 
 test('selectScenesForView: trennt page-gebundene von kapitel-gebundenen Szenen', () => {
@@ -28,6 +32,36 @@ test('selectScenesForView: trennt page-gebundene von kapitel-gebundenen Szenen',
   const out = selectScenesForView(scenes, 7, 10);
   assert.deepEqual(out.onPage.map(s => s.id), [2, 1], 'onPage sortiert nach sort_order');
   assert.deepEqual(out.inChapter.map(s => s.id), [3], 'inChapter nur same chapter UND page_id leer');
+  assert.deepEqual(out.inChapterOtherPage.map(s => s.id), [4],
+    'inChapterOtherPage: same chapter, andere Seite — faellt sonst durch');
+  // Kein Eintrag darf in zwei Toepfen stehen.
+  const ids = [...out.onPage, ...out.inChapter, ...out.inChapterOtherPage].map(s => s.id);
+  assert.equal(new Set(ids).size, ids.length, 'Toepfe sind disjunkt');
+  assert.ok(!ids.includes(5), 'fremdes Kapitel bleibt draussen');
+});
+
+test('selectScenesForView: chapter_id null → auch kein inChapterOtherPage', () => {
+  const scenes = [{ id: 1, page_id: 8, chapter_id: 10, titel: 'A' }];
+  assert.deepEqual(selectScenesForView(scenes, 7, null).inChapterOtherPage, []);
+});
+
+test('selectScenesForView: leere page_id zaehlt als ungebunden, nicht als andere Seite', () => {
+  const scenes = [
+    { id: 1, page_id: '', chapter_id: 10, titel: 'A' },
+    { id: 2, page_id: 9, chapter_id: 10, titel: 'B' },
+  ];
+  const out = selectScenesForView(scenes, 7, 10);
+  assert.deepEqual(out.inChapter.map(s => s.id), [1]);
+  assert.deepEqual(out.inChapterOtherPage.map(s => s.id), [2]);
+});
+
+test('selectScenesForView: inChapterOtherPage sortiert nach sort_order', () => {
+  const scenes = [
+    { id: 1, page_id: 8, chapter_id: 10, sort_order: 2 },
+    { id: 2, page_id: 9, chapter_id: 10, sort_order: 1 },
+  ];
+  const out = selectScenesForView(scenes, 7, 10);
+  assert.deepEqual(out.inChapterOtherPage.map(s => s.id), [2, 1]);
 });
 
 test('selectScenesForView: page_id null/undefined → kein onPage', () => {

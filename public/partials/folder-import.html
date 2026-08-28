@@ -1,4 +1,5 @@
-<!-- Folder-Import: ZIP-Archiv mit Struktur YYYY/Monat/Tagesdatei. -->
+<!-- Import-Karte: Tagebuch-ZIP (YYYY/Monat/Tagesdatei), Manuskript-Dokument
+     (nach Ueberschriften-Ebenen zerlegt) oder .swbook-Bundle. -->
 <div class="card card--folderimport" id="folder-import-card" x-data="folderImportCard" x-show="$app.showFolderImportCard" x-cloak>
   <div class="card-header">
     <span class="card-title" x-text="$app.t('folderImport.title')"></span>
@@ -10,14 +11,17 @@
       <label class="folder-import-label" x-text="$app.t('folderImport.kindLabel')"></label>
       <div x-data="radioGroup()" x-modelable="value" x-model="importKind"
            x-effect="options = [
-             { value: 'diary',  label: $app.t('folderImport.kind.diary') },
-             { value: 'swbook', label: $app.t('folderImport.kind.swbook') }
-           ]"></div>
+             { value: 'diary',      label: $app.t('folderImport.kind.diary') },
+             { value: 'manuscript', label: $app.t('folderImport.kind.manuscript') },
+             { value: 'swbook',     label: $app.t('folderImport.kind.swbook') }
+           ]"
+           @radio-change="file = null; fileName = ''; fileSize = 0; preview = null; errorMessage = ''"></div>
     </div>
 
     <div class="folder-import-merge-info" x-show="importKind === 'swbook'" x-text="$app.t('folderImport.swbookHint')"></div>
+    <div class="folder-import-merge-info" x-show="importKind === 'manuscript'" x-text="$app.t('folderImport.manuscript.hint')"></div>
 
-    <div class="folder-import-row" x-show="importKind === 'diary'">
+    <div class="folder-import-row" x-show="importKind !== 'swbook'">
       <label class="folder-import-label" x-text="$app.t('folderImport.modeLabel')"></label>
       <div x-data="radioGroup()" x-modelable="value" x-model="mode"
            x-effect="options = [
@@ -39,20 +43,25 @@
       </div>
     </div>
 
-    <div class="folder-import-row" x-show="importKind === 'diary' && mode === 'new-book'">
+    <div class="folder-import-row" x-show="importKind !== 'swbook' && mode === 'new-book'">
       <label class="folder-import-label" x-text="$app.t('folderImport.bookName')"></label>
       <input type="text" class="folder-import-input" x-model="bookName"
              :placeholder="$app.t('folderImport.bookNamePlaceholder')">
     </div>
 
-    <div class="folder-import-merge-info" x-show="importKind === 'diary' && mode === 'merge'" x-text="$app.t('folderImport.mergeInto', { name: $app.selectedBookName || '' })"></div>
+    <div class="folder-import-merge-info" x-show="importKind !== 'swbook' && mode === 'merge'" x-text="$app.t('folderImport.mergeInto', { name: $app.selectedBookName || '' })"></div>
+
+    <!-- @include folder-import-manuscript -->
 
     <div class="folder-import-drop"
          :class="{ 'has-file': !!file }"
-         x-data="fileDrop({ accept: () => importKind === 'swbook' ? '.swbook,.zip,application/zip' : '.zip,application/zip' })"
+         x-data="fileDrop({ accept: () => importKind === 'swbook' ? '.swbook,.zip,application/zip'
+                                        : importKind === 'manuscript' ? '.docx,.doc,.odt,.abw'
+                                        : '.zip,application/zip' })"
          @file-drop="setFile($event.detail.file)">
       <div class="folder-import-drop-label">
-        <div class="folder-import-drop-text" x-show="!file" x-text="$app.t('folderImport.dropZone')"></div>
+        <div class="folder-import-drop-text" x-show="!file"
+             x-text="$app.t(importKind === 'manuscript' ? 'folderImport.manuscript.dropZone' : 'folderImport.dropZone')"></div>
         <div class="folder-import-drop-file" x-show="file">
           <strong x-text="fileName"></strong>
           <span class="folder-import-size" x-text="(fileSize / 1024 / 1024).toFixed(1) + ' MB'"></span>
@@ -99,15 +108,32 @@
       <li x-show="result?.extras?.chats"
           x-text="$app.t('folderImport.result.chats', { sessions: result?.extras?.chats?.sessions || 0, messages: result?.extras?.chats?.messages || 0 })"></li>
     </ul>
+    <div class="folder-import-hint" x-show="result?.headingMap"
+         x-text="$app.t('folderImport.result.headingMap', { map: result?.headingMap || '' })"></div>
+    <div x-data="collapsible()" x-show="(result?.outline?.length || 0) > 0" class="folder-import-outline-block">
+      <button type="button" class="collapsible-toggle" x-bind="trigger">
+        <span class="history-chevron" x-bind="chevron" aria-hidden="true"></span>
+        <span x-text="$app.t('folderImport.manuscript.outlineDetails')"></span>
+      </button>
+      <ul class="folder-import-outline" x-bind="panel" x-cloak>
+        <template x-for="(node, idx) in resultOutlineFlat" :key="idx">
+          <li :class="'folder-import-outline-item is-' + node.type" :style="{ '--outline-depth': node.depth }">
+            <span class="folder-import-outline-name" x-text="node.name"></span>
+            <span class="folder-import-outline-meta" x-show="node.type === 'page'"
+                  x-text="$app.t('folderImport.manuscript.pageChars', { n: node.chars || 0 })"></span>
+          </li>
+        </template>
+      </ul>
+    </div>
     <div x-data="collapsible()" x-show="(result?.skipped?.length || 0) > 0" class="folder-import-skipped-block">
       <button type="button" class="collapsible-toggle" x-bind="trigger">
         <span class="history-chevron" x-bind="chevron" aria-hidden="true"></span>
         <span x-text="$app.t('folderImport.result.skippedDetails')"></span>
       </button>
       <ul class="folder-import-skipped" x-bind="panel" x-cloak>
-        <template x-for="s in (result?.skipped || [])" :key="s.path">
+        <template x-for="(s, idx) in (result?.skipped || [])" :key="idx">
           <li>
-            <code x-text="s.path"></code>
+            <code x-text="s.path || s.name || ''"></code>
             <span x-text="' — ' + s.reason"></span>
           </li>
         </template>

@@ -53,8 +53,26 @@ export function registerMotivCard() {
     editBeats: [],
     editChapters: [],
     editPages: [],
-    // Ansicht: Konstellation (Graph) oder Kapitel-Verlaufsband (Heatmap Motiv × Kapitel)
+    // Ansicht: Konstellation (Graph), Kapitel-Verlaufsband (Heatmap Motiv × Kapitel)
+    // oder Konsistenz-Befunde (deterministische Messung der Motiv-Kanten)
     motivView: 'graph',
+    // Konsistenz-Befunde (GET /motifs/consistency — Messung, kein KI-Lauf).
+    // checksScanned=false heisst: der Ist-Index ist leer, es wurde also nicht
+    // gemessen — nicht „alles in Ordnung".
+    checks: [],
+    checksScanned: true,
+    checksLoading: false,
+    selectedCheckIdx: null,
+    // KI-Urteil (Job `motif-consistency`) — zweite Schicht neben der Messung.
+    // consistencyResult ist transient (frischer Lauf ODER wieder geöffneter
+    // Lauf aus der Historie), consistencyRuns die persistierte Liste.
+    consistencyRunning: false,
+    consistencyProgress: 0,
+    consistencyResult: null,
+    consistencyRuns: [],
+    selectedConsistencyRunId: null,
+    selectedKonfliktIdx: null,
+    motivConsistencyJobId: null,
     // Graph-Layer
     layerFigures: false,
     layerBeats: false,
@@ -108,6 +126,7 @@ export function registerMotivCard() {
     _themeObserver: null,
     _scanPollTimer: null,
     _brainstormPollTimer: null,
+    _consistencyPollTimer: null,
     _embedPollTimer: null,
     _layoutSaveTimer: null,
     // Persistiertes Knoten-Layout (node_id → {x,y}); aus loadBoard, beim Ziehen gespeichert.
@@ -131,7 +150,7 @@ export function registerMotivCard() {
       this._lifecycle = setupCardLifecycle(this, {
         name: 'motiv',
         showFlag: 'showMotivCard',
-        timerKeys: ['_scanPollTimer', '_brainstormPollTimer', '_embedPollTimer', '_layoutSaveTimer'],
+        timerKeys: ['_scanPollTimer', '_brainstormPollTimer', '_consistencyPollTimer', '_embedPollTimer', '_layoutSaveTimer'],
         onShow: () => this.loadBoard(),
         onBookChanged: () => {
           this.resetMotiv();

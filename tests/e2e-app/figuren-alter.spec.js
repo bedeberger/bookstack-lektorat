@@ -59,13 +59,13 @@ test('alterstabelle: Reiter rendert, Filter greifen, Belege klappen auf', async 
           name: A_NAME,
           alter_von: 12, alter_bis: 19,
           bezugsjahr_von: 1912, bezugsjahr_bis: 1919,
-          geburtsjahr: 1900, geburtsjahr_quelle: 'kuratiert',
+          geburtsjahr: 1900, gerechnet: 25, geburtsjahr_quelle: 'kuratiert',
           quelle: 'text', konfidenz: 0.7,
           widerspruch: [{ typ: 'rechnung', a: 19, b: 25 }],
           begruendung: null,
           scanned_at: '2026-01-02T03:04:05.000Z',
           belege: [
-            { art: 'alter', wert: 12, bezugsjahr: 1912, zitat: 'sie war zwölf Jahre alt', page_id: null, page_name: 'Seite Eins', chapter_id: null, chapter_name: 'Kapitel Eins', unsicher: false, begruendung: null },
+            { art: 'alter', wert: 12, bezugsjahr: 1912, zitat: 'sie war zwölf Jahre alt', page_id: 1, page_name: 'Seite Eins', chapter_id: null, chapter_name: 'Kapitel Eins', unsicher: false, begruendung: null },
             { art: 'alter', wert: 19, bezugsjahr: 1919, zitat: 'die neunzehnjährige Anna', page_id: null, page_name: 'Seite Zwei', chapter_id: null, chapter_name: 'Kapitel Zwei', unsicher: true, begruendung: null },
           ],
         }],
@@ -98,14 +98,26 @@ test('alterstabelle: Reiter rendert, Filter greifen, Belege klappen auf', async 
   // Spanne als Spanne, nicht als Einzelwert; Widerspruch als „prüfen"-Plakette.
   await expect(rowA.locator('.figur-alter-age')).toHaveText('12–19');
   await expect(rowA.locator('.tag--stale')).toHaveText('prüfen');
-  // Bert hat nichts — die Tabelle behauptet dort kein Alter.
+  // Bert hat nichts — die Tabelle behauptet dort kein Alter, und ohne Alter auch
+  // kein Bezugsjahr (`jahr_im_roman` faellt sonst aufs Buchende zurueck).
   await expect(rowB.locator('.figur-alter-age')).toHaveText('unbekannt');
+  // Der gerechnete Wert stammt aus dem Index (Spalte `gerechnet`), nicht aus dem
+  // Katalog-Feld `alter_im_roman` — der Server kennt dort auch ein nur im Text
+  // gefundenes Geburtsjahr.
+  await expect(rowA.locator('td').nth(4)).toHaveText('25');
 
   // Belege aufklappen: zwei Fundstellen, die zweite als unsicher markiert.
   await expect(rowA.locator('.figur-alter-belege-row')).toBeHidden();
   await rowA.locator('tr.figur-alter-row').click();
   await expect(rowA.locator('.figur-alter-beleg')).toHaveCount(2);
   await expect(rowA.locator('.figur-alter-zitat').first()).toContainText('zwölf Jahre alt');
+  // Beleg MIT Seite bekommt ein Sprungziel, der ohne bleibt ohne — beide Zweige.
+  // Auf Sichtbarkeit pruefen, nicht auf Anzahl: `x-show` laesst den versteckten
+  // Knoten im DOM stehen, `toHaveCount` zaehlt ihn mit.
+  const orte = rowA.locator('.figur-alter-beleg-ort');
+  await expect(orte.first()).toBeVisible();
+  await expect(orte.first()).toHaveText('Kapitel Eins › Seite Eins');
+  await expect(orte.nth(1)).toBeHidden();
 
   // Filter „nur mit Alter" (zweite Combobox) blendet Bert aus.
   const boxes = card.locator('.figur-alter .filter-bar .combobox-wrap');

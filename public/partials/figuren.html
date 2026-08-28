@@ -44,12 +44,13 @@
       <button type="button" class="tabs-btn" :class="{ 'tabs-btn--active': figurenGraphModus === 'soziogramm' }" @click="setFigurenGraphModus('soziogramm')" x-text="$app.t('figuren.modeSoziogramm')"></button>
       <button type="button" class="tabs-btn" :class="{ 'tabs-btn--active': figurenGraphModus === 'praesenz' }" @click="setFigurenGraphModus('praesenz')" x-text="$app.t('figuren.modePraesenz')"></button>
       <button type="button" class="tabs-btn" :class="{ 'tabs-btn--active': figurenGraphModus === 'alter' }" @click="setFigurenGraphModus('alter')" x-text="$app.t('figuren.modeAlter')"></button>
+      <button type="button" class="tabs-btn" :class="{ 'tabs-btn--active': figurenGraphModus === 'lebenslauf' }" @click="setFigurenGraphModus('lebenslauf')" x-text="$app.t('figuren.modeLebenslauf')"></button>
     </div>
 
     <!-- Graph-Legende (klappbar) — nested Partial im figurenCard-Scope -->
     <div id="partial-figuren-graph-legend"></div>
 
-    <div class="figuren-graph-wrap" x-show="figurenGraphModus !== 'praesenz' && figurenGraphModus !== 'alter'" :class="{ 'is-fullscreen': figurenGraphFullscreen }" @keydown.escape.window="figurenGraphFullscreen && toggleFigurenGraphFullscreen()">
+    <div class="figuren-graph-wrap" x-show="!['praesenz', 'alter', 'lebenslauf'].includes(figurenGraphModus)" :class="{ 'is-fullscreen': figurenGraphFullscreen }" @keydown.escape.window="figurenGraphFullscreen && toggleFigurenGraphFullscreen()">
       <div class="figuren-graph-toolbar">
         <!-- Kapitel-Filter (alle Graph-Modi) -->
         <div x-show="figurenKapitelListe().length > 0" class="figuren-graph-filter">
@@ -75,6 +76,9 @@
 
     <!-- Alterstabelle-Tab (Figuren × Alter, filterbar) — nested Partial im figurenCard-Scope -->
     <div id="partial-figuren-alter"></div>
+
+    <!-- Lebenslauf-Tab (Lebensphasen × Figuren als Matrix) — nested Partial im figurenCard-Scope -->
+    <div id="partial-figuren-lebenslauf"></div>
   </div>
 
 

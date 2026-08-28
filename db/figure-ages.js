@@ -19,11 +19,11 @@ const _stmtDelBelege = db.prepare('DELETE FROM figure_age_belege WHERE book_id =
 const _stmtInsAge = db.prepare(`
   INSERT INTO figure_ages (
     figure_id, book_id, alter_von, alter_bis, bezugsjahr_von, bezugsjahr_bis,
-    geburtsjahr, geburtsjahr_quelle, quelle, konfidenz, widerspruch_json,
+    geburtsjahr, gerechnet, geburtsjahr_quelle, quelle, konfidenz, widerspruch_json,
     begruendung, scanned_at
   ) VALUES (
     @figure_id, @book_id, @alter_von, @alter_bis, @bezugsjahr_von, @bezugsjahr_bis,
-    @geburtsjahr, @geburtsjahr_quelle, @quelle, @konfidenz, @widerspruch_json,
+    @geburtsjahr, @gerechnet, @geburtsjahr_quelle, @quelle, @konfidenz, @widerspruch_json,
     @begruendung, ${NOW_ISO_SQL}
   )
 `);
@@ -94,6 +94,7 @@ const replaceFigureAges = db.transaction((bookId, userEmail, { rows = [], scan =
       bezugsjahr_von: _num(r.bezugsjahr_von),
       bezugsjahr_bis: _num(r.bezugsjahr_bis),
       geburtsjahr: _num(r.geburtsjahr),
+      gerechnet: _num(r.gerechnet),
       geburtsjahr_quelle: r.geburtsjahr_quelle || null,
       quelle: r.quelle || null,
       konfidenz: Number.isFinite(Number(r.konfidenz)) ? Number(r.konfidenz) : 0,
@@ -183,6 +184,7 @@ function listFigureAges(bookId, userEmail) {
     bezugsjahr_von: r.bezugsjahr_von,
     bezugsjahr_bis: r.bezugsjahr_bis,
     geburtsjahr: r.geburtsjahr,
+    gerechnet: r.gerechnet,
     geburtsjahr_quelle: r.geburtsjahr_quelle,
     quelle: r.quelle,
     konfidenz: r.konfidenz,

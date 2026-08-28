@@ -11183,6 +11183,7 @@ function _runMigrationsLocked() {
         bezugsjahr_von     INTEGER,
         bezugsjahr_bis     INTEGER,
         geburtsjahr        INTEGER,
+        gerechnet          INTEGER,
         geburtsjahr_quelle TEXT    CHECK(geburtsjahr_quelle IN ('kuratiert','text','zeitstrahl') OR geburtsjahr_quelle IS NULL),
         quelle             TEXT    CHECK(quelle IN ('text','geburtsjahr','zeitstrahl') OR quelle IS NULL),
         konfidenz          REAL    NOT NULL DEFAULT 0,
@@ -11242,6 +11243,102 @@ function _runMigrationsLocked() {
     }
     db.prepare('UPDATE schema_version SET version = 276').run();
     logger.info('DB-Migration auf Version 276 abgeschlossen (figure_ages/figure_age_belege/figure_age_scans).');
+  }
+
+  if (version < 277) {
+    // Buecherregal (Karte „Meine Buecher"): die PERSOENLICHE Ordnungsschicht auf
+    // dem Buchbestand — Anheften und Archivieren. Beides ist eine Aussage des
+    // Betrachters ueber seine eigene Ansicht, nicht ueber das Werk: wer an einem
+    // fremden Buch als Lektor mitarbeitet, darf es aus seiner Liste raeumen, ohne
+    // es dem Autor wegzunehmen. Darum (book_id, user_email) und nicht eine Spalte
+    // an `books`.
+    //
+    // Bewusst NICHT hier: „fertig". Das ist `book_settings.is_finished` und gilt
+    // buchweit, weil es in die Prompts geht (das Modell muss wissen, ob es einen
+    // abgeschlossenen Text vor sich hat). Ein zweiter Fertig-Schalter pro User
+    // wuerde genau diese Aussage zerteilen. Die Karte schreibt deshalb den
+    // bestehenden Schalter statt eines eigenen.
+    //
+    // Getrennt von `book_access` (der ACL-Bruecke mit derselben Schluessel-Form):
+    // dort haengen Rechte, hier Ansicht. Ein Pin-Klick soll keinen UPDATE-Pfad in
+    // die Tabelle legen, die den Zugriff entscheidet.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS book_shelf (
+        book_id     INTEGER NOT NULL REFERENCES books(book_id)   ON DELETE CASCADE,
+        user_email  TEXT    NOT NULL REFERENCES app_users(email) ON DELETE CASCADE,
+        pinned_at   TEXT,
+        archived_at TEXT,
+        updated_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        PRIMARY KEY (book_id, user_email)
+      )
+    `);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_book_shelf_user ON book_shelf(user_email)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_book_shelf_book ON book_shelf(book_id)');
+
+    const fkErrors277 = db.pragma('foreign_key_check');
+    if (fkErrors277.length) {
+      throw new Error(`Migration 277: foreign_key_check meldet ${fkErrors277.length} Verstoesse.`);
+    }
+    db.prepare('UPDATE schema_version SET version = 277').run();
+    logger.info('DB-Migration auf Version 277 abgeschlossen (book_shelf).');
+  }
+
+  if (version < 278) {
+    // Neuigkeiten-Reiter (Hilfe-Karte): zuletzt vom User gesehene App-Version.
+    // Solange sie hinter der neuesten Changelog-Version liegt, traegt der
+    // Hilfe-Knopf einen Achtungs-Punkt; das Oeffnen des Reiters quittiert.
+    //
+    // Spalte an `app_users` statt localStorage, damit der Punkt nicht auf jedem
+    // Geraet und nach jedem Leeren der Browserdaten erneut kommt — er soll genau
+    // einmal pro Release erscheinen, nicht pro Browserprofil.
+    //
+    // Bewusst KEIN Eintrag in `onboarding_state`: das ist der Fortschritt der
+    // Erste-Schritte-Checkliste, ein einmaliger Vorgang. Der Changelog-Stand
+    // wandert bei jedem Release weiter — zwei Lebenszyklen in einem JSON-Blob
+    // machen den Reset des einen zum Unfall fuer den anderen.
+    const auCols278 = db.pragma('table_info(app_users)').map(c => c.name);
+    if (!auCols278.includes('changelog_seen_version')) {
+      db.exec('ALTER TABLE app_users ADD COLUMN changelog_seen_version TEXT');
+    }
+
+    const fkErrors278 = db.pragma('foreign_key_check');
+    if (fkErrors278.length) {
+      throw new Error(`Migration 278: foreign_key_check meldet ${fkErrors278.length} Verstoesse.`);
+    }
+    db.prepare('UPDATE schema_version SET version = 278').run();
+    logger.info('DB-Migration auf Version 278 abgeschlossen (app_users.changelog_seen_version).');
+  }
+
+  if (version < 279) {
+    // Motiv-Konsistenz: Lauf-Historie des KI-Checks (Job `motif-consistency`).
+    // Spiegel von `plot_consistency_runs` — buchweit + pro User, `result_json`
+    // haelt Befunde + Fazit, `konflikt_count` denormalisiert fuers Listen-Rendering
+    // (die Liste kommt ohne result_json).
+    //
+    // Nur die KI-Schicht wird historisiert. Die deterministischen Befunde
+    // (lib/motif-consistency.js) sind eine MESSUNG auf dem aktuellen Stand und
+    // werden bei jedem Board-Load neu gerechnet — sie zu persistieren hiesse, eine
+    // Momentaufnahme neben ihrer eigenen Quelle zu fuehren.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS motif_consistency_runs (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id        INTEGER NOT NULL REFERENCES books(book_id) ON DELETE CASCADE,
+        user_email     TEXT    NOT NULL,
+        created_at     TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        konflikt_count INTEGER NOT NULL DEFAULT 0,
+        result_json    TEXT    NOT NULL,
+        model          TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_motif_consistency_runs_book
+        ON motif_consistency_runs(book_id, user_email, created_at DESC);
+    `);
+
+    const fkErrors279 = db.pragma('foreign_key_check');
+    if (fkErrors279.length) {
+      throw new Error(`Migration 279: foreign_key_check meldet ${fkErrors279.length} Verstoesse.`);
+    }
+    db.prepare('UPDATE schema_version SET version = 279').run();
+    logger.info('DB-Migration auf Version 279 abgeschlossen (motif_consistency_runs).');
   }
 
   // Schutzchecks: idempotent bei jedem Start.
