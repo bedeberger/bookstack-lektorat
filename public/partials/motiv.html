@@ -123,52 +123,9 @@
 
   <!-- Kapitel-Verlaufsband: Motiv × Kapitel als Heatmap (Ist-Dichte über den
        Buchbogen). Zeigt, wo ein Motiv trägt und wo es verschwindet — die
-       Konstellation zeigt nur OB, nicht WO. Reines Lesen, nie generativ. -->
-  <div class="motiv-band-wrap" x-show="motivView === 'band'" x-cloak>
-    <div class="muted-msg muted-msg--spaced"
-         x-show="bandMotifs().length === 0 || bandChapters().length === 0"
-         x-text="$app.t('motiv.band.empty')"></div>
-    <template x-if="bandMotifs().length > 0 && bandChapters().length > 0">
-      <div class="heatmap-wrap">
-        <div class="heatmap-legend" x-text="$app.t('motiv.band.legend')"></div>
-        <div class="heatmap-scroll">
-          <table class="heatmap-table">
-            <thead>
-              <tr>
-                <th class="heatmap-rowhead" x-text="$app.t('motiv.band.motif')"></th>
-                <th class="heatmap-numcol" x-text="$app.t('motiv.band.total')"></th>
-                <template x-for="ch in bandChapters()" :key="ch.id">
-                  <th :data-tip="ch.name"><span x-text="ch.name"></span></th>
-                </template>
-              </tr>
-            </thead>
-            <tbody>
-              <template x-for="m in bandMotifs()" :key="m.id">
-                <tr>
-                  <th class="heatmap-rowhead" scope="row">
-                    <span class="heatmap-rowhead-main internal-link" @click="bandSelectMotif(m.id)">
-                      <span class="motiv-band-swatch" :style="{ background: bandMotifColor(m) }" aria-hidden="true"></span>
-                      <span x-text="m.name"></span>
-                    </span>
-                    <span class="heatmap-rowhead-sub" x-show="m.theme_id"
-                          x-text="(themeById(m.theme_id) || {}).name || ''"></span>
-                  </th>
-                  <td class="heatmap-numcol" x-text="bandRowTotal(m.id)"></td>
-                  <template x-for="ch in bandChapters()" :key="ch.id">
-                    <td class="heatmap-cell"
-                        :class="bandCellClass(bandCount(m.id, ch.id))"
-                        :style="bandCellVars(bandCount(m.id, ch.id))"
-                        :data-tip="ch.name + ' · ' + $app.t('motiv.band.hits', { n: bandCount(m.id, ch.id) })"
-                        x-text="bandCount(m.id, ch.id) || ''"></td>
-                  </template>
-                </tr>
-              </template>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </template>
-  </div>
+       Konstellation zeigt nur OB, nicht WO. Reines Lesen, nie generativ.
+       Nested Partial — HTML-Partial-LOC-Limit. -->
+  <div id="partial-motiv-band" class="motiv-band-wrap" x-show="motivView === 'band'" x-cloak></div>
 
   <!-- Konsistenz-Befunde: deterministische Messung der Motiv-Kanten gegen den
        Ist-Index (nested Partial — HTML-Partial-LOC-Limit). Kein KI-Lauf. -->

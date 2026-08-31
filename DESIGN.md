@@ -1798,7 +1798,7 @@ geteilt mit der Sidebar-Page-Suche) — nur sichtbar (`x-show`), wenn das Suchfe
 
 ## Heatmap-Visualisierung
 
-**Use:** Tabellarische Datenintensitäts-Darstellung (Stil-Heatmap, Fehler-Heatmap).
+**Use:** Tabellarische Datenintensitäts-Darstellung (Stil-Heatmap, Fehler-Heatmap, Motiv-Kapitel-Verlaufsband).
 
 **Klassen** [public/css/analysis/heatmap.css](public/css/analysis/heatmap.css):
 - `.heatmap-wrap` — Container
@@ -1811,7 +1811,7 @@ geteilt mit der Sidebar-Page-Suche) — nur sichtbar (`x-show`), wenn das Suchfe
 
 **Cluster-Header** (Fehler-Heatmap, > 10 Spalten): zweistufiger `<thead>`. Erste Zeile `.heatmap-cluster-row` rendert pro Cluster ein `<th class="heatmap-cluster-head" :colspan="N">` mit Cluster-Label (uppercase, klein, getrackt). Zweite Zeile rendert pro Typ ein `<th>` mit Typ-Label. Spalten an Cluster-Grenzen tragen `.heatmap-cluster-start` (linker Border in Typen-Reihe **und** Body) — Trennlinie zwischen Clustern. SSoT: `FEHLER_CLUSTERS`-Array in [public/js/fehler-heatmap.js](public/js/fehler-heatmap.js); Reihenfolge der Spalten = Reihenfolge im Cluster-Array. Helper `fehlerHeatmapClusterStarts` liefert die Cluster-Grenz-Indizes für die Trennlinien-Klasse.
 
-**Detail-Drawer** unter Tabelle: `.heatmap-detail` mit `.heatmap-detail-list`/`-page`/`-token-groups`.
+**Detail-Drawer** unter Tabelle: `.heatmap-detail` mit `.heatmap-detail-list`/`-page`/`-token-groups`. Klick auf eine Zelle klappt ihn auf; die Zelle trägt dann `.heatmap-cell--active`. **`--clickable` und der Klick-Handler hängen am selben Prädikat** — eine Zelle ohne auflösbaren Inhalt bekommt weder Klick-Cursor noch Tab-Stopp, sonst verspricht die Optik mehr, als der Klick einlöst. Für die Tastatur reicht `.internal-link` (globale Delegation), kein eigenes `tabindex`/`keydown` pro Zelle. Nutzer: Fehler-Heatmap (Befunde je Kapitel × Fehlertyp), Motiv-Verlaufsband (Fundstellen je Motiv × Kapitel).
 
 **Mode-Toggle innerhalb Heatmaps:** `.tabs` + `.tabs-btn` + `--active`. Identisch zur generischen Tabs-Sektion oben — kein eigenes Heatmap-Pattern, einfach `.tabs` wiederverwenden.
 

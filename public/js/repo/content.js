@@ -203,6 +203,21 @@ export const contentRepo = {
     return _write('DELETE', path, undefined, inv);
   },
 
+  // POST /content/pages/:id/revisions/:rev_id/restore — schreibt den Body der
+  // Revision zurueck. Der Restore ist selbst ein Body-Write und erzeugt darum
+  // eine neue Revision; er muss BEIDE Cache-Eintraege busten. Ohne den Bust auf
+  // `pages/:id` liefert ein spaeterer nicht-frischer Read den Stand VOR dem
+  // Restore — und der naechste Save schriebe ihn ueber den Restore zurueck
+  // (derselbe Read-Modify-Write-Hazard wie bei savePage).
+  async restoreRevision(pageId, revId) {
+    const out = await _write('POST', `pages/${pageId}/revisions/${revId}/restore`, undefined,
+      ['pages/' + pageId, 'pages/' + pageId + '/revisions']);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent(EVT.PAGE_REVISIONS_CHANGED, { detail: { pageId } }));
+    }
+    return out;
+  },
+
   // POST /content/pages/:id/move — Seite in anderes Buch verschieben.
   // body: { target_book_id, target_chapter_id? }. Invalidiert die Tree-Listings
   // BEIDER Buecher (Quelle via sourceBookId-Opt, Ziel via target_book_id).

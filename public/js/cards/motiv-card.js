@@ -56,6 +56,13 @@ export function registerMotivCard() {
     // Ansicht: Konstellation (Graph), Kapitel-Verlaufsband (Heatmap Motiv × Kapitel)
     // oder Konsistenz-Befunde (deterministische Messung der Motiv-Kanten)
     motivView: 'graph',
+    // Kapitel-Verlaufsband — aufgeklapptes Zell-Detail (`motifId:chapterId`) und
+    // die dafür geholten Fundstellen. Der Cache liegt pro Motiv (eine Bandzeile
+    // hat so viele Zellen wie das Buch Kapitel) und wird bei jedem loadBoard()
+    // geleert, weil ein Scan-Lauf die Zahlen darunter verschiebt.
+    activeBandDetailKey: null,
+    bandOccCache: {},
+    bandDetailLoading: false,
     // Konsistenz-Befunde (GET /motifs/consistency — Messung, kein KI-Lauf).
     // checksScanned=false heisst: der Ist-Index ist leer, es wurde also nicht
     // gemessen — nicht „alles in Ordnung".

@@ -84,14 +84,23 @@ const _stmtOccChaptersFloor = db.prepare(`
    GROUP BY o.motif_id, COALESCE(pp.chapter_id, sp.chapter_id)
 `);
 // Fundstellen-Detail eines Motivs (Seiten- + Szenen-Kontext via JOIN, kein Snapshot).
+// chapter_id/chapter_name werden GENAU WIE in _stmtOccChapters aufgeloest
+// (page-Treffer ueber pages.chapter_id, scene-Treffer ueber figure_scenes.page_id
+// → pages.chapter_id). Sonst zaehlt das Kapitel-Verlaufsband einen Szenen-Fund in
+// seiner Zelle, waehrend dieselbe Zelle im Detail leer bleibt — die Zahl und ihre
+// Aufloesung muessen dieselbe Frage stellen.
 const _stmtOccDetail = db.prepare(`
   SELECT o.id, o.kind, o.page_id, o.scene_id, o.score, o.snippet, o.source,
-         p.page_name, p.chapter_id, c.chapter_name,
+         p.page_name,
+         COALESCE(p.chapter_id, sp.chapter_id) AS chapter_id,
+         COALESCE(c.chapter_name, sc.chapter_name) AS chapter_name,
          s.titel AS scene_titel, s.page_id AS scene_page_id
     FROM motif_occurrences o
     LEFT JOIN pages p    ON p.page_id = o.page_id
     LEFT JOIN chapters c ON c.chapter_id = p.chapter_id
     LEFT JOIN figure_scenes s ON s.id = o.scene_id
+    LEFT JOIN pages sp    ON sp.page_id = s.page_id
+    LEFT JOIN chapters sc ON sc.chapter_id = sp.chapter_id
    WHERE o.motif_id = ?
    ORDER BY o.score DESC, o.id
 `);

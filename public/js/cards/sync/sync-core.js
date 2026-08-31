@@ -76,7 +76,9 @@ export function createSyncCard(spec) {
             this._applyPushRenames(ev?.detail?.job);
             this.loadLinks();
           }
-          else if (refreshTypes.has(t)) window.__app?.loadPages?.();
+          // source:'job' → frischer Tree-Read: Import-/Pull-Jobs legen die Seiten
+          // SERVERSEITIG an, im Browser lief also kein Cache-Bust.
+          else if (refreshTypes.has(t)) window.__app?.loadPages?.({ source: 'job' });
         };
         window.addEventListener(EVT.PAGES_LOADED, this._onPagesLoaded);
         window.addEventListener(EVT.BOOK_CHANGED, this._onBookChanged);
@@ -210,7 +212,7 @@ export function createSyncCard(spec) {
             app.currentPage.name = r.name;
           }
         }
-        app.loadPages?.();
+        app.loadPages?.({ source: 'job' });
       },
 
       _clearPushBusy(pageId) {

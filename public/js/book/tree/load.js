@@ -43,6 +43,28 @@ export function insertChapterItem(tree, item, { afterChapterId = null, beforeCha
   return [...tree, item];
 }
 
+// Ereignis-getriggerte Reloads lesen frisch, der Kaltstart darf aus dem Cache.
+//
+// WHY: Der SW liefert /content/*-Listen als Stale-While-Revalidate aus — der
+// Cache-Hit kommt sofort, die Netzantwort landet nur im Cache und nicht mehr in
+// der schon gerenderten Sidebar. Fuer den KALTSTART ist das genau richtig (die
+// Sidebar steht sofort, offline ueberhaupt). Fuer einen Reload, den ein Ereignis
+// ausloest, ist es die falsche Antwort auf die gestellte Frage: Wake-Refresh,
+// Buchwechsel und "Job fertig" fragen nach dem Serverstand, nicht nach dem, was
+// beim letzten Mal galt. Beim Wake-Refresh hob der Cache-Hit den ganzen Zweck
+// der Funktion auf; nach einem Import-/Pull-Job (der die Seiten SERVERSEITIG
+// anlegt, also ohne Cache-Bust im Browser) blieben die neuen Seiten unsichtbar.
+//
+// Der Cache bleibt trotzdem warm: der Kaltstart-Read ist SWR und revalidiert im
+// Hintergrund. `fresh` umgeht den SW-Cache und FUELLT ihn nicht — deshalb darf
+// nicht jeder Read fresh sein, sonst friert die Offline-Kopie auf dem Stand des
+// allerersten Loads ein.
+const FRESH_SOURCES = new Set(['bookSwitch', 'wake', 'job']);
+
+export function readsFresh(opts = {}) {
+  return opts.fresh === true || FRESH_SOURCES.has(opts.source);
+}
+
 export const treeLoadMethods = {
   async refreshPageAges() {
     const bookId = this.$store.nav.selectedBookId;
@@ -56,7 +78,7 @@ export const treeLoadMethods = {
   async loadBooks(opts = {}) {
     try {
       this.setStatus(this.t('tree.connecting'), true);
-      this.$store.nav.books = await contentRepo.listBooks({ fresh: opts.fresh === true });
+      this.$store.nav.books = await contentRepo.listBooks({ fresh: readsFresh(opts) });
       // Wake-Refresh: Caller (_refreshAfterWake) triggert loadPages selbst mit source='wake'.
       // Hier weiterzureichen würde Tree erneut clearen (loadPages ohne source) → Flicker.
       // skipPages: für Metadaten-only-Refreshes (Kategorie/Tag/Rename) — Pagetree bleibt stehen.
@@ -187,10 +209,8 @@ export const treeLoadMethods = {
         badges.shareLinkCounts = {};
       }
       this._tokenEstGen++;
-      // Buchwechsel: SW-CONTENT_CACHE (SWR) kann stale Listen liefern, daher fresh.
-      // Initialer Load greift normal aufs Cache (offline-resilient).
-      const fresh = opts.source === 'bookSwitch';
-      const tree = await contentRepo.bookTree(bookId, { fresh, signal });
+      // Frische-Entscheidung: readsFresh (siehe FRESH_SOURCES oben).
+      const tree = await contentRepo.bookTree(bookId, { fresh: readsFresh(opts), signal });
 
       // Buch wurde gewechselt während die Anfrage lief → veraltete Daten verwerfen.
       if (this.$store.nav.selectedBookId !== bookId) return;

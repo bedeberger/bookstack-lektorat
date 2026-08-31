@@ -27,6 +27,10 @@ export const lifecycleMethods = {
       this.embedIndexStale = !!data.embedIndex?.stale;
       this._savedPositions = data.layout || {};
       this._memos = {};
+      // Fundstellen-Cache des Verlaufsbands verwerfen: die Zellzahlen kommen
+      // frisch aus diesem Payload, die aufgelösten Stellen müssen dazu passen.
+      this.bandOccCache = {};
+      this.activeBandDetailKey = null;
       // Persistierte KI-Brainstorm-Läufe (Historie) mitladen.
       this.loadBrainstormRuns();
       // Konsistenz-Befunde mitziehen (deterministisch + billig, kein KI-Lauf) —
@@ -58,6 +62,9 @@ export const lifecycleMethods = {
     this.selectedMotifId = null;
     this.selectedThemeId = null;
     this.motivView = 'graph';
+    this.activeBandDetailKey = null;
+    this.bandOccCache = {};
+    this.bandDetailLoading = false;
     this.checks = [];
     this.checksScanned = true;
     this.selectedCheckIdx = null;

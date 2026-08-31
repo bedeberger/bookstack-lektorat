@@ -56,7 +56,10 @@ const blogSpec = {
         const { contentRepo } = await import('../repo/content.js');
         const [remoteRes, localPage] = await Promise.all([
           fetch(`/blog/${bookId}/pages/${pageId}/remote`).then(r => r.ok ? r.json() : Promise.reject(r)),
-          contentRepo.loadPage(pageId),
+          // fresh: der Diff ist die Entscheidungsgrundlage "lokal oder WordPress".
+          // Aus dem SWR-Cache koennte die lokale Seite AELTER aussehen als sie ist —
+          // der User verwaerfe dann eigene Edits, die er im Diff nie gesehen hat.
+          contentRepo.loadPage(pageId, { fresh: true }),
         ]);
         this.conflictData = {
           pageId,
@@ -88,7 +91,8 @@ const blogSpec = {
         if (!res.ok) throw new Error(data.error_code || 'BLOG_RESOLVE_FAILED');
         this.closeConflict();
         await this.loadLinks();
-        if (side === 'wp') window.__app?.loadPages?.();
+        // Der Server hat die Seite gerade ueberschrieben (kein Bust im Browser).
+        if (side === 'wp') window.__app?.loadPages?.({ source: 'job' });
       } catch (e) {
         console.error('[blogSync] Resolve fehlgeschlagen:', e);
       }

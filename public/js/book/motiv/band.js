@@ -9,6 +9,8 @@
 // Kein eigener Datenpfad: occChapters [{ chapterId, n }] kommt aus GET /motifs
 // (getGraph), die Kapitel-Reihenfolge + Namen aus dem geladenen Sidebar-Tree.
 
+import { fetchJson } from '../../utils.js';
+
 export const bandMethods = {
   // Ansicht umschalten (Konstellation ↔ Verlaufsband). Zurück auf den Graph muss
   // neu gezeichnet + eingepasst werden (Canvas war ausgeblendet → 0-Grösse).
@@ -16,6 +18,9 @@ export const bandMethods = {
     const next = (mode === 'band' || mode === 'checks') ? mode : 'graph';
     if (this.motivView === next) return;
     this.motivView = next;
+    // Zell-Detail gehört zum Band; es beim Verlassen offen zu lassen, hiesse beim
+    // Zurückkommen eine Aufklappung ohne den Klick zu zeigen, der sie erzeugt hat.
+    this.activeBandDetailKey = null;
     if (next === 'graph') this.$nextTick(() => { this.renderMotivGraph(); this.fitGraph(); });
   },
 
@@ -120,5 +125,80 @@ export const bandMethods = {
     const theme = this.themeById(m.theme_id);
     if (!theme) return 'var(--color-muted)';
     return `var(--palette-${this.themeSwatchKey(theme)})`;
+  },
+
+  // ── Zell-Detail: die Fundstellen HINTER einer Färbung ──────────────────────
+  // Die Zelle nennt eine Zahl; ohne Auflösung bleibt sie eine Behauptung. Klick
+  // klappt darum die Fundstellen dieses (Motiv × Kapitel) auf — dieselben Zeilen
+  // wie im Panel, inklusive Sprung an die Textstelle. Muster + geteilte Klassen
+  // wie die Fehler-Heatmap (`heatmap-cell--clickable`/`--active` + `heatmap-detail`).
+
+  // Eine leere Zelle hat nichts aufzulösen und darf weder Klick-Cursor noch
+  // Tab-Stopp anbieten (SSoT für :class-Bindung UND Handler, damit die Optik
+  // nicht mehr verspricht, als der Klick einlöst).
+  bandCellClickable(motifId, chapterId) {
+    return this.bandCount(motifId, chapterId) > 0;
+  },
+
+  bandDetailKey(motifId, chapterId) { return `${motifId}:${chapterId}`; },
+
+  async toggleBandDetail(motifId, chapterId) {
+    if (!this.bandCellClickable(motifId, chapterId)) return;
+    const key = this.bandDetailKey(motifId, chapterId);
+    if (this.activeBandDetailKey === key) { this.activeBandDetailKey = null; return; }
+    this.activeBandDetailKey = key;
+    await this._ensureBandOccurrences(motifId);
+  },
+
+  // Fundstellen eines Motivs holen und pro Motiv merken: eine Band-Zeile hat so
+  // viele Zellen wie das Buch Kapitel, und jede Zelle fragt dieselbe Route.
+  // Der Cache lebt nur bis zum nächsten loadBoard() (Scan-Lauf → frische Zahlen).
+  async _ensureBandOccurrences(motifId) {
+    if (this.bandOccCache[motifId]) return;
+    this.bandDetailLoading = true;
+    try {
+      const data = await fetchJson(`/motifs/${motifId}/occurrences`);
+      // NEUES Objekt statt Mutation: bandActiveDetail() memoisiert über die
+      // Cache-Referenz — eine In-Place-Ergänzung verschiebt sie nicht und das
+      // Detail bliebe nach dem Laden leer.
+      this.bandOccCache = { ...this.bandOccCache, [motifId]: data.occurrences || [] };
+    } catch (e) {
+      // Fundstellen sind optional (wie im Panel): kein harter Fehler. NICHT als
+      // leere Liste cachen — sonst gilt ein Netz-Aussetzer bis zum nächsten
+      // loadBoard() als „Kapitel ohne Fundstellen"; ein zweiter Klick darf es
+      // erneut versuchen.
+    } finally { this.bandDetailLoading = false; }
+  },
+
+  // Aktives Zell-Detail: Motiv, Kapitel und die Fundstellen GENAU dieses Kapitels.
+  // Gefiltert wird auf `chapter_id` — dieselbe Auflösung, aus der die Zellzahl
+  // stammt (Szenen-Funde mappen server-seitig über ihre Ankerseite).
+  // Memoized: das Detail-Panel liest den Wert mehrfach pro Render (Titel, Liste,
+  // beide x-show), und jeder Aufruf filtert sonst die Fundstellenliste erneut.
+  bandActiveDetail() {
+    return this._memo('bandActiveDetail',
+      [this.activeBandDetailKey, this.bandOccCache, this.motifs, this.$store.nav.tree],
+      () => this._computeBandActiveDetail());
+  },
+
+  _computeBandActiveDetail() {
+    const key = this.activeBandDetailKey;
+    if (!key) return null;
+    const [motifIdStr, chapterIdStr] = key.split(':');
+    const motifId = parseInt(motifIdStr, 10);
+    const chapterId = parseInt(chapterIdStr, 10);
+    const motif = this.motifById(motifId);
+    const chapter = this.bandChapters().find(c => c.id === chapterId);
+    if (!motif || !chapter) return null;
+    const loaded = this.bandOccCache[motifId];
+    return {
+      key,
+      motifId,
+      chapterId,
+      motifName: motif.name,
+      chapterName: chapter.name,
+      count: this.bandCount(motifId, chapterId),
+      occurrences: loaded ? loaded.filter(o => o.chapter_id === chapterId) : [],
+    };
   },
 };

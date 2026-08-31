@@ -1,0 +1,41 @@
+{
+  "version": "4.5.0",
+  "date": "2026-08-31",
+  "entries": [
+    {
+      "kind": "neu",
+      "de": "Motiv-Werkstatt, Ansicht „Kapitel-Verlauf“: Ein Klick auf eine Zelle klappt die Fundstellen dieses Motivs in diesem Kapitel auf — mit Sprung an die Textstelle. Die Zahl in der Zelle ist damit belegt statt behauptet.",
+      "en": "Motif workshop, “Chapter arc” view: Clicking a cell reveals that motif's occurrences in that chapter, each linking to the passage. The number in the cell is now backed up rather than merely asserted."
+    },
+    {
+      "kind": "behoben",
+      "de": "Fassungen einer Seite: Die Liste zeigte den Stand des letzten Besuchs. Bei einer neu angelegten Seite blieb sie leer, obwohl längst Fassungen vorlagen.",
+      "en": "Page versions: The list showed the state of the last visit. On a newly created page it stayed empty even though versions already existed."
+    },
+    {
+      "kind": "behoben",
+      "de": "Fassungen wiederherstellen: Eine wiederhergestellte Fassung konnte beim nächsten Speichern wieder vom alten Text überschrieben werden.",
+      "en": "Restoring a version: A restored version could be overwritten by the old text again on the next save."
+    },
+    {
+      "kind": "behoben",
+      "de": "Seitenleiste: Seiten, die ein Import oder ein Blog-Abgleich angelegt hatte, erschienen erst nach einem Neuladen der App im Seitenbaum.",
+      "en": "Sidebar: Pages created by an import or a blog sync only appeared in the page tree after reloading the app."
+    },
+    {
+      "kind": "behoben",
+      "de": "Suche: Die Trefferliste konnte Ergebnisse vom letzten Besuch zeigen, sodass frisch geschriebener Text fehlte.",
+      "en": "Search: The result list could show results from the last visit, so newly written text was missing from it."
+    },
+    {
+      "kind": "behoben",
+      "de": "Rückkehr nach einer Pause: Eine abgelaufene Anmeldung wurde nicht gemeldet. Der Hinweis erschien erst beim nächsten Speicherversuch.",
+      "en": "Returning after a break: An expired sign-in was not reported. The notice appeared only at the next attempt to save."
+    },
+    {
+      "kind": "behoben",
+      "de": "Blog-Abgleich, Konfliktfenster: Der Vergleich konnte einen veralteten eigenen Textstand zeigen. Wer sich für die WordPress-Fassung entschied, verlor Änderungen, die im Vergleich nie zu sehen waren.",
+      "en": "Blog sync, conflict window: The comparison could show an outdated local text. Choosing the WordPress version then discarded changes that the comparison never showed."
+    }
+  ]
+}

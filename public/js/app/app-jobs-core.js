@@ -276,7 +276,7 @@ export const appJobsCoreMethods = {
       try {
         this.$store.nav.selectedBookId = String(job.bookId);
         this._resetBookScopedState();
-        await this.loadPages();
+        await this.loadPages({ source: 'bookSwitch' });
         await this._reloadVisibleBookCards();
       } finally {
         this._applyingHash = false;

@@ -31,7 +31,10 @@
 //    jede Asset-Änderung erzeugt automatisch eine neue Generation — kein
 //    manueller Versions-Bump mehr. Regeneriert via `npm run sw:manifest`
 //    (läuft auf prestart), Drift gegated durch sw-manifest-drift.test.mjs.
-//  - Content-GETs (/content/*): Stale-While-Revalidate im CONTENT_CACHE → Navigation + Seiteninhalt offline
+//  - Content-GETs (/content/*): Stale-While-Revalidate im CONTENT_CACHE → Navigation + Seiteninhalt offline.
+//    Zwei Ausnahmen, begründet an CONTENT_LIVE_REGEX/CONTENT_VOLATILE_REGEX: Poll-Endpunkte
+//    (/changes, /presence) werden nie gecacht, wachsende Logs (Revisionsliste) und die Suche
+//    laufen Netz-zuerst mit Cache als Offline-Rückfall.
 //  - Schreibende Requests (PUT/POST/DELETE): nie behandelt (method-Check am Anfang)
 //  - Auth/KI/Job-Queue/SSE: Network-Only, nie cachen
 
@@ -344,6 +347,15 @@ async function _evictContentCache(cache) {
     for (let i = 0; i < overflow; i++) await cache.delete(keys[i]);
   }
 }
+
+// `no-cache`/`no-store` heissen beide „nicht ohne Rueckfrage ausliefern".
+// `must-revalidate` bewusst NICHT: das greift erst nach Ablauf der Frische und
+// ist keine Aussage gegen einen frischen Cache-Eintrag.
+function _forbidsStale(res) {
+  const cc = res?.headers?.get?.('Cache-Control') || '';
+  return /\bno-cache\b|\bno-store\b/i.test(cc);
+}
+
 async function _handleSwr(req, cacheName) {
   // Bypass-Marker: konsistenzkritische Reads (z.B. Konflikt-Check vor
   // Draft-Push) müssen frische Server-Daten sehen, nicht den SWR-Cache.
@@ -361,6 +373,15 @@ async function _handleSwr(req, cacheName) {
   }
   const cache = await caches.open(cacheName);
   const cached = await cache.match(req);
+  // Der Server darf widersprechen. Deklariert die GECACHTE Antwort `no-cache`
+  // oder `no-store`, ist sie als Stale-Antwort nicht zugelassen — dann gilt
+  // Netz-zuerst. Betrifft heute die drei `/content/*/release.json` (dort steht
+  // ausdruecklich „immer revalidieren (via If-None-Match)"): eine gecachte
+  // Antwort auf die Frage „gibt es eine neuere Client-Version?" ist genau die
+  // Aussage, die der Endpunkt nicht machen wollte. Als Regel ist das die
+  // billigste Absicherung gegen den naechsten solchen Endpunkt: er muss nur
+  // seinen Header setzen und braucht keinen Eintrag in einer Liste hier.
+  if (cached && _forbidsStale(cached)) return _handleNetworkFirst(req, cacheName);
   const netPromise = fetch(req).then(async (res) => {
     if (res && res.ok && res.type !== 'opaqueredirect') {
       await cache.put(req, res.clone());
@@ -381,12 +402,94 @@ async function _handleSwr(req, cacheName) {
   });
 }
 
-function handleContent(req) { return _handleSwr(req, CONTENT_CACHE); }
+// Zwei Klassen von /content/*-GETs, fuer die Stale-While-Revalidate die falsche
+// Strategie ist. Beide sind keine Ausnahme vom Offline-Versprechen, sondern
+// seine Bedingung: SWR taugt fuer einen Stand, der sich aendert — nicht fuer ein
+// Log, das nur waechst, und nicht fuer einen Poll, dessen Antwort eine Sekunde
+// spaeter falsch ist.
+//
+// LIVE (nie cachen): die Poll-Endpunkte des Collab-Ticks. `/changes` traegt
+// einen `since`-Stempel pro Poll — jede Antwort waere ein eigener Cache-Key,
+// zwoelf pro Minute, und der 200-Eintraege-Deckel haette den offline lesbaren
+// Buchinhalt in einer Viertelstunde verdraengt. `/presence` ist ein Heartbeat;
+// ein gecachter Heartbeat ist eine Falschaussage.
+//
+// VOLATIL (Netz zuerst, Cache nur als Offline-Rueckfall): die Revisionsliste
+// einer Seite und die Suche. Die Revisionsliste ist ein wachsendes Log — ein
+// Stale-Hit zeigt den Stand des letzten Besuchs, und weil der Hintergrund-
+// Revalidate nur den Cache fuellt und nicht die Karte, bleibt die Liste bis zum
+// naechsten Reload kurz: bei einer frisch angelegten Seite also leer, waehrend
+// der Server schon Fassungen haelt. Ein Write bustet den Eintrag zwar, aber nur
+// aus DIESEM Browser — jede Revision von einem zweiten Geraet, vom Mac-/Android-
+// Client oder aus einem Server-Apply-Pfad kommt ohne Bust an. Die Liste der
+// Schreiber eines Logs vollstaendig zu halten ist die verlorene Wette; die Regel
+// ist darum "ein Log wird nicht stale ausgeliefert".
+// Der Voll-Body EINER Revision (`/revisions/:rev_id`) bleibt bewusst SWR: er ist
+// unveraenderlich, dort IST der Cache-Hit die richtige Antwort.
+const CONTENT_LIVE_REGEX = /^\/content\/(?:books|pages)\/\d+\/(?:changes|presence)$/;
+const CONTENT_VOLATILE_REGEX = /^\/content\/(?:pages\/\d+\/revisions|search)$/;
+
+function isLiveContent(url) { return CONTENT_LIVE_REGEX.test(url.pathname); }
+
+// Netz zuerst, Cache als Rueckfall. Anders als SWR wartet der Aufrufer auf die
+// Netzantwort — die Aussage "das ist der Serverstand" ist hier den Umweg wert.
+// Eine Fehlerantwort (401/500) wird durchgereicht, nicht durch einen alten
+// Cache-Eintrag beschoenigt; nur ein echter Netzfehler faellt auf den Cache.
+async function _handleNetworkFirst(req, cacheName) {
+  const cache = await caches.open(cacheName);
+  try {
+    const net = await fetch(req);
+    if (net && net.ok && net.type !== 'opaqueredirect') {
+      await cache.put(req, net.clone());
+      await _evictContentCache(cache);
+    }
+    return net;
+  } catch {
+    const cached = await cache.match(req);
+    if (cached) return cached;
+    return new Response(JSON.stringify({ error: 'offline' }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    });
+  }
+}
+
+function handleContent(req) {
+  const url = new URL(req.url);
+  if (CONTENT_VOLATILE_REGEX.test(url.pathname)) return _handleNetworkFirst(req, CONTENT_CACHE);
+  return _handleSwr(req, CONTENT_CACHE);
+}
 
 // /config liefert Session-User + Provider-Config. SWR, damit wiederkehrende
 // Offline-User den App-Shell-Bootstrap komplett durchlaufen können. 401/Fehler
 // werden nicht gecacht (via res.ok-Check), damit Login-Redirects nicht festfrieren.
 async function handleConfig(req) {
+  // Bypass-Marker wie in _handleSwr — hier ist er nicht optional, sondern die
+  // Voraussetzung eines vorhandenen Mechanismus: der Wake-Refresh
+  // (app-view/bookscope.js#_refreshAfterWake) holt `/config` ausschliesslich, um
+  // eine abgelaufene Session an den globalen 401-Wrapper zu geben. Aus dem Cache
+  // beantwortet, kommt dort eine gecachte 200 an, waehrend die echte 401 im
+  // Hintergrund-Revalidate verworfen wird — der Check kann per Konstruktion nie
+  // ausloesen, und der User erfaehrt vom Ablauf erst beim naechsten Schreibversuch.
+  // ACHTUNG: `cache.match(CONFIG_PATH)` ignoriert die Query, ein blosses
+  // `?__fresh=1` am Aufrufer wuerde also weiterhin den Cache-Eintrag treffen.
+  // Der Bypass MUSS hier stehen.
+  const url = new URL(req.url);
+  if (url.searchParams.has('__fresh')) {
+    try {
+      const net = await fetch(req);
+      if (net && net.ok && net.type !== 'opaqueredirect') {
+        const cw = await caches.open(CONFIG_CACHE);
+        await cw.put(CONFIG_PATH, net.clone());
+      }
+      return net;
+    } catch {
+      return new Response(JSON.stringify({ error: 'offline' }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      });
+    }
+  }
   const cache = await caches.open(CONFIG_CACHE);
   const cached = await cache.match(CONFIG_PATH);
   const netPromise = fetch(req).then((res) => {
@@ -473,6 +576,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   if (url.pathname.startsWith('/content/')) {
+    // Poll-Endpunkte gehen unbehandelt ans Netz (siehe isLiveContent).
+    if (isLiveContent(url)) return;
     event.respondWith(handleContent(req));
     return;
   }

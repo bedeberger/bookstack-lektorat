@@ -1,0 +1,95 @@
+<!-- Motiv-Werkstatt — Kapitel-Verlaufsband (Motiv × Kapitel als Heatmap der
+     Ist-Dichte über den Buchbogen). Nested Partial von motiv.html wegen des
+     HTML-Partial-LOC-Limits; die Sichtbarkeits-Weiche (motivView === 'band')
+     sitzt am Platzhalter dort, nicht hier. -->
+  <div class="muted-msg muted-msg--spaced"
+       x-show="bandMotifs().length === 0 || bandChapters().length === 0"
+       x-text="$app.t('motiv.band.empty')"></div>
+  <template x-if="bandMotifs().length > 0 && bandChapters().length > 0">
+    <div class="heatmap-wrap">
+      <div class="heatmap-legend" x-text="$app.t('motiv.band.legend')"></div>
+      <div class="heatmap-scroll">
+        <table class="heatmap-table">
+          <thead>
+            <tr>
+              <th class="heatmap-rowhead" x-text="$app.t('motiv.band.motif')"></th>
+              <th class="heatmap-numcol" x-text="$app.t('motiv.band.total')"></th>
+              <template x-for="ch in bandChapters()" :key="ch.id">
+                <th :data-tip="ch.name"><span x-text="ch.name"></span></th>
+              </template>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="m in bandMotifs()" :key="m.id">
+              <tr>
+                <th class="heatmap-rowhead" scope="row">
+                  <span class="heatmap-rowhead-main internal-link" @click="bandSelectMotif(m.id)">
+                    <span class="motiv-band-swatch" :style="{ background: bandMotifColor(m) }" aria-hidden="true"></span>
+                    <span x-text="m.name"></span>
+                  </span>
+                  <span class="heatmap-rowhead-sub" x-show="m.theme_id"
+                        x-text="(themeById(m.theme_id) || {}).name || ''"></span>
+                </th>
+                <td class="heatmap-numcol" x-text="bandRowTotal(m.id)"></td>
+                <!-- `heatmap-cell--clickable` + `internal-link` haengen am
+                     Praedikat: eine leere Zelle hat nichts aufzuloesen und darf
+                     weder Klick-Cursor noch Tab-Stopp anbieten. `internal-link`
+                     macht die klickbaren Zellen ueber die globale Delegation
+                     (app/boot/internal-links.js) tastatur-erreichbar. -->
+                <template x-for="ch in bandChapters()" :key="ch.id">
+                  <td class="heatmap-cell"
+                      :class="[
+                        bandCellClass(bandCount(m.id, ch.id)),
+                        { 'heatmap-cell--clickable': bandCellClickable(m.id, ch.id),
+                          'internal-link': bandCellClickable(m.id, ch.id),
+                          'heatmap-cell--active': activeBandDetailKey === bandDetailKey(m.id, ch.id) }
+                      ]"
+                      :style="bandCellVars(bandCount(m.id, ch.id))"
+                      :data-tip="ch.name + ' · ' + $app.t('motiv.band.hits', { n: bandCount(m.id, ch.id) })"
+                      @click="toggleBandDetail(m.id, ch.id)"
+                      x-text="bandCount(m.id, ch.id) || ''"></td>
+                </template>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Zell-Detail: die Fundstellen hinter einer Faerbung (Motiv × Kapitel).
+           Dieselben Zeilen wie im Konstellations-Panel, inklusive Sprung an die
+           Textstelle — die Zelle nennt eine Zahl, hier steht, worauf sie beruht. -->
+      <template x-if="bandActiveDetail()">
+        <div class="heatmap-detail">
+          <div class="card-section-head card-section-head--baseline">
+            <span class="heatmap-detail-title"
+                  x-text="$app.t('motiv.band.detail.title', {
+                    motif: bandActiveDetail().motifName,
+                    chapter: bandActiveDetail().chapterName,
+                  })"></span>
+            <button type="button" class="heatmap-detail-close"
+                    @click="activeBandDetailKey = null"
+                    :data-tip="$app.t('common.close')" :aria-label="$app.t('common.close')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#x"/></svg></button>
+          </div>
+          <div class="heatmap-detail-list">
+            <p class="muted-msg" x-show="bandDetailLoading" x-text="$app.t('motiv.band.detail.loading')"></p>
+            <p class="muted-msg" x-show="!bandDetailLoading && !bandActiveDetail().occurrences.length"
+               x-text="$app.t('motiv.band.detail.empty')"></p>
+            <div class="motiv-occ-list" x-show="bandActiveDetail().occurrences.length">
+              <template x-for="o in bandActiveDetail().occurrences" :key="o.id">
+                <button type="button" class="motiv-occ-row internal-link" @click="gotoOccurrence(o)">
+                  <span class="motiv-occ-loc" x-text="o.page_name || o.scene_titel || ''"></span>
+                  <span class="motiv-occ-snip" x-text="o.snippet" x-show="o.snippet"></span>
+                  <span class="motiv-occ-meta">
+                    <span class="badge motiv-occ-conf" x-show="o.score != null"
+                          x-text="Math.round((o.score || 0) * 100) + '%'"
+                          :data-tip="$app.t('motiv.occ.confidence')"></span>
+                    <span class="badge-source" x-text="$app.t('motiv.occ.source.' + o.source)"></span>
+                  </span>
+                </button>
+              </template>
+            </div>
+          </div>
+        </div>
+      </template>
+    </div>
+  </template>

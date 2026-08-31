@@ -139,7 +139,9 @@ export const bookscopeMethods = {
     let needsRetry = false;
     const isNetErr = (e) => e && (e.name === 'TypeError' || /Failed to fetch|NetworkError|ERR_/.test(String(e?.message || e)));
     try {
-      try { await fetch('/config', { credentials: 'same-origin' }); }
+      // `__fresh=1` ist Pflicht: aus dem SW-Cache beantwortet, kaeme hier eine
+      // gecachte 200 an und der 401-Check dieser Zeile koennte nie ausloesen.
+      try { await fetch('/config?__fresh=1', { credentials: 'same-origin' }); }
       catch (e) { if (isNetErr(e)) needsRetry = true; }
       if (this.$store.session.sessionExpired) return;
       if (this.isAdminOnly) return;

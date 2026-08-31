@@ -6,6 +6,7 @@
 // Diff-Lib lazy.
 
 import { fetchJson } from '../utils.js';
+import { contentRepo } from '../repo/content.js';
 import { loadDiff } from '../lazy-libs.js';
 import { renderSideBySide } from '../page-revision-diff.js';
 import { EVT } from '../events.js';
@@ -54,7 +55,7 @@ export function registerPageRevisionsCard() {
         // `keepDepth`: ein Autosave darf ein nachgeladenes Fenster nicht wieder
         // auf die jueng­sten 100 zusammenfallen lassen — der Autosave feuert im
         // Minutentakt, das Blaettern waere sonst nicht haltbar.
-        this.loadRevisions(pid, { fresh: true, keepDepth: true });
+        this.loadRevisions(pid, { keepDepth: true });
       };
       window.addEventListener(EVT.PAGE_REVISIONS_CHANGED, this._onRevisionsChanged);
     },
@@ -81,7 +82,12 @@ export function registerPageRevisionsCard() {
     // wird so viel angefordert, wie geladen war. Server-Deckel ist 500 — bei mehr
     // Tiefe faellt die Liste bewusst auf 500 zurueck (der Rest ist einen Klick
     // entfernt) statt eine unbegrenzte Antwort zu verlangen.
-    async loadRevisions(pageId, { fresh = false, keepDepth = false } = {}) {
+    //
+    // Kein `__fresh=1`: die Frische dieses Pfades garantiert der Service Worker
+    // (CONTENT_VOLATILE_REGEX in public/sw.js liefert die Revisionsliste
+    // Netz-zuerst). `__fresh` wuerde den SW-Cache umgehen, ihn aber auch nicht
+    // fuellen — die Liste waere dann offline gar nicht lesbar.
+    async loadRevisions(pageId, { keepDepth = false } = {}) {
       if (!pageId) return;
       const depth = keepDepth && pageId === this._pageId
         ? Math.min(500, this.revisions.length)
@@ -91,7 +97,6 @@ export function registerPageRevisionsCard() {
       try {
         const qs = [];
         if (depth > 100) qs.push(`limit=${depth}`);
-        if (fresh) qs.push('__fresh=1');
         const url = `/content/pages/${pageId}/revisions${qs.length ? '?' + qs.join('&') : ''}`;
         const data = await fetchJson(url);
         this.revisions = Array.isArray(data?.revisions) ? data.revisions : [];
@@ -340,23 +345,20 @@ export function registerPageRevisionsCard() {
       if (!confirm(app.t('editor.revisions.restoreConfirm', { when }))) return;
       this.restoringId = rev.id;
       try {
-        const r = await fetch(`/content/pages/${pageId}/revisions/${rev.id}/restore`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-        });
-        if (!r.ok) {
-          const body = await r.json().catch(() => ({}));
-          throw new Error(body?.error_code || `HTTP ${r.status}`);
-        }
+        // Ueber contentRepo statt per rohem fetch: der Restore ist ein Body-Write
+        // und muss den SW-Cache von Seite UND Revisionsliste busten. Das Repo
+        // dispatcht danach `page-revisions:changed` — die Liste laedt darum ueber
+        // den Listener nachgeladene Tiefe erhaltend neu, ohne zweiten Aufruf hier.
+        await contentRepo.restoreRevision(pageId, rev.id);
         if (typeof app._refetchCurrentPage === 'function') {
           await app._refetchCurrentPage();
         }
-        await this.loadRevisions(pageId);
         app.setStatus?.(app.t('editor.revisions.restored'), false, 4000);
         this.closeViewer();
       } catch (e) {
         console.error('[pageRevisions:restore]', e);
-        app.setStatus?.(app.t('editor.revisions.restoreFailed') + ' ' + (e.message || ''), true, 6000);
+        const why = e?.code || e?.message || '';
+        app.setStatus?.(app.t('editor.revisions.restoreFailed') + ' ' + why, true, 6000);
       } finally {
         this.restoringId = null;
       }
