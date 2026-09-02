@@ -13,7 +13,7 @@
 
 const { test, expect } = require('@playwright/test');
 const { attachConsoleGuard } = require('../e2e/_helpers/console-guard');
-const { bootApp } = require('./_helpers/app');
+const { bootApp, reboot } = require('./_helpers/app');
 
 test.describe.configure({ mode: 'serial' });
 
@@ -74,8 +74,9 @@ test('Hilfe oeffnet auf „Neuigkeiten", quittiert und der Stand ueberlebt den R
   )).toBe(latest);
 
   // … und kommt nach dem Reload nicht wieder (Server ist die Wahrheit).
-  await page.reload({ waitUntil: 'domcontentloaded' });
-  await bootApp(page);
+  // `reboot` statt `reload()` + `bootApp()`: die zwei Navigationen hintereinander
+  // brechen die noch laufenden Fetches des Reloads ab (i18n → console.error).
+  await reboot(page);
   expect(await page.evaluate(() => window.__app.hasUnreadChangelog(window.Alpine.store('shell')))).toBe(false);
   await expect(page.locator('.header-help-btn')).not.toHaveClass(/icon-btn--attention/);
 

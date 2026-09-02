@@ -15,7 +15,7 @@
 
 const { test, expect } = require('@playwright/test');
 const { attachConsoleGuard } = require('../e2e/_helpers/console-guard');
-const { bootApp } = require('./_helpers/app');
+const { bootApp, reboot } = require('./_helpers/app');
 
 test.describe.configure({ mode: 'serial' });
 
@@ -65,31 +65,12 @@ async function setLocalFallback(page, bookId) {
   }, bookId);
 }
 
-// Stamm-URL laden und warten, bis der Boot fertig entschieden hat.
-//
-// Echter Reload statt `goto('/')`: die Adresse traegt nach dem letzten Boot ein
-// `#book/...` (der Hash-Router schreibt es), und ein Sprung auf dieselbe Seite
-// ohne Fragment ist keine verlaessliche Dokument-Navigation. Erst Hash weg,
-// dann `reload()`.
-//
-// Danach wird nicht nur auf die Buchwahl gewartet, sondern auf das ENDE des
-// Landing-Pfads (Editor oder Uebersicht offen). Sonst laeuft die Wiederherstel-
-// lung der letzten Seite noch, waehrend der Test schon den naechsten Stempel
-// setzt — und `selectPage` stempelt selbst, womit der Test seine eigene
-// Vorbereitung ueberschreiben wuerde.
+// Auf das ENDE des Landing-Pfads warten (Editor oder Uebersicht offen), nicht
+// nur auf die Buchwahl. Sonst laeuft die Wiederherstellung der letzten Seite
+// noch, waehrend der Test schon den naechsten Stempel setzt — und `selectPage`
+// stempelt selbst, womit der Test seine eigene Vorbereitung ueberschreiben
+// wuerde.
 async function settled(page) {
-  await page.waitForFunction(
-    () => window.__app
-      && (window.Alpine.store('nav').books || []).length > 0
-      && !!window.Alpine.store('nav').selectedBookId,
-    null,
-    { timeout: 30000 },
-  );
-  // `bootApp` wartet schon auf die Buchwahl; nach einem `reload()` hier aber
-  // erneut, weil dieser Weg den Helfer nicht durchlaeuft.
-  // Ende des Landing-Pfads: Editor (letzte Seite wiederhergestellt) oder
-  // Uebersicht. Ohne dieses Warten stempelt `selectPage` noch, waehrend der Test
-  // schon seine Vorbereitung setzt — und ueberschreibt sie.
   await page.waitForFunction(
     () => window.__app.showEditorCard || window.__app.showBookOverviewCard,
     null,
@@ -98,9 +79,9 @@ async function settled(page) {
   return page.evaluate(() => String(window.Alpine.store('nav').selectedBookId));
 }
 
+// Stamm-URL frisch laden (Hash weg, EIN Dokument-Load) und die Wahl abwarten.
 async function bootAtRoot(page) {
-  await page.evaluate(() => history.replaceState(null, '', '/'));
-  await page.reload({ waitUntil: 'domcontentloaded' });
+  await reboot(page);
   return settled(page);
 }
 

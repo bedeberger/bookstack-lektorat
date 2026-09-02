@@ -7,6 +7,16 @@
 // App-Boot abwarten: Alpine-Root in window.__app verfuegbar + Buecher geladen.
 async function bootApp(page) {
   await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await waitBooted(page);
+}
+
+// Warten, bis der Boot durch ist: Root da, Buchliste da, Buch gewaehlt.
+// Getrennt von `bootApp`, weil ein Test auch OHNE `goto` neu booten kann
+// (`reload()`) — und ein `reload()` mit direkt folgendem `goto()` waere eine
+// zweite Navigation, die die noch laufenden Fetches des Reloads abbricht
+// (i18n-Fetch → console.error → Console-Guard schlaegt zu). Ein Dokument-Load,
+// dann warten.
+async function waitBooted(page) {
   await page.waitForFunction(
     () => window.__app && Array.isArray(window.Alpine.store('nav').books) && window.Alpine.store('nav').books.length > 0,
     null,
@@ -24,6 +34,14 @@ async function bootApp(page) {
   );
 }
 
+// Frischer Boot vom Server ohne zweite Navigation: Hash weg (sonst wendet der
+// Hash-Router beim Start wieder die alte Ansicht an), dann EIN Dokument-Load.
+async function reboot(page) {
+  await page.evaluate(() => history.replaceState(null, '', '/'));
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await waitBooted(page);
+}
+
 // Seed-Buch auswaehlen + Seiten laden (via Hash-Deeplink → _applyHash).
 async function selectSeededBook(page) {
   const bookId = await page.evaluate(() => window.Alpine.store('nav').books[0].id);
@@ -37,4 +55,4 @@ async function selectSeededBook(page) {
   return bookId;
 }
 
-module.exports = { bootApp, selectSeededBook };
+module.exports = { bootApp, waitBooted, reboot, selectSeededBook };
