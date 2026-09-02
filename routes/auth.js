@@ -5,6 +5,7 @@ const logger = require('../logger');
 const appUsers = require('../db/app-users');
 const rateLimit = require('../lib/admin-login-ratelimit');
 const appSettings = require('../lib/app-settings');
+const { setSessionFingerprintCookie } = require('../lib/session-fingerprint');
 const altcha = require('../lib/altcha');
 const avatarCache = require('../lib/avatar-cache');
 const demoUser = require('../lib/demo-user');
@@ -126,6 +127,10 @@ function _credentialLogin(cfg) {
     req.session.user = { email: givenEmail, name: ensured.name, picture: null, role: ensured.role };
     req.session.loginAt = Date.now();
     req.session.lastSeen = Date.now();
+    // Sitzungs-Fingerprint ans Cookie, BEVOR die Antwort raus ist: die
+    // folgende SPA-Navigation auf `/` kommt cache-only aus dem SHELL_CACHE und
+    // erreicht den Server nicht mehr (lib/session-fingerprint.js).
+    setSessionFingerprintCookie(req, res);
     logger.info(`${logLabel}.`, { user: givenEmail });
     // Post-Login-Hook (Demo-Seed). Non-fatal: ein Fehler darf den bereits
     // erfolgreichen Login nicht in einen 500 verwandeln.
@@ -351,6 +356,9 @@ router.get('/auth/callback', async (req, res) => {
     appUsers.touchLogin(email, claims.name || null);
     appUsers.recordAuditEvent(email, 'login', { ip, userAgent, meta: { method: 'oidc' } });
     logger.info('Login', { user: email });
+    // Siehe lib/session-fingerprint.js: der Redirect ist die letzte Antwort
+    // dieses Logins, die den Server ueberhaupt noch passiert.
+    setSessionFingerprintCookie(req, res);
     res.redirect(returnTo);
   } catch (err) {
     logger.error('Auth callback error: ' + err.message);

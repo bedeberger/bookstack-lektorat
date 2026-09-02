@@ -60,24 +60,28 @@
 
   <div x-show="errorMessage" class="card-status card-status--error" x-text="errorMessage"></div>
 
-  <!-- Anlege-Leiste -->
+  <!-- Ansicht-Reiter: eigene Zeile, nichts anderes darin. Die Ansicht
+       (Konstellation / Verlaufsband / Befunde) ist die uebergeordnete Achse der
+       Karte und waehlt aus, was darunter ueberhaupt steht — steht sie in
+       derselben Zeile wie die Anlege-Felder, ist sie ein Knopf unter vielen. -->
+  <div class="tabs tabs--scrollable motiv-view-tabs" role="tablist" :aria-label="$app.t('motiv.view.label')">
+    <button type="button" class="tabs-btn" role="tab"
+            :class="{ 'tabs-btn--active': motivView === 'graph' }" :aria-selected="motivView === 'graph'"
+            @click="setMotivView('graph')" x-text="$app.t('motiv.view.graph')"></button>
+    <button type="button" class="tabs-btn" role="tab"
+            :class="{ 'tabs-btn--active': motivView === 'band' }" :aria-selected="motivView === 'band'"
+            @click="setMotivView('band')" x-text="$app.t('motiv.view.band')"></button>
+    <button type="button" class="tabs-btn" role="tab"
+            :class="{ 'tabs-btn--active': motivView === 'checks' }" :aria-selected="motivView === 'checks'"
+            @click="setMotivView('checks')">
+      <span x-text="$app.t('motiv.view.checks')"></span>
+      <span class="badge" x-show="checks.length" x-text="checks.length"></span>
+    </button>
+  </div>
+
+  <!-- Anlege-Leiste: Thema und Motiv anlegen (beide Formen in EINER Zeile),
+       rechts die Layer-Schalter der Konstellation. -->
   <div class="motiv-toolbar">
-    <div class="motiv-toolbar-group">
-      <div class="tabs" role="tablist" :aria-label="$app.t('motiv.view.label')">
-        <button type="button" class="tabs-btn" role="tab"
-                :class="{ 'tabs-btn--active': motivView === 'graph' }" :aria-selected="motivView === 'graph'"
-                @click="setMotivView('graph')" x-text="$app.t('motiv.view.graph')"></button>
-        <button type="button" class="tabs-btn" role="tab"
-                :class="{ 'tabs-btn--active': motivView === 'band' }" :aria-selected="motivView === 'band'"
-                @click="setMotivView('band')" x-text="$app.t('motiv.view.band')"></button>
-        <button type="button" class="tabs-btn" role="tab"
-                :class="{ 'tabs-btn--active': motivView === 'checks' }" :aria-selected="motivView === 'checks'"
-                @click="setMotivView('checks')">
-          <span x-text="$app.t('motiv.view.checks')"></span>
-          <span class="badge" x-show="checks.length" x-text="checks.length"></span>
-        </button>
-      </div>
-    </div>
     <div class="motiv-toolbar-group">
       <input type="text" class="motiv-add-input" x-model="newThemeName" data-spellcheck="spelling"
              :placeholder="$app.t('motiv.theme.namePlaceholder')" @keydown.enter="addTheme()">
@@ -90,11 +94,16 @@
            x-modelable="value" x-model="newMotifThemeId" x-effect="options = themeOptions()"></div>
       <button type="button" class="btn-compact" @click="addMotif()" :disabled="busy || !newMotifName.trim()" x-text="$app.t('motiv.motif.add')"></button>
     </div>
-    <div class="motiv-toolbar-group motiv-layer-toggles" x-show="motivView === 'graph'">
-      <button type="button" class="motiv-layer-btn" :class="{ 'is-active': layerFigures }" @click="toggleLayer('figures')" x-text="$app.t('motiv.layer.figures')"></button>
-      <button type="button" class="motiv-layer-btn" :class="{ 'is-active': layerBeats }" @click="toggleLayer('beats')" x-text="$app.t('motiv.layer.beats')"></button>
-      <button type="button" class="motiv-layer-btn" :class="{ 'is-active': layerChapters }" @click="toggleLayer('chapters')" x-text="$app.t('motiv.layer.chapters')"></button>
-    </div>
+  </div>
+
+  <!-- Soll-Layer der Konstellation: eigene Zeile statt am Ende der Anlege-Leiste.
+       Sie schalten, WAS der Graph zeigt, gelten also nur für die Graph-Ansicht —
+       in der Anlege-Zeile brachen sie je nach Kartenbreite ohnehin auf eine
+       eigene, halb leere Zeile um. -->
+  <div class="motiv-layer-toggles" x-show="motivView === 'graph'">
+    <button type="button" class="motiv-layer-btn" :class="{ 'is-active': layerFigures }" @click="toggleLayer('figures')" x-text="$app.t('motiv.layer.figures')"></button>
+    <button type="button" class="motiv-layer-btn" :class="{ 'is-active': layerBeats }" @click="toggleLayer('beats')" x-text="$app.t('motiv.layer.beats')"></button>
+    <button type="button" class="motiv-layer-btn" :class="{ 'is-active': layerChapters }" @click="toggleLayer('chapters')" x-text="$app.t('motiv.layer.chapters')"></button>
   </div>
 
   <!-- Scan-Status: warnt, wenn die semantische Erkennung aus ist (nur wörtliche

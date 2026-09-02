@@ -30,7 +30,13 @@ test('Kaltstart liest aus dem Cache — sonst friert die Offline-Kopie ein', () 
 });
 
 test('Ereignis-getriggerte Reloads lesen frisch', () => {
-  for (const source of ['bookSwitch', 'wake', 'job']) {
+  // `login` gehoert aus demselben Grund dazu: nach einer Anmeldung kann der
+  // Cache einer beliebig alten oder fremden Sitzung gehoeren, und ein Bust KANN
+  // im Browser nicht gelaufen sein — der Griff, der die Caches leert, haengt am
+  // Logout-Link IN der App (eine abgelaufene Session kommt dort nie vorbei).
+  // Erste Wahl bleibt, den Cache zu leeren (boot/session-change.js); dieser
+  // Quellwert ist der Rueckfall, wenn kein SW erreichbar ist.
+  for (const source of ['bookSwitch', 'wake', 'job', 'login']) {
     assert.equal(readsFresh({ source }), true, `${source} muss frisch lesen`);
   }
 });
@@ -52,4 +58,17 @@ test('Der Wake-Refresh gibt beiden Reads die Quelle mit', () => {
     'loadBooks im Wake-Pfad ohne source=wake → Buchliste bleibt stale.');
   assert.match(wake, /loadPages\(\{ source: 'wake' \}\)/,
     'loadPages im Wake-Pfad ohne source=wake → Baum bleibt stale.');
+});
+
+test('loadBooks reicht seine Quelle an loadPages weiter', () => {
+  // Sonst liest `loadBooks({ source })` die Buchliste frisch und den Baum
+  // trotzdem aus dem Cache — die halbe Antwort auf die gestellte Frage, und
+  // genau die Haelfte, in der die Seiten stehen. Der Wake-Pfad ist bewusst
+  // ausgenommen (`skipLoadPages`) und ruft loadPages selbst.
+  const src = fs.readFileSync(path.join(ROOT, 'public/js/book/tree/load.js'), 'utf8');
+  const fn = src.slice(src.indexOf('async loadBooks('), src.indexOf('bookComboOptions('));
+  assert.match(fn, /loadPages\(pageOpts\)/,
+    'loadBooks ruft loadPages ohne weitergereichte Optionen → Baum bleibt stale.');
+  assert.match(fn, /opts\.source \? \{ source: opts\.source \}/,
+    'Quelle wird nicht durchgereicht.');
 });

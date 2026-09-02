@@ -509,23 +509,43 @@ async function handleConfig(req) {
   });
 }
 
-// Logout aus dem Client: API+Config-Caches dropen, sonst rendert die SPA nach
-// `/auth/logout` kurz noch gecachte Seiten/Configs des alten Users.
+// Sitzungs-gebundene Caches wegwerfen. ZWEI Anlaesse, gleiche Wirkung:
+//
+//  - 'auth-logout' — Logout aus dem Client, sonst rendert die SPA nach
+//    `/auth/logout` kurz noch gecachte Seiten/Configs des alten Users.
+//  - 'session-changed' — die SPA hat beim Start festgestellt, dass eine ANDERE
+//    Sitzung laeuft als die, zu der dieser Cache gehoert
+//    (public/js/app/boot/session-change.js). Warum das ein eigener Anlass sein
+//    muss: der Logout-Griff greift nur, wenn der User den Logout-Link IN der
+//    App klickt UND ein SW die Seite kontrolliert. Eine abgelaufene Session,
+//    ein geschlossener Browser oder ein Login direkt von der Login-Seite
+//    lassen den Cache stehen — und weil `/content/*` SWR ist, kommt der erste
+//    Render nach dem Anmelden dann aus einer beliebig alten Kopie: der Baum
+//    zeigt die Seiten des letzten Besuchs, und der Hintergrund-Revalidate
+//    fuellt nur den Cache, nicht die schon gerenderte Sidebar.
+//
+// Geleert statt umgangen: ein leerer Cache laesst SWR ans Netz gehen und FUELLT
+// sich dabei wieder — ein `__fresh=1` waere zwar auch frisch, liesse die
+// Offline-Kopie aber leer zurueck.
+//
 // Update-Anstoss: 'skip-waiting' aktiviert den wartenden SW sofort. Erst danach
 // feuert `controllerchange` im Client, der dann ein einmaliges location.reload()
 // macht.
+const SESSION_CACHE_DROP_TYPES = new Set(['auth-logout', 'session-changed']);
+
 self.addEventListener('message', (event) => {
   if (event.data?.type === 'skip-waiting') {
     self.skipWaiting();
     return;
   }
-  if (event.data?.type === 'auth-logout') {
+  if (SESSION_CACHE_DROP_TYPES.has(event.data?.type)) {
+    const type = event.data.type;
     event.waitUntil((async () => {
       await Promise.all([
         caches.delete(CONTENT_CACHE),
         caches.delete(CONFIG_CACHE),
       ]);
-      event.source?.postMessage?.({ type: 'auth-logout-done' });
+      event.source?.postMessage?.({ type: type + '-done' });
     })());
   }
   // Invalidiert CONTENT_CACHE-Einträge nach Writes. Ohne diesen Bust liefert SWR

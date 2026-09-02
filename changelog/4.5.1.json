@@ -1,0 +1,16 @@
+{
+  "version": "4.5.1",
+  "date": "2026-09-02",
+  "entries": [
+    {
+      "kind": "behoben",
+      "de": "Nach dem Anmelden zeigte die Seitenleiste manchmal noch den Stand des letzten Besuchs — neu angelegte Seiten und Kapitel fehlten. Jetzt steht nach jeder Anmeldung der aktuelle Stand da.",
+      "en": "After signing in, the sidebar sometimes still showed the state from your last visit, with newly added pages and chapters missing. Every sign-in now starts from the current state."
+    },
+    {
+      "kind": "verbessert",
+      "de": "Motiv-Werkstatt: Die Auswahl zwischen Konstellation, Verlaufsband und Befunden steht jetzt in einer eigenen Zeile ganz oben, die Anlege-Felder darunter. Der Kopf der Karte bricht nicht mehr unruhig um.",
+      "en": "Motif workshop: the choice between constellation, chapter band and findings now sits on its own row at the top, with the fields for adding entries below. The top of the card no longer wraps awkwardly."
+    }
+  ]
+}

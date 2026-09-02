@@ -59,7 +59,13 @@ export function insertChapterItem(tree, item, { afterChapterId = null, beforeCha
 // Hintergrund. `fresh` umgeht den SW-Cache und FUELLT ihn nicht — deshalb darf
 // nicht jeder Read fresh sein, sonst friert die Offline-Kopie auf dem Stand des
 // allerersten Loads ein.
-const FRESH_SOURCES = new Set(['bookSwitch', 'wake', 'job']);
+// `login` ist der vierte Fall und aus demselben Grund dabei: nach einer
+// Anmeldung kann der Cache einer beliebig alten (oder fremden) Sitzung
+// gehoeren, und im Browser KANN kein Bust gelaufen sein — der Logout-Griff, der
+// ihn leert, setzt einen Klick auf den Logout-Link voraus. Erste Wahl bleibt
+// dort, den Cache zu leeren (public/js/app/boot/session-change.js); dieser
+// Quellwert ist der Rueckfall, wenn kein SW erreichbar ist.
+const FRESH_SOURCES = new Set(['bookSwitch', 'wake', 'job', 'login']);
 
 export function readsFresh(opts = {}) {
   return opts.fresh === true || FRESH_SOURCES.has(opts.source);
@@ -108,7 +114,16 @@ export const treeLoadMethods = {
       this.booksLoaded = true;
       this.setStatus(this.t('tree.booksFound', { n: this.$store.nav.books.length }), false, 4000);
       if (this.$store.nav.selectedBookId) this._loadBookRole(this.$store.nav.selectedBookId);
-      if (!skipLoadPages) await this.loadPages();
+      // Quelle weiterreichen: sonst laedt `loadBooks({ source })` die Buchliste
+      // frisch und den Baum trotzdem aus dem Cache — die halbe Antwort auf die
+      // gestellte Frage. (Der Wake-Pfad ist oben ausgenommen und ruft
+      // `loadPages` selbst, um den Tree nicht zweimal zu bauen.)
+      if (!skipLoadPages) {
+        const pageOpts = opts.source ? { source: opts.source }
+          : opts.fresh === true ? { fresh: true }
+          : {};
+        await this.loadPages(pageOpts);
+      }
     } catch (e) {
       console.error('[loadBooks]', e);
       this.setStatus(this.t('common.errorColon') + e.message);

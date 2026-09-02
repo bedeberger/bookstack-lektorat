@@ -9,6 +9,7 @@ const path = require('path');
 const fs = require('fs');
 const logger = require('./logger');
 const { runWithContext, setContext } = require('./lib/log-context');
+const { setSessionFingerprintCookie } = require('./lib/session-fingerprint');
 
 // DB-Setup + Migrationen laufen beim Import
 const { db, cleanupStuckJobRuns, pruneStaleByAge } = require('./db/schema');
@@ -505,6 +506,10 @@ app.use((req, res, next) => {
   }
   if (!req.session.loginAt) req.session.loginAt = now; // Fallback für Sessions aus Zeit vor diesem Feature
   req.session.lastSeen = now;
+  // Rueckfall fuer den Sitzungs-Fingerprint (lib/session-fingerprint.js): die
+  // Login-Antworten setzen ihn selbst, hier bekommt ihn jede Session, die es
+  // schon vor diesem Cookie gab. Setzt nur bei Abweichung, also einmal.
+  setSessionFingerprintCookie(req, res);
   if (now - (req.session.lastSeenPersisted || 0) > LAST_SEEN_THROTTLE_MS) {
     try { touchUserLastSeen(email, new Date(now).toISOString()); }
     catch (e) { logger.warn('touchUserLastSeen: ' + e.message); }

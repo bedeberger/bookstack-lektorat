@@ -3,22 +3,45 @@
    Akzent: var(--card-accent) (Mapping in card-accents.css → --card-accent-motiv).
    Layout: Graph links, Seitenpanel rechts; unter 960px gestapelt. */
 
+/* ── Ansicht-Reiter ───────────────────────────────────────────────────── */
+/* Eigene Zeile über der Anlege-Leiste: `.tabs--scrollable` macht die Reihe
+   block-level, damit sie so breit ist wie die Ansicht darunter. Vertikal der
+   engere Rhythmus (`--card-gap-tight`), weil Reiter und Leiste zusammen EINEN
+   Kopfbereich bilden — den Abschnitts-Abstand darunter trägt `.motiv-toolbar`. */
+.motiv-view-tabs { margin-bottom: var(--card-gap-tight); }
+
 /* ── Anlege-/Layer-Leiste ─────────────────────────────────────────────── */
 /* Eigene horizontale Geometrie (Gruppen statt einer Reihe), vertikal aber der
-   Karten-Rhythmus — siehe `.card-toolbar` in card-form/card-shell.css. */
+   Karten-Rhythmus — siehe `.card-toolbar` in card-form/card-shell.css.
+   Die beiden Anlege-Formen (Thema, Motiv) teilen EINE Zeile; die Gruppen
+   bleiben als Ganzes zusammen (`flex-wrap: nowrap` innen), sodass ein Umbruch
+   zwischen den Formen fällt und nicht mitten in eine hinein. */
 .motiv-toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-sm);
+  gap: var(--space-sm) var(--space-lg);
   align-items: center;
   margin-bottom: var(--card-gap-section);
 }
 .motiv-toolbar-group {
   display: flex;
+  flex-wrap: nowrap;
   align-items: center;
   gap: var(--space-2xs);
 }
-.motiv-layer-toggles { margin-left: auto; }
+
+/* ── Soll-Layer-Zeile ─────────────────────────────────────────────────── */
+/* Eigene Zeile unter der Anlege-Leiste, rechtsbündig am Graphen darunter. Nach
+   unten der engere Abstand (`--card-gap-tight`): die Schalter gehören zum
+   Graphen, den sie steuern, nicht zur Anlege-Leiste darüber. */
+.motiv-layer-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--space-2xs);
+  margin-bottom: var(--card-gap-tight);
+}
 .motiv-add-input {
   min-width: 8rem;
   padding: var(--space-2xs) var(--space-xs);
@@ -310,7 +333,7 @@
   .motiv-layout { grid-template-columns: 1fr; }
   .motiv-graph-container { height: clamp(300px, 60vh, 480px); }
   .motiv-panel { max-height: none; }
-  .motiv-layer-toggles { margin-left: 0; }
+  .motiv-layer-toggles { justify-content: flex-start; }
 }
 
 @media (max-width: 640px) {

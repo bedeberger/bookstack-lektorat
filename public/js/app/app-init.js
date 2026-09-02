@@ -9,6 +9,7 @@ import { configureI18n, getSupportedLocales } from '../i18n.js';
 import { setupSpellcheckDispatch } from '../cards/editor-spellcheck/dispatch.js';
 import { FILTER_SCOPES } from './app-view.js';
 import { EVT } from '../events.js';
+import { reconcileSessionCaches } from './boot/session-change.js';
 
 export const appInitMethods = {
   // AbortController `_abortCtrl` (initialisiert via app-state.js) hält alle
@@ -132,6 +133,14 @@ export const appInitMethods = {
     } catch (e) {
       console.error('[init:shell]', e);
     }
+
+    // Sitzungswechsel behandeln, BEVOR der erste gecachte Read laeuft: laeuft
+    // eine andere Sitzung als die, zu der die SW-Caches gehoeren, sind sie hier
+    // weg. Sonst rendert die Sidebar (und `/config`) aus einer beliebig alten
+    // Kopie, weil Stale-While-Revalidate den Cache-Hit sofort ausliefert und
+    // die Netzantwort nur noch den Cache fuellt, nicht die gerenderte Ansicht.
+    // Faelle + Begruendung: boot/session-change.js.
+    const bootstrapOpts = await reconcileSessionCaches();
 
     let cfg = null;
     try {
@@ -258,7 +267,7 @@ export const appInitMethods = {
       if (this.isAdminOnly) {
         await this._ensurePartial('admin-home');
       } else {
-        await this.loadBooks();
+        await this.loadBooks(bootstrapOpts);
         // Top-3 Recency-Features für Quick-Pills laden (best-effort).
         this.loadRecentFeatures();
         if (this.$store.nav.selectedBookId) this.loadRecentPages(this.$store.nav.selectedBookId);
