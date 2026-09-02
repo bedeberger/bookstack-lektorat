@@ -91,6 +91,12 @@ export const cardsMethods = {
     try {
       // Letzte Seite restaurieren, falls vorhanden und im aktuellen Buch noch
       // existiert. Bei explizitem Home-Klick (resetView) übersprungen.
+      // Bewusst NUR der lokale Merker, kein Server-Rueckfall: die letzte Seite
+      // ist eine Bequemlichkeit dieses Geraets. Serverseitig beantwortet waere
+      // sie ein Sprung in den Editor auf einer Seite, die man hier nie geoeffnet
+      // hat — auf einem neuen Geraet ist die Uebersicht die richtige Landung.
+      // (Das BUCH ist die andere Frage und kommt sehr wohl vom Server, siehe
+      // book/tree/load.js#pickStartBook.)
       if (restoreLastPage) {
         const lastId = getLastPageId(this.$store.session.currentUser?.email, bookId);
         if (lastId && Array.isArray(this.$store.nav.pages) && this.$store.nav.pages.length) {

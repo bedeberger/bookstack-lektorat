@@ -145,7 +145,7 @@ async function _buildSnapshotPayload(bookId, req) {
   let extrasJson = null;
   let lektoratMetrics = null;
   try {
-    const extras = collectExtras(bookId, { analysis: true, lektorat: true });
+    const extras = collectExtras(bookId, { analysis: true, lektorat: true }, sessionEmail(req)); // 3. Arg = Analyse-Scope, siehe _pickScope
     if (extras && (extras.analysis || extras.lektorat)) extrasJson = JSON.stringify(extras);
     const checks = extras?.lektorat?.pageChecks;
     if (Array.isArray(checks) && checks.length) {

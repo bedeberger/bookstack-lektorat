@@ -73,8 +73,20 @@ export const appInitMethods = {
       if (!_hiddenAt) return;
       const delta = Date.now() - _hiddenAt;
       _hiddenAt = 0;
+      // Sichtbar geworden = dieses Buch habe ich jetzt vor mir. Der Stempel
+      // haengt NICHT an der 30-s-Schwelle darunter: die entscheidet ueber einen
+      // Daten-Refresh, waehrend hier bloss die Reihenfolge der Tabs gemessen
+      // wird — gedrosselt im Helfer, damit Alt-Tab-Wechseln nichts kostet.
+      this._touchBookOpened(this.$store.nav.selectedBookId);
       if (delta < 30_000) return;
       this._refreshAfterWake();
+    }, { signal });
+    // Zwei Fenster nebeneinander bleiben BEIDE sichtbar — `visibilitychange`
+    // feuert dort nie, obwohl der Wechsel derselbe ist. Darum zusaetzlich am
+    // Fenster-Fokus stempeln (im Helfer gedrosselt, also hoechstens ein Write
+    // pro Minute und Buch).
+    window.addEventListener('focus', () => {
+      this._touchBookOpened(this.$store.nav.selectedBookId);
     }, { signal });
     window.addEventListener('beforeunload', (e) => {
       if (this.editMode && this.editDirty) { e.preventDefault(); e.returnValue = ''; }
@@ -283,10 +295,12 @@ export const appInitMethods = {
       if (!this.isAdminOnly) await this._maybeOpenBookOverview();
       this._syncUrlNow();
       this._applyingHash = false;
-      if (this.$store.nav.selectedBookId) {
-        try {
-          localStorage.setItem(`sw:lastBookId:${this.$store.session.currentUser?.email || ''}`, String(this.$store.nav.selectedBookId));
-        } catch (_) {}
+      // Startbuch als „zuletzt offen" melden — aber NUR aus einem sichtbaren
+      // Tab. Nach einem Deploy laden alle Tabs neu (controllerchange → reload);
+      // stempelte jeder Boot, gewaenne der zuletzt fertig gewordene, also die
+      // Netz-Latenz. Ein verstecktes Neuladen ist kein Oeffnen.
+      if (this.$store.nav.selectedBookId && !document.hidden) {
+        this._touchBookOpened(this.$store.nav.selectedBookId, { force: true });
       }
       this._setupHashRouting();
       // Buchwechsel (Combobox, Hash-Nav oder programmatisch) → Seiten/Tree neu laden.
@@ -317,9 +331,7 @@ export const appInitMethods = {
         // _resetBookScopedState löscht User-Eingaben (Filter, offene Karten),
         // also überspringen.
         if (String(newVal) === String(oldVal)) return;
-        try {
-          localStorage.setItem(`sw:lastBookId:${this.$store.session.currentUser?.email || ''}`, String(newVal));
-        } catch (_) {}
+        this._touchBookOpened(newVal, { force: true });
         this._resetBookScopedState();
         this._loadBookRole(newVal);
         this._loadBookFlagsForCurrentBook(newVal);

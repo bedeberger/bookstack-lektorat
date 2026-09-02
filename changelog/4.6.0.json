@@ -1,0 +1,51 @@
+{
+  "version": "4.6.0",
+  "date": "2026-09-02",
+  "entries": [
+    {
+      "kind": "neu",
+      "de": "Recherche-Karte, neue Ansicht „Status“: Die Fundstücke stehen in vier Spalten von „Offen“ bis „Eingearbeitet“ und lassen sich per Ziehen weiterschieben. So ist sichtbar, was noch auf den Weg in den Text wartet.",
+      "en": "Research card, new “Status” view: Your findings sit in four columns from “Open” to “Incorporated” and can be dragged along. You can see at a glance what is still waiting to make it into the text."
+    },
+    {
+      "kind": "neu",
+      "de": "Recherche-Karte: Neben jedem Link liest ein Knopf die verlinkte Seite und übernimmt Titel, Text und Herkunft ins Fundstück. Damit muss ein geteilter Link nicht mehr von Hand abgeschrieben werden.",
+      "en": "Research card: Next to every link, a button reads the linked page and pulls its title, text and origin into the finding. A shared link no longer has to be typed out by hand."
+    },
+    {
+      "kind": "neu",
+      "de": "Die App startet mit dem Buch, das Sie zuletzt vor sich hatten — auch dann, wenn Sie an einem anderen Gerät weiterarbeiten oder mehrere Bücher in mehreren Tabs offen haben.",
+      "en": "The app now opens with the book you had in front of you most recently — including when you continue on another device or keep several books open in several tabs."
+    },
+    {
+      "kind": "neu",
+      "de": "Motiv-Werkstatt: Im geöffneten Thema legt eine Zeile ein neues Motiv gleich in diesem Thema an. Der Umweg über die Leiste oben und die nachträgliche Zuordnung entfällt.",
+      "en": "Motif workshop: Inside an open theme, one field creates a new motif directly in that theme. No more detour via the bar at the top and assigning the theme afterwards."
+    },
+    {
+      "kind": "verbessert",
+      "de": "Motiv-Werkstatt: „Einpassen“ und „Anordnen“ erscheinen nur noch in der Konstellation, wo sie etwas bewirken. Die übrigen Knöpfe der Leiste sind nach Aufgabe gruppiert.",
+      "en": "Motif workshop: “Fit” and “Arrange” now appear only in the constellation, where they actually do something. The remaining buttons in the bar are grouped by purpose."
+    },
+    {
+      "kind": "verbessert",
+      "de": "Motiv-Werkstatt: Aus einem geöffneten Motiv führt ein Zurück-Knopf wieder in die Themenliste. Bisher war das der einzige Zustand ohne sichtbaren Ausgang.",
+      "en": "Motif workshop: An open motif now has a back button to the theme list. Until now this was the only view without a visible way out."
+    },
+    {
+      "kind": "behoben",
+      "de": "Referenz-Panel neben dem Editor, Reiter „Figuren“: Die Figuren des Kapitels standen doppelt in der Liste.",
+      "en": "Reference panel beside the editor, “Characters” tab: The characters of the chapter appeared twice in the list."
+    },
+    {
+      "kind": "behoben",
+      "de": "Buch einspielen (Buch-Bundle und Ordner-Import): Hatten zwei Personen dasselbe Buch analysiert, standen Figuren, Orte und Szenen danach doppelt im Katalog. Jetzt wird genau eine Analyse übernommen, und der Bericht sagt, wenn eine zweite mitgeliefert war.",
+      "en": "Importing a book (book bundle and folder import): If two people had analysed the same book, characters, places and scenes ended up duplicated in the catalogue. Exactly one analysis is now taken over, and the report says when a second one came along."
+    },
+    {
+      "kind": "behoben",
+      "de": "Fehler- und Stil-Heatmap: Das Schliessen-Kreuz der aufgeklappten Detailbox sah wie eine zweite Aktion neben dem Titel aus.",
+      "en": "Error and style heatmap: The close cross of the expanded detail box looked like a second action next to the title."
+    }
+  ]
+}

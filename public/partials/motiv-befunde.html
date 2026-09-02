@@ -64,7 +64,7 @@
   </div>
 
   <div class="motiv-consistency" x-show="consistencyResult" x-cloak>
-    <div class="motiv-checks-head">
+    <div class="card-section-head">
       <h4 class="motiv-panel-heading" x-text="$app.t('motiv.consistency.title')"></h4>
       <button type="button" class="icon-btn icon-btn--ghost" @click="dismissConsistency()"
               :data-tip="$app.t('motiv.consistency.closePanel')" :aria-label="$app.t('motiv.consistency.closePanel')">
@@ -73,7 +73,7 @@
     </div>
     <!-- Ohne gelaufene Erkennung stand der KI keine Ist-Seite zur Verfügung — das
          gehört an den Befund, nicht in die Fussnote. -->
-    <div class="motiv-hint" x-show="consistencyResult && consistencyResult.scanned === false" x-cloak>
+    <div class="motiv-hint motiv-hint--warn" x-show="consistencyResult && consistencyResult.scanned === false" x-cloak>
       <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#alert-triangle"/></svg>
       <span x-text="$app.t('motiv.consistency.unscannedNote')"></span>
     </div>
@@ -94,7 +94,7 @@
             <span class="motiv-check-text" x-text="k.problem"></span>
             <!-- Sprungziel kommt deterministisch aus dem Fund-Index, nicht aus dem
                  Modelltext (ein erfundenes Ziel fiele niemandem auf). -->
-            <button type="button" class="tag motiv-check-beleg internal-link"
+            <button type="button" class="tag motiv-check-beleg"
                     x-show="k.fundstelle && k.fundstelle.page_id"
                     @click.stop="$app.gotoPageById(k.fundstelle.page_id)"
                     :data-tip="$app.t('motiv.consistency.gotoBeleg')"

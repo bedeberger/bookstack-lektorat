@@ -1,6 +1,6 @@
 # ERD — schreibwerkstatt
 
-Stand: Schema-Version 280, 159 Tabellen (ohne `sqlite_*`/`schema_version`/FTS5-Shadow-Tables; inkl. FTS5-Virtual `search_index`/`search_trigram` + `search_meta`).
+Stand: Schema-Version 282, 159 Tabellen (ohne `sqlite_*`/`schema_version`/FTS5-Shadow-Tables; inkl. FTS5-Virtual `search_index`/`search_trigram` + `search_meta`).
 
 Quelle: Squashed-Schema-Snapshot in [db/squashed-schema.js](../db/squashed-schema.js) (regeneriert via `node tools/dump-schema.js`) + [db/migrations.js](../db/migrations.js). Drift gegen die Legacy-Migration-Kette ist durch [tests/unit/squash-drift.test.mjs](../tests/unit/squash-drift.test.mjs) gegated. Mermaid-Diagramme — in VSCode mit „Markdown Preview Mermaid Support" (oder GitHub) direkt sichtbar.
 
@@ -513,6 +513,7 @@ erDiagram
     TEXT    doc_text    "extrahierter Plain-Text (FTS + KI-Verknuepfung)"
     INTEGER doc_pages
     INTEGER doc_chars   "Laenge von doc_text — == MAX_TEXT_CHARS heisst: Volltext gedeckelt"
+    TEXT    status      "offen|in_arbeit|eingearbeitet|verworfen — Einarbeitungs-Achse (Spalten des Status-Boards); NEBEN archived, nicht darin"
     INTEGER pinned
     INTEGER archived
     TEXT    created_at
@@ -1710,10 +1711,11 @@ erDiagram
     TEXT    granted_by
   }
   book_shelf {
-    INTEGER book_id     PK,FK "books(book_id) CASCADE"
-    TEXT    user_email  PK,FK "app_users(email) CASCADE"
-    TEXT    pinned_at   "NULL = nicht angeheftet"
-    TEXT    archived_at "NULL = nicht archiviert"
+    INTEGER book_id        PK,FK "books(book_id) CASCADE"
+    TEXT    user_email     PK,FK "app_users(email) CASCADE"
+    TEXT    pinned_at      "NULL = nicht angeheftet"
+    TEXT    archived_at    "NULL = nicht archiviert"
+    TEXT    last_opened_at "NULL = nie offen gehabt; groesster Stempel = Startbuch"
     TEXT    updated_at
   }
   book_share_invites {

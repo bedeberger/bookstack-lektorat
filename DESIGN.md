@@ -37,6 +37,7 @@ Token-Referenz (Farben, Radien, Spacing, Schriftgrössen): [public/css/tokens.cs
 - [Wortwolke](#wortwolke-wortschatz-cloud) — gewichtete Wortliste als Fläche (d3-cloud, lazy)
 - [Entity-List](#entity-list-listendarstellung) — Listen mit Detail-Drawer
 - [Listen-Anriss + Detail-Dialog](#listen-anriss--detail-dialog) — Zeilen-Cap in der Liste, Volltext im `<dialog>`
+- [Status-Board (Kanban einer Listen-Karte)](#status-board-kanban-einer-listen-karte) — zweite Ansicht auf denselben Bestand: Spalten = Stufen, Drag setzt nur das Feld
 - [Karten-Toolbar](#karten-toolbar-card-toolbar) — Aktionszeile im Karten-Body
 - [Filter-Bar](#filter-bar-listenfilter) — Such-/Sort-Eingaben
 - [Heatmap-Visualisierung](#heatmap-visualisierung) — Daten-Intensität
@@ -614,7 +615,7 @@ Niemals `x-text` für Icon-Buttons mit zwei Zuständen — `x-text` setzt `textC
 - Seiten-Actions: `spell-check` (Lektorat/Prüfen), `pencil` (Bearbeiten), `maximize` (Fokus-Editor), `message-square` (Seiten-Chat), `lightbulb` (Ideen), `share-2` (Seite teilen)
 - Sidebar / Navigation: `rotate-cw` (Seiten neu laden), `list-tree` (Buch organisieren), `download` (Export), `book-open` (Seite öffnen)
 - Clients: `laptop-minimal` (macOS-App), `smartphone` (Android-App), `puzzle` (Chrome-Erweiterung) — je einmal pro Client und Oberfläche: im CTA-Button der Landing-Client-Sektion und im Zeilen-Kopf der Profil-Download-Zeile. Die Landing lädt dafür `css/components/icons.css` mit (pre-auth erlaubt über den `/css/`-Prefix, Sprite über `/icons.svg` in `PUBLIC_ASSETS`).
-- **Schliessen: immer `x`** (Lucide) — alle Karten-/Panel-/Overlay-Close-Buttons rendern das `x`-Sprite-Icon, nie ein `×`/`&#x2715;`-Glyph oder ein Text-„Schliessen". Basis ist das Primitive **`.btn-close`** ([components/btn-close.css](public/css/components/btn-close.css)): es trägt den invarianten Kern (randlose Fläche, `inline-flex`-Zentrierung, Ruhefarbe, Hover), die Varianz läuft über `--close-size` / `--close-pad` / `--close-color`. Adoptiert: `.figur-lookup-close`, `.synonym-picker-close`. Noch mit eigener Vollkopie und **bei Berührung nachzuziehen**: `.btn-card-close`, `.edit-find-close`, `.book-editor-find-close`, `.entity-popover-close`, `.heatmap-detail-close`, `.job-toast-close`, `.revision-viewer__close`, `.shortcuts-close` — beim Umstellen den dort bestehenden `font-size`/`padding`-Wert als `--close-size`/`--close-pad` mitnehmen, nicht auf den Default vereinheitlichen. Destruktives Entfernen (Chips, Session/Seite/Kapitel löschen) ist **kein** Schliessen — eigene Semantik.
+- **Schliessen: immer `x`** (Lucide) — alle Karten-/Panel-/Overlay-Close-Buttons rendern das `x`-Sprite-Icon, nie ein `×`/`&#x2715;`-Glyph oder ein Text-„Schliessen". Basis ist das Primitive **`.btn-close`** ([components/btn-close.css](public/css/components/btn-close.css)): es trägt den invarianten Kern (randlose Fläche, `inline-flex`-Zentrierung, Ruhefarbe, Hover), die Varianz läuft über `--close-size` / `--close-pad` / `--close-color`. Adoptiert: `.figur-lookup-close`, `.synonym-picker-close`, `.heatmap-detail-close`. Noch mit eigener Vollkopie und **bei Berührung nachzuziehen**: `.btn-card-close`, `.edit-find-close`, `.book-editor-find-close`, `.entity-popover-close`, `.job-toast-close`, `.revision-viewer__close`, `.shortcuts-close` — beim Umstellen den dort bestehenden `font-size`/`padding`-Wert als `--close-size`/`--close-pad` mitnehmen, nicht auf den Default vereinheitlichen. Destruktives Entfernen (Chips, Session/Seite/Kapitel löschen) ist **kein** Schliessen — eigene Semantik.
 
 Neuer Bedarf → Lucide-SVG von [lucide.dev](https://lucide.dev) als `<symbol>` in `public/icons.svg` ergänzen. Der Shell-Cache zieht über den Content-Hash automatisch nach (`npm run sw:manifest`, siehe CLAUDE.md „Shell-Cache: kein manueller Bump") — nichts hochzuzählen.
 
@@ -1231,6 +1232,39 @@ CSS: [public/css/entities/entity-list.css](public/css/entities/entity-list.css).
 - Kein `<details>`/`<summary>` für den Anriss; das ist keine klappbare Section (Pattern [Klappbarer Section-Toggle](#klappbarer-section-toggle-accordion)), sondern ein Overflow-Cap.
 
 **Beispiele:** [recherche-item.html](public/partials/recherche-item.html) + [recherche-detail.html](public/partials/recherche-detail.html) + [recherche-create.html](public/partials/recherche-create.html) (geteilte Felder: [recherche-form-fields.html](public/partials/recherche-form-fields.html)), E2E: [tests/e2e-app/recherche-overview.spec.js](tests/e2e-app/recherche-overview.spec.js).
+
+---
+
+## Status-Board (Kanban einer Listen-Karte)
+
+**Use:** Eine Listen-Karte bekommt eine **zweite Ansicht** auf denselben Bestand, wenn neben der Frage „was habe ich?" eine zweite, gleich wichtige Frage steht: „wo steht jedes Stück?" (Recherche-Board: Einarbeitungs-Stufen offen → in Arbeit → eingearbeitet, dazu verworfen). Spalten sind die Stufen, Karten die Einträge.
+
+**Markup** (Umschalter in [recherche.html](public/partials/recherche.html), Board in [recherche-status-board.html](public/partials/recherche-status-board.html)):
+```html
+<div class="tabs entity-view-toggle" role="tablist" :aria-label="t('…viewLabel')">
+  <template x-for="m in ['list','status']" :key="m">
+    <button type="button" role="tab" class="tabs-btn"
+            :class="{ 'tabs-btn--active': viewMode === m }"
+            :aria-selected="viewMode === m" @click="viewMode = m"
+            x-text="t('…view.' + m)"></button>
+  </template>
+</div>
+…
+<div class="research-status-cell" :data-research-status-cell="st">…</div>
+```
+
+**Klassen** [entities/recherche/status-board.css](public/css/entities/recherche/status-board.css): `.research-status-board` (Flex-Spalten, horizontal scrollend, `.is-refreshing` wie die Liste) · `.research-status-column--<stufe>` (setzt `--status-accent` aus den semantischen Tokens) · `.research-status-column-head` (sticky, Titel + Zähler) · `.research-status-cell` (SortableJS-Container, wächst über die Karten hinaus) · `.research-status-card` + `.research-status-grip` · `.research-status-badge` (die Stufe in Liste + Detailansicht).
+
+**Regeln:**
+- **Umschalter, nicht zweite Karte.** Der Toggle ist die `.tabs.entity-view-toggle`-Reihe über der Toolbar (Muster der Orte-Karte); die Wahl liegt global im `localStorage`, nicht pro Buch — es ist eine Arbeitsweise, keine Eigenschaft des Buchs.
+- **Ein Bestand, eine Filterleiste.** Beide Ansichten rendern dieselbe geladene Liste; der Umschalter steht **über** der Filterleiste, damit sichtbar ist, dass Filter und Sortierung für beide gelten. Ein eigener Request pro Ansicht zeigt bei aktivem Filter zwei verschiedene Bestände.
+- **Die Spalte ist die Aussage, nicht die Position darin.** Fehlt der Entität eine `sort_order`, trägt ein Drag genau eine Information: die neue Spalte. Dann wird der DOM-Move von SortableJS **immer** zurückgenommen (`revertSortable`, siehe [sortable-dnd.js](public/js/sortable-dnd.js)) — auch innerhalb derselben Spalte — und nur das Feld geschrieben.
+- **`x-if` ums Board, `x-show` darin.** Die Spalten laufen je einmal über den ganzen Bestand; das soll in der Listenansicht nicht mitlaufen (`x-if` am Umschalter-Zustand). Innen bleibt `x-show`, sonst verschwinden beim Leeren der Liste die Drag-Container und die gebundenen Sortable-Instanzen zeigen ins Leere. Neu binden am `viewMode`-Watcher, nicht bei jeder Datenänderung.
+- **Zwei Ansichten, zwei Attribute.** Beide stehen im Markup — ein gemeinsames `data-…-id` träfe beim Deep-Link/Scroll die versteckte Ansicht (und ein Scroll dorthin ist ein No-op). Die Liste behält ihr Attribut, das Board bekommt ein eigenes.
+- **Der Status braucht einen tastaturerreichbaren Weg.** Drag ist Maus-Komfort; gesetzt wird die Stufe zusätzlich im vorhandenen Aktionsmenü (`.context-menu-header--inline` + `role="menuitemradio"`, aktiv = `.context-menu-item--on`). Ein Schreibpfad, alle Oberflächen — kein zweites Widget daneben.
+- **Die Stufe erscheint auch in der Liste** (`.research-status-badge`), sonst sehen dieselben Daten je Ansicht anders aus. Auf der Board-Karte wäre sie eine Doppelung der Spalte und steht dort nicht.
+
+**Beispiel:** [recherche-status-board.html](public/partials/recherche-status-board.html) + [recherche/status.js](public/js/book/recherche/status.js), Unit: [tests/unit/research-status.test.mjs](tests/unit/research-status.test.mjs).
 
 ---
 
@@ -1901,7 +1935,7 @@ Nur in Sidebar-Tree verwendet. Bei neuer hierarchischer Liste: erst prüfen, ob 
 
 **CSS** [public/css/components/context-menu.css](public/css/components/context-menu.css):
 - `.context-menu` — `position: fixed`, `z-index: var(--z-popover)`, Border + Shadow.
-- `.context-menu-header` — Target-Name oben, gemuted + ellipsed.
+- `.context-menu-header` — Target-Name oben, gemuted + ellipsed. Modifier `--inline` für einen Gruppen-Kopf **mitten** im Menü (nach einem `.context-menu-sep`, z.B. „Status" im Recherche-Item-Menü): nimmt den negativen Anschluss an den Menü-Rand zurück, der sonst in den Trenner darüber zieht.
 - `.context-menu-item` — Volle Breite, Hover/Focus = `--color-hover`.
 - `.context-menu-item--danger` — Rot getönt, Hover = `--color-err-bg`.
 - `.context-menu-sep` — 1 px Trenner zwischen Gruppen.
@@ -2946,6 +2980,7 @@ Drei Editoren leben in eigenen Subfoldern (`book/`, `focus/`, `notebook/`); edit
 | [entities/entity-list.css](public/css/entities/entity-list.css) | `.entity-list` / `-row`, `.severity-tag*`, `.collapsible-*`, Skeleton, `.ort-*` Schauplätze. |
 | [entities/orte-map.css](public/css/entities/orte-map.css) | Orte-Karte View-Mode `map` (Geo-Karte via Leaflet): `.ort-map*` Container + Geocode-Liste. Nur bei `book_settings.orte_real`. |
 | [entities/recherche/board.css](public/css/entities/recherche/board.css) | Recherche-/Wissensboard (Board-Teil): Toolbar/Filter, Anlege-/Edit-Formular, einspaltige Schnipsel-Liste (`.recherche-list` + `.research-item`), Kind-Badges, Verknüpfungs-/Tag-Chips, KI-Vorschläge, Link-Picker, Link-Zeile (`.research-item-url-row`: Link + „als Quelle übernehmen"-`.icon-btn--ghost`, auf 22px kontext-verkleinert über `.research-url-tosource`, weil 28px die Zeilenhöhe einer `font-size-sm`-Liste bestimmen würde). Native-Vollbild (`.card--recherche:fullscreen`, Toggle via `fullscreen.js` wie Plot-Board) → Liste zentriert mit Lese-Maximalbreite. |
+| [entities/recherche/status-board.css](public/css/entities/recherche/status-board.css) | Recherche-Board, Ansicht „Status": Kanban ueber die Einarbeitungs-Stufen (`.research-status-board` mit vier gleich breiten Spalten, `.research-status-column--<status>` traegt die semantische Stufen-Farbe als `--status-accent`), Karte (`.research-status-card` + Drag-Griff `.research-status-grip`, SortableJS-Zustaende), Stelle-im-Buch-Chips, „eingearbeitet ohne Stelle"-Befund und die Status-Plakette (`.research-status-badge`) fuer Liste + Detailansicht. Laedt NACH board.css und benutzt dessen Vokabular (Kind-Badge, Titel-Button, Link-Chip) weiter. Mobile (≤700px) stapelt die Spalten. |
 | [entities/recherche/dialog.css](public/css/entities/recherche/dialog.css) | Geteilte `<dialog>`-Shell der Recherche-Karte (`.research-dialog*`) für Detailansicht **und** Anlegen-Modal: Panelbreite, stehender `__head`, scrollender `__scroll`, `__bar`-Fussleiste, Mobile als vollflächiges Blatt. `__text` setzt den Volltext in Lesegrösse mit begrenztem Satzspiegel, `__figure`/`__image` zeigen das Bild gross (bis 60vh), `__doc`/`__figcaption` tragen die Anhang-Aktionen. Dazu `textarea.recherche-input--tall` fürs Redigieren langer Funde. |
 | [entities/recherche/chat.css](public/css/entities/recherche/chat.css) | Recherche-Chat derselben Karte: Spalten-Layout `.recherche-split` (ab 1280px Board links / Chat rechts als sticky Spalte `clamp(420px, 32vw, 620px)` — breiter als der 420px-Seiten-Chat, weil Web-Such-Antworten und Fundstück-Vorschläge mehr Zeilenbreite brauchen; darunter Flex-Spalte mit `order: -1`, Chat über dem Board) plus das Panel selbst (`.research-chat*`: Kopf, Nachrichtenhöhe, Quellenliste, Speicher-Vorschläge). |
 | [entities/sources.css](public/css/entities/sources.css) | Quellenverzeichnis-Karte: Toolbar/Filter-Bar (Compact-Höhen-Scope für `.filter-search-input`), Quellen-Tabelle (`.sources-table` via `sortableTable`), Zitier-Badge (`.sources-cite-badge`, Hue aus `--card-accent`), Detail-Formular, Fundstellen-Panel, Zitat-Kennzahlen-Reihe (`.sources-quote-stats` / `-stat` / `-stat-value` / `-stat-label` / `-stats-hint`: Zitat-Anteil + wörtlich/Paraphrase/belegte Quellen — schlichte Wert/Label-Reihe am Tabellenfuss, bewusst kein Tile-Grid). Enthält ausserdem `.sources-preview` (hängend eingerückte Formatter-Vorschau) — **geteilt** mit dem Quellen-Tab der Bucheinstellungen. |

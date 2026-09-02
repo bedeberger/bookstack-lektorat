@@ -208,3 +208,55 @@ test('Motiv-Werkstatt: Motivwechsel speichert ungespeicherte Edits', async ({ pa
 
   guard.assertClean('Motiv-Werkstatt Commit-on-Switch');
 });
+
+// Schnellweg im Themen-Editor: Motiv mit getipptem Namen anlegen und sofort dem
+// offenen Thema zuordnen. Prüft beides — die Verdrahtung (theme_id gesetzt,
+// Auswahl wandert in den Motiv-Editor, Draft geleert) UND dass das ausgelagerte
+// Themen-Editor-Fragment (@include motiv-panel-theme) überhaupt im Baum landet:
+// es hängt hinter `x-if`, kein anderer Test öffnet diesen Panel-Zustand.
+test('Motiv-Werkstatt: Themen-Editor legt ein Motiv direkt im Thema an', async ({ page }) => {
+  const guard = attachConsoleGuard(page);
+  await bootApp(page);
+  await selectSeededBook(page);
+
+  await page.evaluate(() => window.__app.toggleMotivCard());
+  await page.waitForFunction(() => {
+    const el = document.querySelector('.card--motiv');
+    if (!el) return false;
+    const c = window.Alpine.$data(el);
+    return c && !c.loading;
+  }, null, { timeout: 15000 });
+
+  // Thema anlegen → addTheme selektiert es, der Themen-Editor rendert.
+  await page.evaluate(async () => {
+    const card = window.Alpine.$data(document.querySelector('.card--motiv'));
+    card.newThemeName = 'Schnellweg-Thema';
+    await card.addTheme();
+  });
+  const quickInput = page.locator('.motiv-theme-addmotif input');
+  await expect(quickInput, 'Schnellweg-Zeile im Themen-Editor gerendert').toBeVisible();
+
+  const result = await page.evaluate(async () => {
+    const card = window.Alpine.$data(document.querySelector('.card--motiv'));
+    const themeId = card.selectedThemeId;
+    card.newThemeMotifName = 'Schnellweg-Motiv';
+    await card.addMotifToTheme();
+    const m = card.motifById(card.selectedMotifId);
+    return {
+      themeId,
+      motifName: m?.name,
+      motifThemeId: m?.theme_id,
+      selectedThemeId: card.selectedThemeId,
+      draft: card.newThemeMotifName,
+      err: card.errorMessage,
+    };
+  });
+
+  expect(result.motifName, 'Motiv unter dem getippten Namen angelegt').toBe('Schnellweg-Motiv');
+  expect(result.motifThemeId, 'dem offenen Thema zugeordnet').toBe(result.themeId);
+  expect(result.selectedThemeId, 'Motiv-Editor loest den Themen-Editor ab').toBe(null);
+  expect(result.draft, 'Draft nach dem Anlegen geleert').toBe('');
+  expect(result.err).toBe('');
+
+  guard.assertClean('Motiv-Werkstatt Schnellweg');
+});

@@ -1,7 +1,7 @@
 'use strict';
 // Buecherregal des Users („Meine Buecher"): Uebersicht ueber ALLE fuer ihn
-// sichtbaren Buecher mit Kennzahlen, plus die zwei persoenlichen Ordnungs-
-// Achsen Anheften und Archivieren.
+// sichtbaren Buecher mit Kennzahlen, plus die drei persoenlichen Achsen
+// Anheften, Archivieren und „zuletzt offen gehabt".
 //
 // Eigener Router statt weiterer Routen in routes/usersettings.js: die Datei ist
 // bereits eine LOC-Altlast (Ratsche in tests/unit/loc-limits.test.mjs) und darf
@@ -68,6 +68,7 @@ router.get('/', (req, res) => {
         archived: !!sh.archivedAt,
         pinned_at: sh.pinnedAt || null,
         archived_at: sh.archivedAt || null,
+        last_opened_at: sh.lastOpenedAt || null,
         is_finished: st.is_finished ? 1 : 0,
         exclude_from_stats: st.exclude_from_stats ? 1 : 0,
         goal_target_chars: st.goal_target_chars ?? null,
@@ -77,6 +78,38 @@ router.get('/', (req, res) => {
     res.json({ books, exportTypes: bookShelf.EXPORT_JOB_TYPES });
   } catch (e) {
     logger.error('[me/books] DB-Fehler: ' + e.message, { user: email });
+    res.status(500).json({ error_code: 'DB_ERROR' });
+  }
+});
+
+/**
+ * GET /me/books/last-opened — welches Buch hatte der User zuletzt vor sich.
+ * `{ book_id, last_opened_at }` bzw. `{ book_id: null }`, wenn noch keines.
+ *
+ * Der Boot waehlt daraus sein Startbuch. Eigener, schlanker Endpunkt und NICHT
+ * ein Feld an `GET /content/books`: die Buchliste liefert der Service Worker
+ * als Stale-While-Revalidate (das ist ihr Zweck — die Sidebar steht sofort und
+ * auch offline), und aus einer alten Kopie gelesen waere der Zeitstempel genau
+ * der Stand des letzten Besuchs. Diese Antwort darf nicht stale sein.
+ *
+ * Auch nicht Teil von `GET /me/books`: das ist die Kennzahlen-Antwort der
+ * Regal-Karte (ein Dutzend Aggregate ueber alle Buecher) und viel zu teuer fuer
+ * den kritischen Boot-Pfad.
+ */
+router.get('/last-opened', (req, res) => {
+  const email = sessionEmail(req);
+  if (!email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
+  // Explizit unkacheln. Der Service Worker beruehrt `/me/*` ohnehin nicht (er
+  // behandelt nur `/config`, `/content/*` und Shell-Assets), aber die Aussage
+  // dieses Endpunkts ist „Stand JETZT" — eine aus einem Zwischenspeicher
+  // beantwortete Anfrage waere wieder der Stand des letzten Besuchs.
+  res.setHeader('Cache-Control', 'private, no-store');
+  try {
+    const ids = bookAccess.listBookIdsForUser(email).map(r => r.book_id);
+    const row = bookShelf.lastOpenedBook(email, ids);
+    res.json(row || { book_id: null, last_opened_at: null });
+  } catch (e) {
+    logger.error('[me/books/last-opened] DB-Fehler: ' + e.message, { user: email });
     res.status(500).json({ error_code: 'DB_ERROR' });
   }
 });
@@ -104,6 +137,34 @@ router.put('/:book_id', jsonBody, (req, res) => {
     res.json({ ok: true, ...next });
   } catch (e) {
     logger.error(`[me/books] Regal-Write fehlgeschlagen (book=${bookId}): ${e.message}`);
+    res.status(500).json({ error_code: 'DB_ERROR' });
+  }
+});
+
+/**
+ * PUT /me/books/:book_id/opened — „ich habe dieses Buch gerade vor mir".
+ * Setzt `book_shelf.last_opened_at` auf jetzt.
+ *
+ * Der Startpunkt der App beim Aufruf der Stamm-URL ist das Buch mit dem
+ * groessten dieser Zeitstempel. Bewusst eine EIGENE Route neben `PUT
+ * /:book_id`: das dortige `NOTHING_TO_UPDATE` verlangt eine Achse im Body, und
+ * die Aussage hier ist keine Regal-Aenderung, die der User trifft, sondern eine
+ * Messung, die der Client nebenbei meldet. Kein Body, damit sie sich nicht
+ * versehentlich mit Anheften/Archivieren vermischt.
+ *
+ * Rolle `viewer` wie die uebrigen Regal-Achsen — die Zeile sagt etwas ueber die
+ * eigene Liste, nicht ueber das Buch. Der Client ruft das gedrosselt (Buchwahl,
+ * Seitenoeffnung, Sichtbarwerden des Tabs); der Aufruf ist idempotent.
+ */
+router.put('/:book_id/opened', (req, res) => {
+  const bookId = toIntId(req.params.book_id);
+  if (!bookId) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
+  if (!guardBook(req, res, bookId, 'viewer')) return;
+  try {
+    const next = bookShelf.touchOpened(bookId, sessionEmail(req));
+    res.json({ ok: true, ...next });
+  } catch (e) {
+    logger.error(`[me/books] Opened-Write fehlgeschlagen (book=${bookId}): ${e.message}`);
     res.status(500).json({ error_code: 'DB_ERROR' });
   }
 });

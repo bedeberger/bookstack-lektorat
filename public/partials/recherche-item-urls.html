@@ -1,10 +1,10 @@
 <!-- Link-Liste eines Recherche-Fundstuecks. Fragment (string-seitiger @include),
      weil der Block im x-for-Template-Content von recherche.html steckt — ein
      DOM-Placeholder greift dort nicht.
-     Je Zeile: der Link selbst + „als Quelle uebernehmen" (POST /sources/from-research
-     mit genau dieser url_id, siehe public/js/sources/from-research.js). Die Aktion
-     haengt an der EINZELNEN Zeile, weil nur der User weiss, welcher der Links der
-     Nachweis ist. -->
+     Je Zeile: der Link selbst + zwei Aktionen, die BEIDE genau diese `url_id`
+     mitschicken, weil nur der User weiss, welcher der Links gemeint ist:
+       „Seite lesen"           POST /research/:id/scrape  (public/js/book/recherche/scrape.js)
+       „als Quelle uebernehmen" POST /sources/from-research (public/js/sources/from-research.js) -->
 <div class="research-item-urls" x-show="item.urls && item.urls.length">
   <template x-for="u in item.urls" :key="u.url_id">
     <div class="research-item-url-row">
@@ -12,7 +12,14 @@
         <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#external-link"/></svg>
         <span x-text="u.label || u.url"></span>
       </a>
-      <button type="button" class="icon-btn icon-btn--ghost research-url-tosource"
+      <button type="button" class="icon-btn icon-btn--ghost research-url-action"
+              @click="scrapeUrl(item, u)"
+              :disabled="urlScrapeBusy(item, u)"
+              :data-tip="$app.t('recherche.scrape.tip')"
+              :aria-label="$app.t('recherche.scrape.tip')">
+        <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#download"/></svg>
+      </button>
+      <button type="button" class="icon-btn icon-btn--ghost research-url-action"
               @click="urlToSource(item, u)"
               :disabled="urlToSourceBusy(item, u)"
               :data-tip="$app.t('recherche.toSource.tip')"

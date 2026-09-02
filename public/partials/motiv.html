@@ -18,6 +18,10 @@
     </div>
     <div class="card-header-aside">
       <div class="card-actions card-actions--grouped">
+        <!-- Buendel 1: die KI-/Index-Laeufe (Brainstorm, frischer Brainstorm,
+             Motiverkennung). Buendel 2: Ansichts-Steuerung des Graphen.
+             Buendel 3: Vollbild. Getrennt durch `.action-sep` — eine flache
+             Sechserreihe liest sich als eine Aktionsart. -->
         <button type="button" class="icon-btn icon-btn--ghost"
                 @click="runBrainstorm()" :disabled="brainstorming"
                 :data-tip="$app.t('motiv.brainstorm.run')" :aria-label="$app.t('motiv.brainstorm.run')">
@@ -35,14 +39,24 @@
           <span x-show="scanning" class="spinner"></span>
           <svg x-show="!scanning" class="icon" aria-hidden="true"><use href="/icons.svg?v=693#search"/></svg>
         </button>
-        <button type="button" class="icon-btn icon-btn--ghost" @click="fitGraph()"
-                :data-tip="$app.t('motiv.graph.fit')" :aria-label="$app.t('motiv.graph.fit')">
-          <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#scan"/></svg>
-        </button>
-        <button type="button" class="icon-btn icon-btn--ghost" @click="resetLayout()"
-                :data-tip="$app.t('motiv.graph.resetLayout')" :aria-label="$app.t('motiv.graph.resetLayout')">
-          <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#undo"/></svg>
-        </button>
+        <!-- Ansichts-Steuerung des Graphen: nur in der Konstellation. Im
+             Verlaufsband und in den Befunden gibt es nichts einzupassen oder
+             anzuordnen — ein Knopf, der dort wortlos nichts tut, liest sich als
+             Defekt. Trennstrich und Gruppe tragen dieselbe Bedingung (Muster aus
+             editor-page-actions.html); `.action-group` ist `display: contents`
+             und bricht den Flex-Fluss der Leiste nicht. -->
+        <span class="action-sep" aria-hidden="true" x-show="motivView === 'graph'"></span>
+        <span class="action-group" x-show="motivView === 'graph'">
+          <button type="button" class="icon-btn icon-btn--ghost" @click="fitGraph()"
+                  :data-tip="$app.t('motiv.graph.fit')" :aria-label="$app.t('motiv.graph.fit')">
+            <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#scan"/></svg>
+          </button>
+          <button type="button" class="icon-btn icon-btn--ghost" @click="resetLayout()"
+                  :data-tip="$app.t('motiv.graph.resetLayout')" :aria-label="$app.t('motiv.graph.resetLayout')">
+            <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#undo"/></svg>
+          </button>
+        </span>
+        <span class="action-sep" aria-hidden="true"></span>
         <button type="button" class="icon-btn icon-btn--ghost"
                 :class="{ 'is-active': motivFullscreen }"
                 :aria-pressed="motivFullscreen"
@@ -75,12 +89,11 @@
             :class="{ 'tabs-btn--active': motivView === 'checks' }" :aria-selected="motivView === 'checks'"
             @click="setMotivView('checks')">
       <span x-text="$app.t('motiv.view.checks')"></span>
-      <span class="badge" x-show="checks.length" x-text="checks.length"></span>
+      <span class="tabs-btn-count" x-show="checks.length" x-text="checks.length"></span>
     </button>
   </div>
 
-  <!-- Anlege-Leiste: Thema und Motiv anlegen (beide Formen in EINER Zeile),
-       rechts die Layer-Schalter der Konstellation. -->
+  <!-- Anlege-Leiste: Thema und Motiv anlegen (beide Formen in EINER Zeile). -->
   <div class="motiv-toolbar">
     <div class="motiv-toolbar-group">
       <input type="text" class="motiv-add-input" x-model="newThemeName" data-spellcheck="spelling"
@@ -100,15 +113,21 @@
        Sie schalten, WAS der Graph zeigt, gelten also nur für die Graph-Ansicht —
        in der Anlege-Zeile brachen sie je nach Kartenbreite ohnehin auf eine
        eigene, halb leere Zeile um. -->
-  <div class="motiv-layer-toggles" x-show="motivView === 'graph'">
-    <button type="button" class="motiv-layer-btn" :class="{ 'is-active': layerFigures }" @click="toggleLayer('figures')" x-text="$app.t('motiv.layer.figures')"></button>
-    <button type="button" class="motiv-layer-btn" :class="{ 'is-active': layerBeats }" @click="toggleLayer('beats')" x-text="$app.t('motiv.layer.beats')"></button>
-    <button type="button" class="motiv-layer-btn" :class="{ 'is-active': layerChapters }" @click="toggleLayer('chapters')" x-text="$app.t('motiv.layer.chapters')"></button>
+  <div class="motiv-layer-toggles" x-show="motivView === 'graph'"
+       role="group" :aria-label="$app.t('motiv.layer.label')">
+    <!-- Umschalter, kein Sprung: `<button>` + `:aria-pressed` (wie der Vollbild-
+         Schalter im Kartenkopf). `.is-active` traegt nur die Optik. -->
+    <button type="button" class="motiv-layer-btn" :class="{ 'is-active': layerFigures }"
+            :aria-pressed="layerFigures" @click="toggleLayer('figures')" x-text="$app.t('motiv.layer.figures')"></button>
+    <button type="button" class="motiv-layer-btn" :class="{ 'is-active': layerBeats }"
+            :aria-pressed="layerBeats" @click="toggleLayer('beats')" x-text="$app.t('motiv.layer.beats')"></button>
+    <button type="button" class="motiv-layer-btn" :class="{ 'is-active': layerChapters }"
+            :aria-pressed="layerChapters" @click="toggleLayer('chapters')" x-text="$app.t('motiv.layer.chapters')"></button>
   </div>
 
   <!-- Scan-Status: warnt, wenn die semantische Erkennung aus ist (nur wörtliche
        Trigger), sonst bietet sie Embeddings-Refresh für frische Fundstellen. -->
-  <div class="motiv-hint" x-show="!semanticActive()" x-cloak>
+  <div class="motiv-hint motiv-hint--warn" x-show="!semanticActive()" x-cloak>
     <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#alert-triangle"/></svg>
     <span x-text="$app.t('motiv.hint.semanticOff')"></span>
   </div>

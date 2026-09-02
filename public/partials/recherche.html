@@ -33,6 +33,21 @@
   <div class="recherche-split" :class="{ 'recherche-split--chat': researchChatOpen }">
   <div class="recherche-board">
 
+  <!-- Ansicht-Umschalter (Liste / Status-Board). Zwei Blicke auf DENSELBEN
+       Bestand: die Liste zeigt, was gesammelt ist, das Board, wo es auf dem Weg
+       in den Buchtext steht. Filterleiste und Sortierung gelten fuer beide —
+       darum steht der Umschalter darueber und nicht in der Filterleiste. -->
+  <div x-show="!loading && items.length > 0" class="tabs entity-view-toggle" role="tablist" :aria-label="$app.t('recherche.viewLabel')">
+    <template x-for="m in ['list','status']" :key="m">
+      <button type="button" role="tab"
+              class="tabs-btn"
+              :class="{ 'tabs-btn--active': viewMode === m }"
+              :aria-selected="viewMode === m"
+              @click="viewMode = m"
+              x-text="$app.t('recherche.view.' + m)"></button>
+    </template>
+  </div>
+
   <!-- Toolbar: Anlegen + Filter -->
   <div class="card-toolbar">
     <button type="button" class="btn-compact" @click="startCreate()" :disabled="busy">
@@ -100,10 +115,22 @@
     </button>
   </div>
 
-  <!-- Schnipsel-Liste -->
-  <div class="recherche-list" :class="{ 'is-refreshing': refreshing }" x-show="!loading && items.length > 0">
+  <!-- Schnipsel-Liste (Ansicht „Liste") -->
+  <div class="recherche-list" :class="{ 'is-refreshing': refreshing }" x-show="!loading && items.length > 0 && viewMode === 'list'">
     <!-- @include recherche-item -->
   </div>
+
+  <!-- Status-Board (Ansicht „Status"). `x-if` statt `x-show`: die vier Spalten
+       laufen je einmal ueber den ganzen Bestand, und das soll nicht bei jedem
+       Listen-Render der Liste mitlaufen. Der Preis ist, dass die
+       Drag-Container beim Umschalten frisch entstehen — genau darum bindet
+       `_ensureStatusBoard()` sie am `viewMode`-Watcher neu. Innen `x-show`
+       (nicht wieder `x-if`), damit die Container beim Leeren/Fuellen der Liste
+       stehenbleiben und die gebundenen Sortable-Instanzen nicht ins Leere
+       zeigen. -->
+  <template x-if="viewMode === 'status'">
+    <!-- @include recherche-status-board -->
+  </template>
 
   </div><!-- /.recherche-board -->
 

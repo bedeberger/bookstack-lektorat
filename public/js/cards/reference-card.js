@@ -15,7 +15,10 @@
 // `refCtx`; `refPageName` nennt die fremde Seite, wo es eine gibt. Woran die
 // Zugehoerigkeit haengt, ist pro Reiter verschieden — IMMER an IDs, nie an
 // Namen, ausser wo es keine ID gibt:
-//   Figuren    `$app.chapterFigures` (figure_appearances) ∪ Namens-Treffer
+//   Figuren    `$app.chapterFigures` (figure_appearances) ∪ Namens-Treffer —
+//              die Identitaet ist die TEXT-`fig_id`, die BEIDE Routen als `id`
+//              liefern; eine zweite Achse (Zeilen-ID) laesst jede Kapitel-Figur
+//              als unbekannt gelten und ein zweites Mal in der Liste stehen
 //   Orte       `ort.kapitel` (location_chapters) ∪ Namens-Treffer
 //   Szenen     selectScenesForView — alle drei Toepfe, inkl. der seiten-
 //              gebundenen Szenen desselben Kapitels

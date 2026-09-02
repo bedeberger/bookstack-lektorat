@@ -62,12 +62,27 @@ test('Szene einer anderen Seite nennt diese Seite beim Namen', async ({ page }) 
 
 test('Figuren: Kapitel-Index UND Namens-Treffer, nicht das eine statt des anderen', async ({ page }) => {
   await setup(page);
-  // 21 im Text + im Index, 23 nur im Text (frisch), 22 nur im Index. 24 draussen.
-  expect(await ids(page, 'figur')).toEqual(['figur-21', 'figur-23', 'figur-22']);
-  await expect(page.locator('[data-test="count-figuren"]')).toHaveText('3');
-  await expect(page.locator('[data-test="figur-21"]')).toHaveAttribute('data-ctx', 'page');
-  await expect(page.locator('[data-test="figur-23"]')).toHaveAttribute('data-ctx', 'page');
-  await expect(page.locator('[data-test="figur-22"]')).toHaveAttribute('data-ctx', 'chapter');
+  // fig_21 im Text + im Index, fig_23 nur im Text (frisch), fig_22 nur im
+  // Index, fig_25 nur im Index und noch nicht im Katalog. fig_24 draussen.
+  expect(await ids(page, 'figur'))
+    .toEqual(['figur-fig_21', 'figur-fig_23', 'figur-fig_22', 'figur-fig_25']);
+  await expect(page.locator('[data-test="count-figuren"]')).toHaveText('4');
+  await expect(page.locator('[data-test="figur-fig_21"]')).toHaveAttribute('data-ctx', 'page');
+  await expect(page.locator('[data-test="figur-fig_23"]')).toHaveAttribute('data-ctx', 'page');
+  await expect(page.locator('[data-test="figur-fig_22"]')).toHaveAttribute('data-ctx', 'chapter');
+  await expect(page.locator('[data-test="figur-fig_25"]')).toHaveAttribute('data-ctx', 'chapter');
+});
+
+// Regression: Katalog und Kapitel-Index sind zwei Listen derselben Figuren und
+// werden vereinigt. Sprechen sie nicht dieselbe Identitaet (TEXT-`fig_id`),
+// findet der Vergleich kein Gegenstueck — jede Kapitel-Figur gilt als unbekannt
+// und steht ein zweites Mal in der Liste, obwohl der Figuren-Katalog sie einmal
+// zeigt. Genau das war auf einem Buch mit vielen Figuren zu sehen.
+test('Figuren: eine Figur erscheint nie zweimal', async ({ page }) => {
+  await setup(page);
+  const namen = await page.$$eval('[data-test^="figur-"]', els => els.map(e => e.textContent.trim()));
+  expect(namen).toEqual(['Brandt', 'Roth', 'Kessler', 'Steiner']);
+  expect(new Set(namen).size).toBe(namen.length);
 });
 
 test('Ereignisse: Anker sind IDs — ein gleichnamiges Fremdkapitel zaehlt nicht', async ({ page }) => {
@@ -98,7 +113,9 @@ test('Scope "Buch": kein Kontext-Filter, keine Herkunfts-Markierung', async ({ p
   await expect(page.locator('[data-test="scope"]')).toHaveText('book');
   expect(await ids(page, 'ort')).toEqual(['ort-1', 'ort-2', 'ort-3', 'ort-4']);
   expect(await ids(page, 'szene')).toEqual(['szene-11', 'szene-12', 'szene-13', 'szene-14']);
-  expect(await ids(page, 'figur')).toEqual(['figur-21', 'figur-22', 'figur-23', 'figur-24']);
+  // Buch-Scope zeigt den Katalog — das Waisenkind fig_25 gehoert nicht dazu.
+  expect(await ids(page, 'figur'))
+    .toEqual(['figur-fig_21', 'figur-fig_22', 'figur-fig_23', 'figur-fig_24']);
   expect(await ids(page, 'ereignis'))
     .toEqual(['ereignis-31', 'ereignis-32', 'ereignis-33', 'ereignis-34', 'ereignis-35']);
   expect(await ids(page, 'recherche'))

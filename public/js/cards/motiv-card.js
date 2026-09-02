@@ -94,6 +94,10 @@ export function registerMotivCard() {
     newThemeName: '',
     newMotifName: '',
     newMotifThemeId: '',
+    // Schnellweg im Themen-Editor: Name des dort direkt anzulegenden Motivs.
+    // Eigenes Feld statt newMotifName — die Toolbar-Eingabe ist gleichzeitig
+    // sichtbar und würde sonst mitschreiben.
+    newThemeMotifName: '',
     newRelationTargetId: '',
     newRelationTyp: '',
     // Scan-Job

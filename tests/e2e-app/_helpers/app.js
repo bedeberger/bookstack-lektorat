@@ -12,6 +12,16 @@ async function bootApp(page) {
     null,
     { timeout: 30000 },
   );
+  // Auch auf die Buchwahl warten, nicht nur auf die Liste: das Startbuch faellt
+  // eine Netzantwort spaeter (`GET /me/books/last-opened`, siehe
+  // book/tree/load.js#pickStartBook). Ohne dieses Warten laufen Specs los,
+  // waehrend `nav.selectedBookId` noch leer ist — und buchgebundene Karten
+  // rendern dann nicht.
+  await page.waitForFunction(
+    () => !!window.Alpine.store('nav').selectedBookId,
+    null,
+    { timeout: 30000 },
+  );
 }
 
 // Seed-Buch auswaehlen + Seiten laden (via Hash-Deeplink → _applyHash).

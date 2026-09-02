@@ -29,7 +29,7 @@ after(() => { ctxBoot.cleanup(); });
 
 beforeEach(() => { ctxBoot.dbSeed.reset(); });
 
-async function buildBundleBuffer(bookId, includes = null) {
+async function buildBundleBuffer(bookId, includes = null, opts = {}) {
   const tree = await contentStore.bookTree(bookId, reqCtx);
   const book = await contentStore.loadBook(bookId, reqCtx);
   const metas = [];
@@ -47,8 +47,11 @@ async function buildBundleBuffer(bookId, includes = null) {
   zip.file('book.json', JSON.stringify(bookJson));
   if (norm.analysis || norm.lektorat || norm.chats) {
     const { collectExtras } = require('../../db/book-migration-data');
-    const extras = collectExtras(bookId, norm);
-    if (extras.analysis) zip.file('analysis.json', JSON.stringify(extras.analysis));
+    const extras = collectExtras(bookId, norm, opts.scopeEmail ?? null);
+    // `analysisOverride` baut ein Alt-Bundle nach: vor der Scope-Regel sammelte
+    // der Export den Analyse-Block ungefiltert, also die Analysen ALLER User.
+    const analysis = opts.analysisOverride || extras.analysis;
+    if (analysis) zip.file('analysis.json', JSON.stringify(analysis));
     if (extras.lektorat) zip.file('lektorat.json', JSON.stringify(extras.lektorat));
     if (extras.chats)    zip.file('chats.json', JSON.stringify(extras.chats));
   }
@@ -222,4 +225,83 @@ test('Kaputtes Manifest -> Job-Error badManifest', async () => {
   const buffer = await zip.generateAsync({ type: 'nodebuffer' });
   const job = await runImport(buffer);
   assert.equal(job.status, 'error');
+});
+
+// Zwei Leute am selben Buch heisst zwei Analysen: `figures`/`locations`/`scenes`/
+// … sind pro `user_email` skopiert, jede Analyse hat ihren eigenen `fig_1`-Raum.
+// Beim Restore bekommen alle Zeilen die E-Mail des Importierenden — nimmt das
+// Bundle beide Analysen mit, verschmelzen sie zu EINEM Katalog, in dem jede
+// Figur zweimal steht (mit umbenanntem Schluessel `fig_1__2`). Genau das war im
+// Figuren-Katalog und im Referenz-Slot zu sehen.
+const MITARBEIT = 'mitarbeit@test.dev';
+
+function _seedZweiAnalysen(bookId) {
+  const { db } = require('../../db/connection');
+  const iso = '2026-06-01T10:00:00.000Z';
+  const insFig = db.prepare('INSERT INTO figures (book_id,fig_id,name,updated_at,user_email) VALUES (?,?,?,?,?)');
+  // Analyse des Owners: drei Figuren. Analyse der Mitarbeiterin: zwei — mit
+  // denselben fig_ids, was innerhalb einer Analyse unmoeglich ist.
+  insFig.run(bookId, 'fig_1', 'Held', iso, OWNER);
+  insFig.run(bookId, 'fig_2', 'Gegenspieler', iso, OWNER);
+  insFig.run(bookId, 'fig_3', 'Nebenfigur', iso, OWNER);
+  insFig.run(bookId, 'fig_1', 'Held', iso, MITARBEIT);
+  insFig.run(bookId, 'fig_2', 'Gegenspieler', iso, MITARBEIT);
+  db.prepare('INSERT INTO figure_scenes (book_id,user_email,titel,updated_at) VALUES (?,?,?,?)')
+    .run(bookId, MITARBEIT, 'Szene der Mitarbeiterin', iso);
+  return db;
+}
+
+test('Export nimmt genau EINE Analyse mit — die des exportierenden Users', async () => {
+  ctxBoot.dbSeed.setBook({
+    books: [{ id: 952, name: 'ZweiAnalysen' }],
+    pages: [{ id: 95201, book_id: 952, name: 'S', chapter_id: null, position: 0 }],
+    pageBodies: { 95201: '<p>x</p>' },
+  });
+  _seedZweiAnalysen(952);
+
+  const { collectExtras } = require('../../db/book-migration-data');
+  const extras = collectExtras(952, { analysis: true }, OWNER);
+  assert.deepEqual(extras.analysis.figures.map(f => f.fig_id).sort(), ['fig_1', 'fig_2', 'fig_3']);
+  assert.ok(extras.analysis.figures.every(f => f.user_email === OWNER));
+  assert.equal(extras.analysis.scenes.length, 0, 'die Szene gehoert zur anderen Analyse');
+  assert.equal(extras.analysisScope.email, OWNER);
+  assert.equal(extras.analysisScope.skippedScopes, 1);
+  assert.equal(extras.analysisScope.skippedRows, 3, '2 Figuren + 1 Szene der Mitarbeiterin');
+
+  // Und aus der Sicht der Mitarbeiterin genau umgekehrt.
+  const mit = collectExtras(952, { analysis: true }, MITARBEIT);
+  assert.deepEqual(mit.analysis.figures.map(f => f.fig_id).sort(), ['fig_1', 'fig_2']);
+  assert.equal(mit.analysis.scenes.length, 1);
+});
+
+test('Alt-Bundle mit zwei Analysen: der Import spielt nur eine ein, keine Dubletten', async () => {
+  ctxBoot.dbSeed.setBook({
+    books: [{ id: 953, name: 'AltBundle' }],
+    pages: [{ id: 95301, book_id: 953, name: 'S', chapter_id: null, position: 0 }],
+    pageBodies: { 95301: '<p>x</p>' },
+  });
+  const db = _seedZweiAnalysen(953);
+
+  // Analyse-Block wie ihn der Export VOR der Scope-Regel gebaut hat: ungefiltert.
+  const analysisOverride = {
+    figures: db.prepare('SELECT * FROM figures WHERE book_id = ?').all(953),
+    scenes: db.prepare('SELECT * FROM figure_scenes WHERE book_id = ?').all(953),
+  };
+  assert.equal(analysisOverride.figures.length, 5, 'Vorbedingung: beide Analysen im Bundle');
+
+  const buffer = await buildBundleBuffer(953, { analysis: true }, { analysisOverride });
+  const job = await runImport(buffer);
+  assert.equal(job.status, 'done', job.error || '');
+  const newBookId = job.result.bookId;
+
+  const figs = db.prepare('SELECT fig_id, name FROM figures WHERE book_id = ? ORDER BY fig_id').all(newBookId);
+  assert.deepEqual(figs.map(f => f.fig_id), ['fig_1', 'fig_2', 'fig_3'],
+    'die vollstaendigste Analyse gewinnt, die andere bleibt draussen');
+  assert.equal(figs.filter(f => f.fig_id.includes('__')).length, 0,
+    'kein umbenannter Schluessel — der Kollisions-Rename ist nur noch letzte Absicherung');
+  assert.equal(new Set(figs.map(f => f.name)).size, figs.length, 'keine Namens-Dublette im Katalog');
+
+  // Der Import sagt, dass er nicht alles eingespielt hat.
+  assert.equal(job.result.extras.analysis.skippedScopes, 1);
+  assert.equal(job.result.extras.analysis.skippedRows, 3);
 });

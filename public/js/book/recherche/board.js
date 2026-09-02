@@ -15,6 +15,11 @@ export const rechercheBoardMethods = {
     // Refetches bleibt die Liste stehen und wird nur gedimmt (refreshing) — sonst
     // flackert bei jedem Tastendruck das Skeleton auf und wieder weg.
     if (this.items.length > 0) this.refreshing = true; else this.loading = true;
+    // Memo-Speicher der Karte leeren (Status-Buckets in recherche/status.js).
+    // Die Deps haengen an der `items`-Referenz und verfallen darum ohnehin — der
+    // Reset ist die Konvention, damit ein spaeterer Memo mit anderen Deps nicht
+    // still ueber einen Buchwechsel hinweg gilt.
+    this._memos = {};
     try {
       const qs = new URLSearchParams({ book_id: String(bookId) });
       if (this.filterKind) qs.set('kind', this.filterKind);
@@ -83,6 +88,7 @@ export const rechercheBoardMethods = {
 
   resetRecherche() {
     this.items = [];
+    this._memos = {};
     this.tagPool = [];
     this.linkTargets = {};
     this._linkTargetsBookId = null;

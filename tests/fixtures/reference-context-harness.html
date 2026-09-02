@@ -58,11 +58,15 @@
         // Seite 7 in Kapitel 3. Ihr Text nennt nur "Waldhuette".
         currentPage: { id: 7, updated_at: '2026-01-01T00:00:00Z', chapter_id: 3 },
         originalHtml: '<p>Brandt und Roth erreichten die Waldhuette erst im Dunkeln.</p>',
-        // Index-Sicht des Kapitels: kennt Brandt (im Text) und Kessler (nur
-        // umschrieben), NICHT die eben erst geschriebene Erwaehnung von Roth.
+        // Index-Sicht des Kapitels (/figures/chapter/:book/:chapter): kennt
+        // Brandt (im Text) und Kessler (nur umschrieben), NICHT die eben erst
+        // geschriebene Erwaehnung von Roth. `id` ist wie im Katalog die TEXT-
+        // `fig_id` — beide Routen sprechen dieselbe Identitaet.
         chapterFigures: [
-          { id: 21, name: 'Brandt' },
-          { id: 22, name: 'Kessler' },
+          { id: 'fig_21', name: 'Brandt' },
+          { id: 'fig_22', name: 'Kessler' },
+          // Steiner steht im Index, aber (noch) nicht im Katalog → Waisenkind.
+          { id: 'fig_25', name: 'Steiner' },
         ],
         t: (k, p) => (p ? k + ':' + JSON.stringify(p) : k),
         loadFiguren: () => {},
@@ -78,15 +82,17 @@
       });
       window.Alpine.store('config', { semanticSearchEnabled: false });
       window.Alpine.store('catalog', {
+        // Katalog (/figures/:book_id): `id` ist die TEXT-`fig_id`, nicht die
+        // Zeilen-ID — dieselbe Achse wie `chapterFigures` oben.
         figuren: [
-          // 21: im Seitentext UND im Kapitel-Index.
-          { id: 21, name: 'Brandt', typ: 'haupt' },
-          // 22: nur im Kapitel-Index — auf der Seite umschrieben.
-          { id: 22, name: 'Kessler', typ: 'neben' },
-          // 23: im Seitentext, aber noch nicht im Index (frisch geschrieben).
-          { id: 23, name: 'Roth', typ: 'neben' },
-          // 24: weder noch.
-          { id: 24, name: 'Vogler', typ: 'neben' },
+          // fig_21: im Seitentext UND im Kapitel-Index.
+          { id: 'fig_21', name: 'Brandt', typ: 'haupt' },
+          // fig_22: nur im Kapitel-Index — auf der Seite umschrieben.
+          { id: 'fig_22', name: 'Kessler', typ: 'neben' },
+          // fig_23: im Seitentext, aber noch nicht im Index (frisch geschrieben).
+          { id: 'fig_23', name: 'Roth', typ: 'neben' },
+          // fig_24: weder noch.
+          { id: 'fig_24', name: 'Vogler', typ: 'neben' },
         ],
         orte: [
           // 1: woertlich auf der Seite genannt.

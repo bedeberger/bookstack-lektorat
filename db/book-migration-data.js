@@ -14,6 +14,13 @@
 // werden hier waehrend des Inserts remapped. `user_email` aller Zeilen wird auf
 // den importierenden User gesetzt — Owner nach Import = Importer, und es haelt
 // die app_users-FK gueltig (Quell-User existiert auf der Zielinstanz evtl. nicht).
+//
+// GENAU EINE ANALYSE: weil beim Restore alle Zeilen dieselbe E-Mail bekommen,
+// darf der Analyse-Block nur die Analyse EINES Users tragen — sonst verschmelzen
+// zwei Kataloge desselben Buchs zu einem, in dem jede Figur zweimal steht.
+// Durchgesetzt auf beiden Seiten: _pickScope beim Sammeln, _restoreToOneScope
+// beim Einspielen. Lektorat und Chats sind davon bewusst ausgenommen (Protokolle,
+// die nebeneinander bestehen koennen).
 
 const { db } = require('./connection');
 // Bundles aus fremden Instanzen können Alt-Zeilen mit 0-Platzhaltern statt NULL
@@ -23,41 +30,84 @@ const { normalizeDatumFields } = require('../lib/datum-parse');
 
 function _now() { return new Date().toISOString(); }
 
+// ── Analyse-Scope ─────────────────────────────────────────────────────────────
+
+// Die Analyse-Tabellen mit eigener `user_email`-Spalte. Der Analyse-Block ist
+// PRO USER skopiert: jeder Mitarbeitende hat seine EIGENE Komplettanalyse
+// desselben Buchs (eigene Figuren, Orte, Szenen, Weltfakten, Zeitstrahl …).
+const SCOPED_TABLES = [
+  'figures', 'locations', 'figure_scenes', 'songs', 'world_facts',
+  'zeitstrahl_events', 'continuity_checks', 'ideen',
+];
+
+// Vorhandene Analyse-Scopes eines Buchs, der zeilenreichste zuerst (Tie-Break:
+// E-Mail, damit die Wahl reproduzierbar ist).
+function _analysisScopes(bookId) {
+  const sql = SCOPED_TABLES
+    .map(t => `SELECT user_email FROM ${t} WHERE book_id = ?`)
+    .join(' UNION ALL ');
+  return db.prepare(`
+    SELECT user_email AS email, COUNT(*) AS n FROM (${sql})
+    GROUP BY user_email ORDER BY n DESC, email
+  `).all(...SCOPED_TABLES.map(() => bookId));
+}
+
+/** Genau EINE Analyse waehlen: die des uebergebenen Users, sonst die
+ *  vollstaendigste. **Why:** beim Restore bekommen alle Zeilen die E-Mail des
+ *  Importierenden (der Quell-User existiert auf der Zielinstanz nicht) — zwei
+ *  mitgenommene Analysen werden dabei zu EINEM Katalog verschmolzen, in dem
+ *  jede Figur zweimal steht. Die drei Tabellen mit UNIQUE(book_id, key,
+ *  user_email) verraten das an einem umbenannten Schluessel (`fig_3__2`, siehe
+ *  `_uniqueKey`), die uebrigen (Szenen/Weltfakten/Zeitstrahl/Kontinuitaet/
+ *  Ideen) verdoppeln sich lautlos. Ein Buch mit zwei Analysen ist der
+ *  Normalfall, sobald zwei Leute daran arbeiten. */
+function _pickScope(scopes, preferEmail) {
+  if (!scopes.length) return { email: preferEmail ?? null, skipped: [] };
+  const want = preferEmail ?? null;
+  const chosen = scopes.find(s => (s.email ?? null) === want) || scopes[0];
+  return { email: chosen.email ?? null, skipped: scopes.filter(s => s !== chosen) };
+}
+
 // ── Collect ───────────────────────────────────────────────────────────────────
 
 function _all(sql, ...args) { return db.prepare(sql).all(...args); }
 
-// JOIN-Scoping auf book_id fuer Bridge-/Kind-Tabellen ohne eigene book_id-Spalte.
-function collectAnalysis(bookId) {
+// JOIN-Scoping auf book_id fuer Bridge-/Kind-Tabellen ohne eigene book_id-Spalte;
+// zusaetzlich auf genau EINEN Analyse-Scope (`user_email` des Traegers, siehe
+// _pickScope). `storylines` hat keine user_email (UNIQUE(book_id, name)) und
+// bleibt darum ungefiltert.
+function collectAnalysis(bookId, scopeEmail = null) {
+  const em = scopeEmail ?? null;
+  const q = (sql) => _all(sql, bookId, em);
   return {
-    figures:               _all('SELECT * FROM figures WHERE book_id = ?', bookId),
-    figureTags:            _all('SELECT ft.* FROM figure_tags ft JOIN figures f ON f.id = ft.figure_id WHERE f.book_id = ?', bookId),
-    figureRelations:       _all('SELECT * FROM figure_relations WHERE book_id = ?', bookId),
-    figureAppearances:     _all('SELECT fa.* FROM figure_appearances fa JOIN figures f ON f.id = fa.figure_id WHERE f.book_id = ?', bookId),
-    figureEvents:          _all('SELECT fe.* FROM figure_events fe JOIN figures f ON f.id = fe.figure_id WHERE f.book_id = ?', bookId),
-    pageFigureMentions:    _all('SELECT pfm.* FROM page_figure_mentions pfm JOIN figures f ON f.id = pfm.figure_id WHERE f.book_id = ?', bookId),
-    locations:             _all('SELECT * FROM locations WHERE book_id = ?', bookId),
-    locationFigures:       _all('SELECT lf.* FROM location_figures lf JOIN locations l ON l.id = lf.location_id WHERE l.book_id = ?', bookId),
-    locationChapters:      _all('SELECT lc.* FROM location_chapters lc JOIN locations l ON l.id = lc.location_id WHERE l.book_id = ?', bookId),
-    scenes:                _all('SELECT * FROM figure_scenes WHERE book_id = ?', bookId),
-    sceneFigures:          _all('SELECT sf.* FROM scene_figures sf JOIN figure_scenes s ON s.id = sf.scene_id WHERE s.book_id = ?', bookId),
-    sceneLocations:        _all('SELECT sl.* FROM scene_locations sl JOIN figure_scenes s ON s.id = sl.scene_id WHERE s.book_id = ?', bookId),
-    songs:                 _all('SELECT * FROM songs WHERE book_id = ?', bookId),
-    songFigures:           _all('SELECT sf.* FROM song_figures sf JOIN songs s ON s.id = sf.song_id WHERE s.book_id = ?', bookId),
-    songChapters:          _all('SELECT sc.* FROM song_chapters sc JOIN songs s ON s.id = sc.song_id WHERE s.book_id = ?', bookId),
-    songScenes:            _all('SELECT ss.* FROM song_scenes ss JOIN songs s ON s.id = ss.song_id WHERE s.book_id = ?', bookId),
-    worldFacts:            _all('SELECT * FROM world_facts WHERE book_id = ?', bookId),
-    worldFactChapters:     _all('SELECT wfc.* FROM world_fact_chapters wfc JOIN world_facts wf ON wf.id = wfc.fact_id WHERE wf.book_id = ?', bookId),
+    figures:               q('SELECT * FROM figures WHERE book_id = ? AND user_email IS ?'),
+    figureTags:            q('SELECT ft.* FROM figure_tags ft JOIN figures f ON f.id = ft.figure_id WHERE f.book_id = ? AND f.user_email IS ?'),
+    figureRelations:       q('SELECT * FROM figure_relations WHERE book_id = ? AND user_email IS ?'),
+    figureAppearances:     q('SELECT fa.* FROM figure_appearances fa JOIN figures f ON f.id = fa.figure_id WHERE f.book_id = ? AND f.user_email IS ?'),
+    figureEvents:          q('SELECT fe.* FROM figure_events fe JOIN figures f ON f.id = fe.figure_id WHERE f.book_id = ? AND f.user_email IS ?'),
+    pageFigureMentions:    q('SELECT pfm.* FROM page_figure_mentions pfm JOIN figures f ON f.id = pfm.figure_id WHERE f.book_id = ? AND f.user_email IS ?'),
+    locations:             q('SELECT * FROM locations WHERE book_id = ? AND user_email IS ?'),
+    locationFigures:       q('SELECT lf.* FROM location_figures lf JOIN locations l ON l.id = lf.location_id WHERE l.book_id = ? AND l.user_email IS ?'),
+    locationChapters:      q('SELECT lc.* FROM location_chapters lc JOIN locations l ON l.id = lc.location_id WHERE l.book_id = ? AND l.user_email IS ?'),
+    scenes:                q('SELECT * FROM figure_scenes WHERE book_id = ? AND user_email IS ?'),
+    sceneFigures:          q('SELECT sf.* FROM scene_figures sf JOIN figure_scenes s ON s.id = sf.scene_id WHERE s.book_id = ? AND s.user_email IS ?'),
+    sceneLocations:        q('SELECT sl.* FROM scene_locations sl JOIN figure_scenes s ON s.id = sl.scene_id WHERE s.book_id = ? AND s.user_email IS ?'),
+    songs:                 q('SELECT * FROM songs WHERE book_id = ? AND user_email IS ?'),
+    songFigures:           q('SELECT sf.* FROM song_figures sf JOIN songs s ON s.id = sf.song_id WHERE s.book_id = ? AND s.user_email IS ?'),
+    songChapters:          q('SELECT sc.* FROM song_chapters sc JOIN songs s ON s.id = sc.song_id WHERE s.book_id = ? AND s.user_email IS ?'),
+    songScenes:            q('SELECT ss.* FROM song_scenes ss JOIN songs s ON s.id = ss.song_id WHERE s.book_id = ? AND s.user_email IS ?'),
+    worldFacts:            q('SELECT * FROM world_facts WHERE book_id = ? AND user_email IS ?'),
+    worldFactChapters:     q('SELECT wfc.* FROM world_fact_chapters wfc JOIN world_facts wf ON wf.id = wfc.fact_id WHERE wf.book_id = ? AND wf.user_email IS ?'),
     storylines:            _all('SELECT * FROM storylines WHERE book_id = ?', bookId),
-    zeitstrahlEvents:      _all('SELECT * FROM zeitstrahl_events WHERE book_id = ?', bookId),
-    zeitstrahlEventChapters: _all('SELECT zec.* FROM zeitstrahl_event_chapters zec JOIN zeitstrahl_events ze ON ze.id = zec.event_id WHERE ze.book_id = ?', bookId),
-    zeitstrahlEventPages:  _all('SELECT zep.* FROM zeitstrahl_event_pages zep JOIN zeitstrahl_events ze ON ze.id = zep.event_id WHERE ze.book_id = ?', bookId),
-    zeitstrahlEventFigures: _all('SELECT zef.* FROM zeitstrahl_event_figures zef JOIN zeitstrahl_events ze ON ze.id = zef.event_id WHERE ze.book_id = ?', bookId),
-    continuityChecks:      _all('SELECT * FROM continuity_checks WHERE book_id = ?', bookId),
-    continuityIssues:      _all('SELECT * FROM continuity_issues WHERE book_id = ?', bookId),
-    continuityIssueFigures: _all('SELECT cif.* FROM continuity_issue_figures cif JOIN continuity_issues ci ON ci.id = cif.issue_id WHERE ci.book_id = ?', bookId),
-    continuityIssueChapters: _all('SELECT cic.* FROM continuity_issue_chapters cic JOIN continuity_issues ci ON ci.id = cic.issue_id WHERE ci.book_id = ?', bookId),
-    ideen:                 _all('SELECT * FROM ideen WHERE book_id = ?', bookId),
+    zeitstrahlEvents:      q('SELECT * FROM zeitstrahl_events WHERE book_id = ? AND user_email IS ?'),
+    zeitstrahlEventChapters: q('SELECT zec.* FROM zeitstrahl_event_chapters zec JOIN zeitstrahl_events ze ON ze.id = zec.event_id WHERE ze.book_id = ? AND ze.user_email IS ?'),
+    zeitstrahlEventPages:  q('SELECT zep.* FROM zeitstrahl_event_pages zep JOIN zeitstrahl_events ze ON ze.id = zep.event_id WHERE ze.book_id = ? AND ze.user_email IS ?'),
+    zeitstrahlEventFigures: q('SELECT zef.* FROM zeitstrahl_event_figures zef JOIN zeitstrahl_events ze ON ze.id = zef.event_id WHERE ze.book_id = ? AND ze.user_email IS ?'),
+    continuityChecks:      q('SELECT * FROM continuity_checks WHERE book_id = ? AND user_email IS ?'),
+    continuityIssues:      q('SELECT * FROM continuity_issues WHERE book_id = ? AND user_email IS ?'),
+    continuityIssueFigures: q('SELECT cif.* FROM continuity_issue_figures cif JOIN continuity_issues ci ON ci.id = cif.issue_id WHERE ci.book_id = ? AND ci.user_email IS ?'),
+    continuityIssueChapters: q('SELECT cic.* FROM continuity_issue_chapters cic JOIN continuity_issues ci ON ci.id = cic.issue_id WHERE ci.book_id = ? AND ci.user_email IS ?'),
+    ideen:                 q('SELECT * FROM ideen WHERE book_id = ? AND user_email IS ?'),
   };
 }
 
@@ -75,9 +125,23 @@ function collectChats(bookId) {
 }
 
 // Liefert nur die angeforderten Bloecke; nicht angeforderte bleiben weg.
-function collectExtras(bookId, { analysis = false, lektorat = false, chats = false } = {}) {
+// `scopeEmail` waehlt die mitgenommene Analyse (die des exportierenden Users,
+// sonst die vollstaendigste — siehe _pickScope). Lektorat und Chats bleiben
+// bewusst ungefiltert: sie sind Protokolle und koennen nebeneinander bestehen,
+// waehrend zwei Analyse-Kataloge desselben Buchs sich beim Restore vermischen.
+// Die uebersprungenen Scopes stehen in `out.analysisScope` — der Aufrufer soll
+// sagen koennen, dass er nicht alles mitnimmt.
+function collectExtras(bookId, { analysis = false, lektorat = false, chats = false } = {}, scopeEmail = null) {
   const out = {};
-  if (analysis) out.analysis = collectAnalysis(bookId);
+  if (analysis) {
+    const scope = _pickScope(_analysisScopes(bookId), scopeEmail);
+    out.analysis = collectAnalysis(bookId, scope.email);
+    out.analysisScope = {
+      email: scope.email,
+      skippedScopes: scope.skipped.length,
+      skippedRows: scope.skipped.reduce((n, s) => n + s.n, 0),
+    };
+  }
   if (lektorat) out.lektorat = collectLektorat(bookId);
   if (chats)    out.chats = collectChats(bookId);
   return out;
@@ -85,8 +149,13 @@ function collectExtras(bookId, { analysis = false, lektorat = false, chats = fal
 
 // ── Restore ─────────────────────────────────────────────────────────────────
 
-// Sorgt fuer eindeutige Natural-Keys (fig_id/loc_id/song_uid), falls beim
-// Kollabieren des user_email zwei Quell-Zeilen kollidieren wuerden.
+// Letzte Absicherung fuer die drei Natural-Keys mit UNIQUE(book_id, key,
+// user_email): fig_id / loc_id / song_uid. Der Normalfall ist, dass hier nichts
+// zu tun ist — _restoreToOneScope schneidet das Bundle vorher auf EINE Analyse,
+// und innerhalb einer Analyse sind die Schluessel schon eindeutig. Greift also
+// nur noch bei von Hand gebauten oder beschaedigten Bundles; das Umbenennen
+// haelt den INSERT am Leben, ist aber KEIN Weg, zwei Analysen zu vereinen (das
+// Ergebnis waere ein Katalog, in dem jede Figur zweimal steht).
 function _uniqueKey(used, key) {
   const base = key || '';
   if (!used.has(base)) { used.add(base); return base; }
@@ -97,10 +166,48 @@ function _uniqueKey(used, key) {
   return nk;
 }
 
+// Die Trage-Tabellen des Analyse-Blocks im Bundle (Pendant zu SCOPED_TABLES).
+// Bruecken-Zeilen haengen an ihnen und fallen ueber die leeren id-Maps von selbst
+// weg (jeder Bruecken-INSERT unten prueft `if (!fid) continue`).
+const SCOPED_ARRAYS = [
+  'figures', 'figureRelations', 'locations', 'scenes', 'songs', 'worldFacts',
+  'zeitstrahlEvents', 'continuityChecks', 'continuityIssues', 'ideen',
+];
+
+/** Ein Bundle darf nur EINE Analyse einspielen. Neue Bundles tragen von sich aus
+ *  nur eine (collectExtras skopiert beim Export); aeltere Bundles und solche aus
+ *  fremden Instanzen koennen mehrere enthalten. Dieselbe Regel wie beim Export:
+ *  die vollstaendigste gewinnt, der Rest bleibt draussen — hier gibt es keinen
+ *  bevorzugten User, weil die Quell-Adressen auf dieser Instanz nichts bedeuten.
+ *  Ohne diesen Schnitt landet jede Figur zweimal im Katalog (mit umbenanntem
+ *  `fig_id`, siehe `_uniqueKey`) und Szenen/Weltfakten/Zeitstrahl verdoppeln sich
+ *  ohne jedes Signal. Kuerzt die uebergebenen Arrays in place. */
+function _restoreToOneScope(data) {
+  const perScope = new Map();
+  for (const k of SCOPED_ARRAYS) {
+    for (const r of (Array.isArray(data[k]) ? data[k] : [])) {
+      const e = r?.user_email ?? null;
+      perScope.set(e, (perScope.get(e) || 0) + 1);
+    }
+  }
+  if (perScope.size <= 1) return { skippedScopes: 0, skippedRows: 0 };
+  const scopes = [...perScope].map(([email, n]) => ({ email, n }))
+    .sort((a, b) => b.n - a.n || String(a.email).localeCompare(String(b.email)));
+  const keep = scopes[0].email;
+  let skippedRows = 0;
+  for (const k of SCOPED_ARRAYS) {
+    if (!Array.isArray(data[k])) continue;
+    const kept = data[k].filter(r => (r?.user_email ?? null) === keep);
+    skippedRows += data[k].length - kept.length;
+    data[k] = kept;
+  }
+  return { skippedScopes: scopes.length - 1, skippedRows };
+}
+
 function restoreAnalysis(bookId, data, ctx) {
   if (!data || typeof data !== 'object') return {};
   const { pageOf, chapterOf, email } = ctx;
-  const counts = {};
+  const counts = _restoreToOneScope(data);
   const arr = (k) => (Array.isArray(data[k]) ? data[k] : []);
 
   const figMap = new Map();      // srcFigureId  → newId

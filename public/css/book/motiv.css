@@ -39,11 +39,17 @@
   flex-wrap: wrap;
   justify-content: flex-end;
   align-items: center;
-  gap: var(--space-2xs);
+  /* Klickziele, keine Inline-Tags — mit dem 2px-Gap der dichten Tag-Reihen
+     verschmelzen die drei Schalter zu einem Block. */
+  gap: var(--space-6);
   margin-bottom: var(--card-gap-tight);
 }
-.motiv-add-input {
-  min-width: 8rem;
+/* Kompakte Feld-Form der Karte — EINE Deklaration fuer alle drei Traeger
+   (Anlege-Leiste, Panel-Zeile, Textarea). Sie unterscheiden sich nur in der
+   Breite; als drei Bloecke driftete Polsterung und Fokus-Farbe auseinander. */
+.motiv-add-input,
+.motiv-inline-input,
+.motiv-textarea {
   padding: var(--space-2xs) var(--space-xs);
   border: 1px solid var(--color-border-input);
   border-radius: var(--radius-sm);
@@ -52,7 +58,13 @@
   font-family: inherit;
   font-size: var(--font-size-sm);
 }
-.motiv-add-input:focus { border-color: var(--card-accent); outline: none; }
+.motiv-add-input:focus,
+.motiv-inline-input:focus,
+.motiv-textarea:focus { border-color: var(--card-accent); outline: none; }
+.motiv-add-input { min-width: 8rem; }
+.motiv-inline-input,
+.motiv-textarea { width: 100%; }
+.motiv-textarea { resize: vertical; }
 .motiv-theme-select { min-width: 10rem; }
 
 .motiv-layer-btn {
@@ -66,7 +78,8 @@
   transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
 }
 .motiv-layer-btn:hover { color: var(--color-text); }
-.motiv-layer-btn.is-active {
+.motiv-layer-btn.is-active,
+.motiv-layer-btn[aria-pressed="true"] {
   background: var(--card-accent);
   border-color: var(--card-accent);
   color: var(--color-on-accent-fill);
@@ -216,20 +229,6 @@
   font-size: var(--font-size-xs);
   color: var(--color-muted);
 }
-.motiv-inline-input,
-.motiv-textarea {
-  width: 100%;
-  padding: var(--space-2xs) var(--space-xs);
-  border: 1px solid var(--color-border-input);
-  border-radius: var(--radius-sm);
-  background: var(--color-bg);
-  color: var(--color-text);
-  font-family: inherit;
-  font-size: var(--font-size-sm);
-}
-.motiv-inline-input:focus,
-.motiv-textarea:focus { border-color: var(--card-accent); outline: none; }
-.motiv-textarea { resize: vertical; }
 
 /* ── Fundstellen (Ist) ────────────────────────────────────────────────── */
 .motiv-occ-list { display: flex; flex-direction: column; gap: var(--space-2xs); }
@@ -245,10 +244,7 @@
   cursor: pointer;
   transition: border-color var(--transition-fast);
 }
-/* `.internal-link` trägt die Zeile nur für die Tastatur-Delegation (role=button,
-   Enter/Space); der globale `.internal-link:hover`-Underline ist hier unerwünscht. */
-.motiv-occ-row:hover { border-color: var(--card-accent); text-decoration: none; }
-.motiv-occ-row:focus-visible { text-decoration: none; }
+.motiv-occ-row:hover { border-color: var(--card-accent); }
 .motiv-occ-loc { font-size: var(--font-size-xs); font-weight: var(--fw-semibold); color: var(--color-text); }
 .motiv-occ-snip {
   font-size: var(--font-size-xs);
@@ -290,6 +286,12 @@
   padding: 0;
 }
 .motiv-chip button:hover { color: var(--color-err-text); }
+/* Schnellweg im Themen-Editor: Motiv-Name + Anlegen-Knopf auf einer Zeile. */
+.motiv-theme-addmotif { display: flex; align-items: center; gap: var(--space-2xs); }
+/* `width` explizit zurueck auf auto: die geteilte Feld-Deklaration oben setzt
+   100%, was hier als flex-basis den Knopf auf min-content quetschte. */
+.motiv-theme-addmotif > .motiv-inline-input { flex: 1 1 auto; width: auto; min-width: 0; }
+
 .motiv-relation-add { display: flex; align-items: center; gap: var(--space-2xs); flex-wrap: wrap; }
 /* Ziel-Combobox auf eigener, voller Zeile — ein langer Motivname bläht sie nicht
    in die benachbarte Spalte, sondern ellipsiert (min-width:0). Typ-Auswahl +
@@ -358,6 +360,13 @@
   font-size: var(--font-size-xs);
 }
 .motiv-hint .icon { flex-shrink: 0; }
+/* Warnend statt erklaerend: „semantische Erkennung aus" und „ohne Ist-Index
+   geurteilt" sind Einschraenkungen des Ergebnisses. Farbe kommt aus den Warn-
+   Tokens — die Bedeutung ist „Achtung", nicht „gehoert zu dieser Karte". */
+.motiv-hint--warn {
+  background: var(--color-warn-bg);
+  color: var(--color-warn-text);
+}
 .motiv-hint--action { justify-content: space-between; }
 .motiv-hint-text { min-width: 0; }
 
@@ -418,8 +427,15 @@
   flex: 0 0 auto;
   cursor: pointer;
   color: var(--color-stark);
-  border-color: color-mix(in oklch, var(--color-stark) 40%, transparent);
+  border: 1px solid color-mix(in oklch, var(--color-stark) 40%, transparent);
   background: color-mix(in oklch, var(--color-stark) 12%, transparent);
+}
+/* Eigenes Hover-Signal: der Chip ist ein <button> und traegt darum nicht mehr
+   die Unterstreichung des globalen `.internal-link` (die dort nur fuer die
+   Tastatur-Delegation an NICHT-Buttons haengt). Ohne sie fehlte jede Rueckmeldung. */
+.motiv-check-beleg:hover {
+  border-color: var(--color-stark);
+  background: color-mix(in oklch, var(--color-stark) 22%, transparent);
 }
 .motiv-check-hint {
   margin-top: var(--space-2xs);

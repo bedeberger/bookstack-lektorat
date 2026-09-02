@@ -5,6 +5,7 @@ import { setupCardLifecycle } from './card-lifecycle.js';
 import { attachFullscreenSync } from '../fullscreen.js';
 import { rechercheMethods } from '../book/recherche.js';
 import { rechercheToSourceMethods } from '../sources/from-research.js';
+import { rechercheScrapeMethods } from '../book/recherche/scrape.js';
 import { researchChatMethods } from '../chat/research-chat.js';
 import { EVT } from '../events.js';
 import { emptyDraft as _emptyDraft } from '../book/recherche/shared.js';
@@ -31,6 +32,16 @@ export function registerRechercheCard() {
     tagPool: [],
     linkTargets: {},
     _linkTargetsBookId: null,
+
+    // Ansicht des Boards: Liste (Bestand) oder Status-Board (Fortschritt).
+    // Global im localStorage, nicht pro Buch — es ist eine Arbeitsweise, keine
+    // Eigenschaft des Buchs (gleiche Wahl wie `viewMode` der Orte-Karte). Darum
+    // bewusst NICHT in RECHERCHE_FILTER_SCOPES: das ist der Filter-Stand.
+    viewMode: localStorage.getItem('recherche.viewMode') === 'status' ? 'status' : 'list',
+    // SortableJS-Instanzen der vier Status-Spalten (recherche/status.js).
+    _statusSortables: [],
+    // Speicher des EINEN Memo-Helfers der Karte (_memo in recherche/status.js).
+    _memos: {},
 
     loading: false,
     // Refetch bei Filter/Sort/Suche (Daten schon vorhanden): Liste bleibt stehen
@@ -79,6 +90,11 @@ export function registerRechercheCard() {
     // Kein Eintrag in resetRecherche noetig: der finally-Block der Uebernahme
     // raeumt jeden Schluessel, hier bleibt nichts liegen.
     _toSourceBusy: {},
+
+    // Laufende „Link scrapen"-Vorgaenge, Schluessel `${item.id}:${url_id}`
+    // (rechercheScrapeMethods). Dieselbe Reassign-Regel wie _toSourceBusy: das
+    // Flag wird in einem verschachtelten x-for gelesen.
+    _scrapeBusy: {},
 
     suggestions: {},
     suggestItemId: null,
@@ -139,7 +155,7 @@ export function registerRechercheCard() {
         timerKeys: ['_suggestTimer', '_researchChatPollTimer', '_ivPollTimer'],
         resetState: { detailEditing: false, menuOpenId: null, linkPickerItemId: null, busy: false },
         filterScopes: RECHERCHE_FILTER_SCOPES,
-        load: () => this.loadRecherche(),
+        load: async () => { await this.loadRecherche(); await this._ensureStatusBoard(); },
         extraListeners: [
           { type: 'recherche:filter-page', handler: (e) => this.filterToPage(e.detail?.pageId) },
           { type: 'recherche:filter-chapter', handler: (e) => this.filterToChapter(e.detail?.chapterId) },
@@ -174,6 +190,18 @@ export function registerRechercheCard() {
         if (v) return;
         this.closeDetail();
         this.closeCreate();
+        // Zugeklappte Karte haelt keine Drag-Container: das Board wird beim
+        // naechsten Oeffnen ueber den Lifecycle-Load neu gebunden.
+        this._destroyStatusSortables();
+      });
+
+      // Ansichtswechsel: Wahl merken und die Drag-Container des Status-Boards
+      // neu binden. Das Board haengt an `x-if` — vor dem Umschalten existieren
+      // seine Spalten gar nicht, danach sind es frische Knoten; eine einmal
+      // gebundene Instanz zeigte auf einen abgeraeumten Container.
+      this.$watch('viewMode', (v) => {
+        localStorage.setItem('recherche.viewMode', v === 'status' ? 'status' : 'list');
+        this._ensureStatusBoard();
       });
 
       // Native Fullscreen-API: Status spiegeln (Toggle-Button + Esc-Exit).
@@ -185,7 +213,10 @@ export function registerRechercheCard() {
       });
     },
 
-    destroy() { this._lifecycle?.destroy(); },
+    destroy() {
+      this._destroyStatusSortables();
+      this._lifecycle?.destroy();
+    },
 
     // Deep-Link-Item (#book/X/recherche/<itemId>) öffnen: Schnipsel suchen →
     // Detailansicht (LESEN, nicht Bearbeiten — ein geteilter Link soll zeigen,
@@ -201,7 +232,14 @@ export function registerRechercheCard() {
       if (!item) { this._pendingFocusItemId = id; return; }
       this.openDetail(item);
       this.$nextTick(() => {
-        const el = this.$root?.querySelector(`[data-research-id="${id}"]`);
+        // Beide Ansichten stehen im Markup; das Sprungziel ist die SICHTBARE.
+        // Die Attribute sind darum verschieden (`data-research-id` in der Liste,
+        // `data-research-card-id` im Status-Board) — ein gemeinsamer Name traefe
+        // die versteckte Ansicht, und ein Scroll dorthin ist ein No-op.
+        const sel = this.viewMode === 'status'
+          ? `[data-research-card-id="${id}"]`
+          : `[data-research-id="${id}"]`;
+        const el = this.$root?.querySelector(sel);
         if (!el) return;
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         el.classList.remove('research-item--flash');
@@ -215,6 +253,7 @@ export function registerRechercheCard() {
 
     ...rechercheInterviewMethods,
     ...rechercheToSourceMethods,
+    ...rechercheScrapeMethods,
     ...researchChatMethods,
   }));
 }

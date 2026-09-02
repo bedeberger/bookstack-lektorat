@@ -16,7 +16,9 @@ delete process.env.ADMIN_EMAIL;
 
 require('../../db/migrations');
 const { db } = require('../../db/connection');
-const { rebuildFigureAppearances, saveFigurenToDb } = require('../../db/figures');
+const {
+  rebuildFigureAppearances, saveFigurenToDb, getChapterFigures, listFigurenWithDetails,
+} = require('../../db/figures');
 
 test.after(() => {
   try { db.close(); } catch {}
@@ -147,4 +149,28 @@ test('saveFigurenToDb fasst figure_appearances nicht an – auch nicht mit idMap
     { reconcile: true, onMissing: 'stale' });
   assert.deepEqual(_apps(figId), before,
     'Kapitel-Auftritte überleben den Reconcile – der Rebuild am Laufende ist der einzige Schreiber');
+});
+
+// Die Lese-Seite des Index. `getChapterFigures` und `listFigurenWithDetails`
+// sind zwei Sichten auf dieselben Figuren und treffen im Frontend aufeinander
+// (der Referenz-Slot vereinigt Kapitel-Index und Katalog). Sie MUESSEN darum
+// dieselbe Identitaet ausliefern: die TEXT-`fig_id`. Mit zwei Achsen (hier die
+// Zeilen-ID, dort die fig_id) findet der Vergleich kein Gegenstueck — jede
+// Kapitel-Figur gilt als unbekannt und erscheint ein zweites Mal in der Liste,
+// waehrend der Figuren-Katalog sie einmal zeigt.
+test('getChapterFigures liefert dieselbe Identitaet wie der Figuren-Katalog', () => {
+  const kapitelFiguren = getChapterFigures(BOOK, 1, USER);
+  assert.ok(kapitelFiguren.length >= 1, 'Vorbedingung: K1 hat Auftritte');
+  assert.equal(kapitelFiguren.find(f => f.name === 'Pamela')?.id, 'fig_1',
+    '`id` ist die fig_id, nicht die INTEGER-Zeilen-ID');
+
+  const katalogIds = new Set(listFigurenWithDetails(BOOK, USER).figuren.map(f => f.id));
+  for (const f of kapitelFiguren) {
+    assert.ok(katalogIds.has(f.id), `Kapitel-Figur ${f.name} (${f.id}) hat ein Katalog-Gegenstueck`);
+  }
+
+  // Auch der Fallback-Zweig (kein Kapitel bzw. keine Auftritte) spricht die Achse.
+  for (const f of getChapterFigures(BOOK, null, USER)) {
+    assert.ok(katalogIds.has(f.id), `Fallback-Figur ${f.name} (${f.id}) auf derselben Achse`);
+  }
 });

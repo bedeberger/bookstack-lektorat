@@ -9,10 +9,15 @@ require('../migrations');
  *  reine Namensnennungen (page_figure_mentions) zählen bewusst nicht mit.
  *  Sortierung: Häufigkeit DESC. Fallback: alle Buchfiguren, wenn keine Kapitel-
  *  zuordnung existiert (z.B. vor der ersten Komplettanalyse).
- *  Gibt kompakte Objekte zurück: { name, kurzname, geschlecht, beruf, wohnadresse, beschreibung, typ } */
+ *  Gibt kompakte Objekte zurück: { id, name, kurzname, geschlecht, beruf, wohnadresse, beschreibung, typ }.
+ *  **`id` ist die TEXT-`fig_id`, nicht die INTEGER-Zeilen-ID** — dieselbe Achse,
+ *  die `listFigurenWithDetails` als `id` ausliefert. Beide Listen treffen im
+ *  Frontend aufeinander (Referenz-Slot vereinigt Katalog + Kapitel-Index); mit
+ *  zwei Identitätsachsen findet dort kein Vergleich ein Gegenstück, und jede
+ *  Kapitel-Figur erscheint ein zweites Mal als angeblich unbekannte Zeile. */
 function getChapterFigures(bookId, chapterId, userEmail) {
   if (!bookId) return [];
-  const cols = 'f.id, f.name, f.kurzname, f.geschlecht, f.beruf, f.wohnadresse, f.beschreibung, f.typ, f.geburtstag';
+  const cols = 'f.fig_id AS id, f.name, f.kurzname, f.geschlecht, f.beruf, f.wohnadresse, f.beschreibung, f.typ, f.geburtstag';
   if (chapterId) {
     const rows = db.prepare(`
       SELECT ${cols} FROM figures f

@@ -41,6 +41,11 @@
   line-height: 1.3;
 }
 
+/* Gruppen-Kopf MITTEN im Menue (nach einem .context-menu-sep) statt oben:
+   nur der negative Anschluss an den Menue-Rand faellt weg, sonst identisch.
+   Ohne den Modifier zieht die Zeile sich in den Trenner darueber hinein. */
+.context-menu-header--inline { margin-top: 0; }
+
 .context-menu-item {
   display: block;
   width: 100%;

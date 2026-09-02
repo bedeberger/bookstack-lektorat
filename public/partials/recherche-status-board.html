@@ -1,0 +1,87 @@
+<!-- Recherche-Board, Ansicht „Status": Kanban ueber die Einarbeitungs-Stufen
+     (offen → in Arbeit → eingearbeitet, dazu verworfen). Beantwortet die Frage,
+     die die Liste nicht beantwortet: wo steht jeder Fund auf dem Weg in den
+     Buchtext, und AN WELCHER STELLE ist er gelandet — darum traegt die Karte die
+     Kapitel-/Seiten-Verknuepfungen (placeLinks), nicht alle Bezuege.
+
+     Ausgelagert als string-seitiges Fragment (@include): der Block steht in
+     recherche.html unter einem `x-if`, und ein DOM-Placeholder greift im
+     Template-Content nicht.
+
+     Derselbe Bestand wie die Liste — dieselbe `items`-Liste, dieselbe
+     Filterleiste darueber. Verschoben wird per Drag am Griff (SortableJS, Logik
+     in public/js/book/recherche/status.js); der tastaturerreichbare Weg ist das
+     Aktionsmenue der Karte (Abschnitt „Status" in recherche-item-menu.html).
+     Eine Reihenfolge INNERHALB der Spalte gibt es nicht: `research_items` hat
+     keine sort_order, die Ordnung kommt aus der gewaehlten Sortierung. -->
+<div class="research-status-board" :class="{ 'is-refreshing': refreshing }"
+     x-show="!loading && items.length > 0" x-cloak>
+  <template x-for="st in statuses()" :key="st">
+    <div class="research-status-column" :class="'research-status-column--' + st">
+      <div class="research-status-column-head">
+        <span class="research-status-column-title" x-text="statusLabel(st)"></span>
+        <span class="research-status-column-count" x-text="itemsForStatus(st).length"></span>
+      </div>
+
+      <!-- SortableJS-Container: haelt ausser dem x-for-Anker nur die Karten.
+           `data-research-status-cell` ist das Ziel-Status-Attribut, das
+           onStatusSortEnd ausliest. -->
+      <div class="research-status-cell" :data-research-status-cell="st">
+        <template x-for="item in itemsForStatus(st)" :key="item.id">
+          <div class="research-status-card" :data-research-card-id="item.id"
+               :class="{ 'research-status-card--pinned': item.pinned, 'research-status-card--archived': item.archived, 'research-status-card--open': detailItemId === item.id }">
+            <div class="research-status-card-head">
+              <!-- Griff = einzige Greiffläche (SortableJS handle), damit Titel,
+                   Chips und Menue voll klickbar bleiben. -->
+              <span class="research-status-grip" :data-tip="$app.t('recherche.status.drag')" :aria-label="$app.t('recherche.status.drag')">
+                <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#grip-vertical"/></svg>
+              </span>
+              <span class="research-kind-badge palette-badge" :class="'research-kind-badge--' + item.kind" x-text="kindLabel(item.kind)"></span>
+              <div class="research-item-actions research-status-card-actions" x-data="{ menuCtx: 'status' }">
+                <!-- @include recherche-item-menu -->
+              </div>
+            </div>
+
+            <button type="button" class="research-item-title research-status-card-title"
+                    @click="openDetail(item)"
+                    x-text="item.title || kindLabel(item.kind)"></button>
+
+            <!-- Kurzer Anriss: ein Fundstueck ohne Titel waere sonst nur seine
+                 Typbezeichnung. Zwei Zeilen Cap — eine Kanban-Karte darf nicht
+                 auf Textlaenge wachsen; der Volltext steht in der Detailansicht. -->
+            <div class="research-status-card-text" x-show="item.body" x-text="item.body"></div>
+
+            <!-- Stelle im Buch: Kapitel-/Seiten-Verknuepfungen als Sprungziele.
+                 Read-only — entfernt wird eine Verknuepfung in der Detailansicht,
+                 wo auch der Picker sitzt. -->
+            <div class="research-status-places" x-show="placeLinks(item).length">
+              <template x-for="link in placeLinks(item)" :key="link.link_id">
+                <button type="button" class="research-link-chip research-status-place"
+                        :class="'research-link-chip--' + link.target_kind"
+                        @click="gotoLink(link)"
+                        :data-tip="$app.t('recherche.link.goto')"
+                        :aria-label="$app.t('recherche.link.goto') + ': ' + link.label">
+                  <span class="research-link-kind" x-text="linkKindLabel(link.target_kind)"></span>
+                  <span class="research-link-goto-label" x-text="link.label"></span>
+                </button>
+              </template>
+            </div>
+
+            <!-- „Eingearbeitet" ohne Stelle im Buch: Befund, nicht Korrektur —
+                 der Fund gilt als verwendet, aber nirgends steht, wo. -->
+            <p class="research-status-noplace" x-show="statusNeedsPlace(item)" x-cloak>
+              <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#alert-triangle"/></svg>
+              <span x-text="$app.t('recherche.status.noPlace')"></span>
+            </p>
+
+            <span class="research-status-otherlinks" x-show="otherLinkCount(item) > 0"
+                  x-text="$app.t('recherche.status.otherLinks', { n: otherLinkCount(item) })"></span>
+          </div>
+        </template>
+      </div>
+
+      <p class="research-status-column-empty" x-show="itemsForStatus(st).length === 0"
+         x-text="$app.t('recherche.status.emptyColumn')"></p>
+    </div>
+  </template>
+</div>

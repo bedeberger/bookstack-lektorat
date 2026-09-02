@@ -92,7 +92,8 @@ function attachRelations(items) {
 function emitItem(id) {
   const row = db.prepare(
     `SELECT id, book_id, user_email, kind, title, body, source, image_mime,
-            doc_mime, doc_name, doc_pages, doc_chars, pinned, archived, created_at, updated_at
+            doc_mime, doc_name, doc_pages, doc_chars, status, pinned, archived,
+            created_at, updated_at
        FROM research_items WHERE id = ?`
   ).get(id);
   if (!row) return null;
@@ -217,6 +218,23 @@ function setItemDocText(id, text) {
   return _stmtSetDocText.run(s, s.length, parseInt(id)).changes > 0;
 }
 
+// Bezeichnung EINES Links setzen. Gezielt statt ueber replaceUrls, weil das die
+// Kind-Tabelle neu schreibt und dabei neue `url_id` vergibt — die halten das
+// Frontend (x-for-key) und jeder Aufrufer in der Hand, der gleich danach
+// POST /sources/from-research mit genau dieser Id schickt.
+//
+// Aufrufer: der Scrape-Weg (routes/research-scrape.js), der die nackte URL aus
+// der Teilen-Funktion mit dem Seitentitel benennt.
+const _stmtSetUrlLabel = db.prepare(
+  'UPDATE research_item_urls SET label = ? WHERE id = ? AND item_id = ?',
+);
+
+/** Label eines Links setzen. `item_id` steht mit im WHERE, damit ein fremdes
+ *  `url_id` nicht die Zeile eines anderen Fundstuecks trifft. */
+function setUrlLabel(itemId, urlId, label) {
+  return _stmtSetUrlLabel.run(String(label || '') || null, parseInt(urlId), parseInt(itemId)).changes > 0;
+}
+
 module.exports = {
   LINK_TARGETS,
   attachRelations,
@@ -228,4 +246,5 @@ module.exports = {
   listEntityLinkTargets,
   setItemKind,
   setItemDocText,
+  setUrlLabel,
 };

@@ -1,10 +1,18 @@
 // Teil von appViewMethods (siehe Facade app-view.js).
-import { EVT, EXCLUSIVE_CARDS, FILTER_SCOPES, computeTodayRing, computeWeekBars, computeWritingStreak, fetchJsonRetry, resetFilterScopes, restoreFilterScopes } from './_shared.js';
+import { EVT, EXCLUSIVE_CARDS, FILTER_SCOPES, computeTodayRing, computeWeekBars, computeWritingStreak, fetchJson, fetchJsonRetry, resetFilterScopes, restoreFilterScopes } from './_shared.js';
+import { setLastBookId } from '../../local-prefs.js';
 
 // In-Flight-Handle von `loadDailyProgress`. Modul-Scope statt Store: ein
 // Promise im reaktiven Alpine-Proxy wird beim `await` mit dem Proxy als `this`
 // aufgerufen und wirft. Kurzlebiger Re-Entry-Guard, kein fachlicher State.
 let _dailyProgressInflight = { bookId: null, promise: null };
+
+// Drosselung von `_touchBookOpened`. Modul-Scope, weil es kein fachlicher State
+// ist, sondern die Erinnerung „das habe ich gerade gemeldet". Pro Buch: ein
+// Wechsel zu einem ANDEREN Buch muss immer durch, sonst waere die Reihenfolge
+// zweier abwechselnd benutzter Tabs nicht mehr messbar.
+const TOUCH_THROTTLE_MS = 60_000;
+let _lastTouch = { bookId: null, ts: 0 };
 
 export const bookscopeMethods = {
 
@@ -110,6 +118,61 @@ export const bookscopeMethods = {
     this.showKomplettStatus = false;
     this.resetDailyProgress();
     if (this.$store.nav.selectedBookId) this.loadDailyProgress(this.$store.nav.selectedBookId);
+  },
+
+
+  // „Ich habe dieses Buch gerade vor mir." Schreibt den Server-Zeitstempel
+  // (`PUT /me/books/:id/opened` → `book_shelf.last_opened_at`) und den lokalen
+  // Rückfall-Merker. Aus dem grössten dieser Zeitstempel wählt der nächste Boot
+  // sein Startbuch (`pickStartBook` in book/tree/load.js).
+  //
+  // Aufrufer sind die Momente, in denen „offen gehabt" wahr wird:
+  //   • Buchwechsel (Combobox, Job-Sprung) — immer, `force`
+  //   • Seite öffnen (selectPage) — das stärkste Arbeits-Signal
+  //   • Tab wird sichtbar bzw. Fenster bekommt den Fokus — der Moment, der die
+  //     Konkurrenz mehrerer offener Tabs auflöst (zwei Fenster nebeneinander
+  //     bleiben beide sichtbar, dort feuert nur `focus`)
+  //
+  // Beim Boot NUR aus einem sichtbaren Tab: nach einem Deploy laden alle Tabs
+  // neu (controllerchange → reload), und ein verstecktes Neuladen darf sein Buch
+  // nicht als „zuletzt offen" stempeln — genau daran hing das Zufalls-Verhalten.
+  //
+  // Best-Effort: kein `await` beim Aufrufer, Fehler werden geschluckt. Offline
+  // bleibt der lokale Merker die Antwort, und der nächste sichtbare Boot meldet
+  // den Stand nach.
+  _touchBookOpened(bookId, { force = false } = {}) {
+    const id = String(bookId || '');
+    if (!id) return;
+    if (this.$store.session.sessionExpired) return;
+    const now = Date.now();
+    if (!force && _lastTouch.bookId === id && now - _lastTouch.ts < TOUCH_THROTTLE_MS) return;
+    _lastTouch = { bookId: id, ts: now };
+    setLastBookId(this.$store.session.currentUser?.email, id);
+    try {
+      fetch(`/me/books/${encodeURIComponent(id)}/opened`, {
+        method: 'PUT',
+        credentials: 'same-origin',
+      }).catch(() => {});
+    } catch { /* Best-Effort */ }
+  },
+
+
+  // Welches Buch hatte der User zuletzt vor sich (`book_shelf.last_opened_at`,
+  // groesster Zeitstempel gewinnt). Antwort auf die Frage, mit welchem Buch die
+  // App beim Aufruf der Stamm-URL startet — `pickStartBook` in
+  // book/tree/load.js verarbeitet sie weiter.
+  //
+  // Eigener, ungecachter Endpunkt: `/content/books` liefert der Service Worker
+  // als Stale-While-Revalidate, und aus der alten Kopie gelesen waere der
+  // Zeitstempel der Stand des letzten Besuchs — also wieder das falsche Buch.
+  //
+  // Fehlschlag ist kein Fehler, sondern die Offline-Lage: dann entscheidet der
+  // lokale Rueckfall-Merker.
+  async _serverLastOpenedBookId() {
+    try {
+      const r = await fetchJson('/me/books/last-opened');
+      return r?.book_id ? String(r.book_id) : '';
+    } catch { return ''; }
   },
 
 

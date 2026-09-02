@@ -51,6 +51,10 @@ export const pageMethods = {
       this._trackPageUsage(p.id, this.$store.nav.selectedBookId);
     }
     setLastPageId(this.$store.session.currentUser?.email, this.$store.nav.selectedBookId, p.id);
+    // Eine geoeffnete Seite ist das staerkste „ich arbeite in DIESEM Buch"-Signal
+    // (gedrosselt im Helfer). Es entscheidet, welches Buch der naechste Aufruf
+    // der Stamm-URL zeigt.
+    this._touchBookOpened?.(this.$store.nav.selectedBookId);
 
     this._loadPageBadgeCounts(p.id);
 

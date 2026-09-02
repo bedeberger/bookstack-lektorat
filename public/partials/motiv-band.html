@@ -66,7 +66,7 @@
                     motif: bandActiveDetail().motifName,
                     chapter: bandActiveDetail().chapterName,
                   })"></span>
-            <button type="button" class="heatmap-detail-close"
+            <button type="button" class="btn-close heatmap-detail-close"
                     @click="activeBandDetailKey = null"
                     :data-tip="$app.t('common.close')" :aria-label="$app.t('common.close')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#x"/></svg></button>
           </div>
@@ -76,7 +76,7 @@
                x-text="$app.t('motiv.band.detail.empty')"></p>
             <div class="motiv-occ-list" x-show="bandActiveDetail().occurrences.length">
               <template x-for="o in bandActiveDetail().occurrences" :key="o.id">
-                <button type="button" class="motiv-occ-row internal-link" @click="gotoOccurrence(o)">
+                <button type="button" class="motiv-occ-row" @click="gotoOccurrence(o)">
                   <span class="motiv-occ-loc" x-text="o.page_name || o.scene_titel || ''"></span>
                   <span class="motiv-occ-snip" x-text="o.snippet" x-show="o.snippet"></span>
                   <span class="motiv-occ-meta">

@@ -31,11 +31,11 @@ const EXPORT_JOB_TYPES = ['pdf-export', 'epub-export', 'docx-export'];
 /* ------------------------------------------------------------------ Regal */
 
 const _stmtShelf = db.prepare(`
-  SELECT book_id, pinned_at, archived_at, updated_at
+  SELECT book_id, pinned_at, archived_at, last_opened_at, updated_at
     FROM book_shelf WHERE user_email = ? COLLATE NOCASE
 `);
 
-/** Regal-Zeilen des Users als Map book_id → { pinnedAt, archivedAt }. */
+/** Regal-Zeilen des Users als Map book_id → { pinnedAt, archivedAt, lastOpenedAt }. */
 function shelfMap(userEmail) {
   const email = userEmail == null ? '' : String(userEmail).trim();
   const out = new Map();
@@ -44,6 +44,7 @@ function shelfMap(userEmail) {
     out.set(r.book_id, {
       pinnedAt: r.pinned_at || null,
       archivedAt: r.archived_at || null,
+      lastOpenedAt: r.last_opened_at || null,
       updatedAt: r.updated_at || null,
     });
   }
@@ -89,9 +90,74 @@ function setShelf(bookId, userEmail, { pinned, archived } = {}) {
   return { book_id: id, pinned: !!pinnedAt, archived: !!archivedAt, pinned_at: pinnedAt, archived_at: archivedAt };
 }
 
-/* -------------------------------------------------------------- Kennzahlen */
-
+// Platzhalter-Liste fuer `IN (...)` — von der Regal-Abfrage und den
+// Kennzahlen geteilt.
 function _ph(n) { return new Array(n).fill('?').join(','); }
+
+const _stmtTouchOpened = db.prepare(`
+  INSERT INTO book_shelf (book_id, user_email, last_opened_at, updated_at)
+  VALUES (@book_id, @user_email, ${NOW_ISO_SQL}, ${NOW_ISO_SQL})
+  ON CONFLICT(book_id, user_email) DO UPDATE SET
+    last_opened_at = excluded.last_opened_at,
+    updated_at     = excluded.updated_at
+`);
+
+/**
+ * „Dieses Buch hatte ich gerade vor mir." Setzt `last_opened_at` auf jetzt und
+ * legt die Regal-Zeile an, falls es noch keine gibt.
+ *
+ * Die dritte persoenliche Achse neben Anheften und Archivieren — und die
+ * einzige, die der Client selbsttaetig schreibt. Sie entscheidet, mit welchem
+ * Buch die App beim Aufruf der Stamm-URL startet: die Antwort ist der groesste
+ * Zeitstempel, nicht der letzte Schreiber. Das ist der Unterschied zu einem
+ * lokalen Merker — localStorage ist browserweit und nicht pro Tab, dort gewann
+ * bei mehreren offenen Tabs der zuletzt GELADENE.
+ *
+ * Beruehrt `pinned_at`/`archived_at` NICHT (und `setShelf` umgekehrt nicht
+ * `last_opened_at`): die drei Achsen sind unabhaengig, ein Tab-Wechsel darf
+ * kein Archiv aufheben.
+ */
+function touchOpened(bookId, userEmail) {
+  const email = requireUserEmail(userEmail, 'book-shelf.touchOpened');
+  const id = parseInt(bookId, 10);
+  if (!Number.isInteger(id) || id <= 0) throw new Error('book-shelf.touchOpened: book_id ungueltig.');
+  _stmtTouchOpened.run({ book_id: id, user_email: email });
+  return { book_id: id, last_opened_at: _stmtNow.get().now };
+}
+
+/**
+ * Das Buch mit dem groessten `last_opened_at` — die Antwort auf „womit startet
+ * die App". `allowedIds` ist die `book_access`-Grenze des Users (der Aufrufer
+ * hat sie schon) und damit die ACL dieser Abfrage.
+ *
+ * Archivierte Buecher fallen HIER heraus, nicht erst beim Aufrufer: sonst
+ * muesste der Client, wenn der Spitzenreiter archiviert ist, den zweitbesten
+ * kennen — den er nicht hat. Ein Archiv ist die Aussage „raus aus meiner
+ * Liste", und die Buchwahl-Combobox zeigt es ebenfalls nicht.
+ *
+ * Null, wenn der User noch nie ein Buch geoeffnet hat (oder nur archivierte) —
+ * dann entscheidet der Client mit seinem lokalen Rueckfall.
+ */
+function lastOpenedBook(userEmail, allowedIds) {
+  const email = userEmail == null ? '' : String(userEmail).trim();
+  const ids = (Array.isArray(allowedIds) ? allowedIds : [])
+    .map(v => parseInt(v, 10))
+    .filter(v => Number.isInteger(v) && v > 0);
+  if (!email || !ids.length) return null;
+  const row = db.prepare(`
+    SELECT book_id, last_opened_at
+      FROM book_shelf
+     WHERE user_email = ? COLLATE NOCASE
+       AND last_opened_at IS NOT NULL
+       AND archived_at IS NULL
+       AND book_id IN (${_ph(ids.length)})
+     ORDER BY last_opened_at DESC
+     LIMIT 1
+  `).get(email, ...ids);
+  return row ? { book_id: row.book_id, last_opened_at: row.last_opened_at } : null;
+}
+
+/* -------------------------------------------------------------- Kennzahlen */
 
 /**
  * Kennzahlen je Buch fuer die Regal-Karte.
@@ -253,5 +319,7 @@ module.exports = {
   EXPORT_JOB_TYPES,
   shelfMap,
   setShelf,
+  touchOpened,
+  lastOpenedBook,
   metricsForBooks,
 };

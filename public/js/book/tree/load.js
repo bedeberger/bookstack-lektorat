@@ -1,6 +1,7 @@
 import { fetchJson } from '../../utils.js';
 import { contentRepo } from '../../repo/content.js';
 import { EVT } from '../../events.js';
+import { getLastBookId } from '../../local-prefs.js';
 
 // Buch-/Seiten-Laden + Tree-Build, Buchwahl-Combobox, Kapitel-Anlage,
 // Token-Estimate-Backfill (Server-Push + IntersectionObserver-Lazy).
@@ -71,6 +72,42 @@ export function readsFresh(opts = {}) {
   return opts.fresh === true || FRESH_SOURCES.has(opts.source);
 }
 
+/**
+ * Startbuch waehlen — reine Funktion, damit die Regel testbar ist und nicht in
+ * der Ladepipeline versteckt liegt. Greift nur, wenn der Hash kein Buch vorgibt
+ * (Aufruf der Stamm-URL) oder das gewaehlte Buch nicht mehr in der Liste steht.
+ *
+ * Reihenfolge, und jede Stufe hat einen Grund:
+ *   1. `serverBookId` — die Antwort von `GET /me/books/last-opened`, also der
+ *      groesste `book_shelf.last_opened_at`-Zeitstempel dieses Users. Der Server
+ *      ist Schiedsrichter, nicht der letzte Schreiber: genau das kann ein
+ *      lokaler Merker nicht leisten, denn `localStorage` ist browserweit und
+ *      NICHT pro Tab — bei mehreren offenen Tabs (je ein Buch) gewinnt dort der
+ *      zuletzt GELADENE, und nach einem Deploy-Reload aller Tabs entscheidet die
+ *      Netz-Latenz.
+ *   2. `storedId` — der lokale Rueckfall (`sw:lastBookId`). Fuer den ersten
+ *      Besuch auf diesem Geraet und fuer offline. Rueckfall, nie Korrektur der
+ *      Server-Antwort.
+ *   3. Erstes Buch der Liste (Server-Reihenfolge: alphabetisch). Willkuerlich,
+ *      aber nur noch fuer „noch nie ein Buch geoeffnet".
+ *
+ * Beide Kandidaten werden gegen die Liste geprueft: sie kann inzwischen anders
+ * aussehen (Zugriff entzogen, Buch geloescht) — und archivierte Buecher kommen
+ * nicht in Frage, weil sie aus der eigenen Liste geraeumt wurden und die
+ * Buchwahl-Combobox sie ebenfalls nicht zeigt. Ist ALLES archiviert, wird
+ * trotzdem eines gewaehlt: ein Start ohne Buch waere eine leere App.
+ */
+export function pickStartBook(books, { serverBookId = '', storedId = '' } = {}) {
+  const list = Array.isArray(books) ? books : [];
+  if (!list.length) return '';
+  const candidate = (id) => (id
+    ? list.find(b => !b.archived && String(b.id) === String(id))
+    : null);
+  const chosen = candidate(serverBookId) || candidate(storedId)
+    || list.find(b => !b.archived) || list[0];
+  return String(chosen.id);
+}
+
 export const treeLoadMethods = {
   async refreshPageAges() {
     const bookId = this.$store.nav.selectedBookId;
@@ -84,6 +121,14 @@ export const treeLoadMethods = {
   async loadBooks(opts = {}) {
     try {
       this.setStatus(this.t('tree.connecting'), true);
+      // Steht noch kein Buch (Boot auf der Stamm-URL), wird gleich ein Startbuch
+      // gewaehlt — dafuer braucht es den Serverstand. PARALLEL zur Buchliste
+      // anstossen, nicht danach: in Serie legte sich der Roundtrip auf den
+      // Boot-Pfad, und bis zur Wahl waere kein Buch gewaehlt (leere Buchwahl im
+      // ersten Frame). Beides landet, bevor entschieden wird.
+      const lastOpenedPromise = this.$store.nav.selectedBookId
+        ? null
+        : this._serverLastOpenedBookId?.();
       this.$store.nav.books = await contentRepo.listBooks({ fresh: readsFresh(opts) });
       // Wake-Refresh: Caller (_refreshAfterWake) triggert loadPages selbst mit source='wake'.
       // Hier weiterzureichen würde Tree erneut clearen (loadPages ohne source) → Flicker.
@@ -102,13 +147,17 @@ export const treeLoadMethods = {
         } catch (_) {}
       }
       if (!this.$store.nav.selectedBookId || !this.$store.nav.books.some(b => String(b.id) === String(this.$store.nav.selectedBookId))) {
-        let restored = '';
-        try {
-          const key = `sw:lastBookId:${this.$store.session.currentUser?.email || ''}`;
-          const stored = localStorage.getItem(key);
-          if (stored && this.$store.nav.books.some(b => String(b.id) === String(stored))) restored = String(stored);
-        } catch (_) {}
-        this.$store.nav.selectedBookId = restored || String(this.$store.nav.books[0]?.id || '');
+        // Serverstand awaiten: die Wahl muss deterministisch sein. Ein
+        // Hintergrund-Fetch, der nach der Entscheidung landet, wuerde entweder
+        // nichts bewirken oder das Buch unter dem User wegziehen.
+        // Der Fall ohne vorab angestossenes Promise ist der seltene zweite:
+        // ein Buch WAR gewaehlt, steht aber nicht mehr in der Liste (Zugriff
+        // entzogen, geloescht) — dort ist der Roundtrip in Serie in Ordnung.
+        const serverBookId = await (lastOpenedPromise || this._serverLastOpenedBookId?.());
+        this.$store.nav.selectedBookId = pickStartBook(this.$store.nav.books, {
+          serverBookId,
+          storedId: getLastBookId(this.$store.session.currentUser?.email),
+        });
       }
       this.showBookCard = true;
       this.booksLoaded = true;

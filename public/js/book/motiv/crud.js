@@ -126,7 +126,9 @@ export const crudMethods = {
     if (!sameId && !(await this._commitPendingEdits())) return;
     this.selectedMotifId = null;
     this.selectedThemeId = id;
-    if (!sameId) this._loadThemeBuffer(this.themeById(id));
+    // Der Schnellweg-Draft gehört zum geöffneten Thema — beim Wechsel leeren,
+    // damit ein Name nicht im nächsten Thema landet.
+    if (!sameId) { this.newThemeMotifName = ''; this._loadThemeBuffer(this.themeById(id)); }
   },
   // Themen-Editor schliessen → zurück zur Themen-Liste (committet ausstehende Edits).
   async deselectTheme() {
@@ -167,6 +169,24 @@ export const crudMethods = {
       await this.loadBoard();
       await this.selectMotif(m.id);
       this.$nextTick(() => this.$root?.querySelector('.motiv-name-input')?.focus());
+    } catch (e) { this.errorMessage = window.__app.t('motiv.error.save'); }
+    finally { this.busy = false; }
+  },
+  // Schnellweg aus dem geöffneten Themen-Editor: Motiv mit getipptem Namen anlegen
+  // und sofort diesem Thema zuordnen — spart den Umweg über die Toolbar samt
+  // nachträglicher Thema-Zuweisung. Danach löst der Motiv-Editor den Themen-Editor
+  // im Panel ab; ausstehende Themen-Edits committet selectMotif via
+  // _commitPendingEdits (kein stilles Verwerfen).
+  async addMotifToTheme() {
+    const theme = this.selectedTheme();
+    const name = (this.newThemeMotifName || '').trim();
+    if (!theme || !name) return;
+    this.busy = true;
+    try {
+      const m = await sendJson('/motifs', 'POST', { book_id: this._bookId(), name, theme_id: theme.id });
+      this.newThemeMotifName = '';
+      await this.loadBoard();
+      await this.selectMotif(m.id);
     } catch (e) { this.errorMessage = window.__app.t('motiv.error.save'); }
     finally { this.busy = false; }
   },

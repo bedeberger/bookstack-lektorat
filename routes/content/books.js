@@ -60,6 +60,11 @@ function register(router) {
           buchtyp: meta.get(b.id)?.buchtyp ?? null,
           pinned: !!shelf.get(b.id)?.pinnedAt,
           archived: !!shelf.get(b.id)?.archivedAt,
+          // `book_shelf.last_opened_at` steht hier bewusst NICHT: diese Antwort
+          // darf nicht stale sein (der SW liefert /content/books als
+          // Stale-While-Revalidate), und ein Boot auf der alten Kopie waehlte
+          // wieder das falsche Startbuch. Sie kommt aus dem ungecachten
+          // `GET /me/books/last-opened`.
         }));
       res.json(visible);
     } catch (e) { _fail(res, e, 'GET /content/books'); }

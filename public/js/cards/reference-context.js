@@ -26,9 +26,17 @@ const markCtx = (list, refCtx, extra) =>
   list.map(x => ({ ...x, refCtx, ...(extra ? extra(x) : null) }));
 
 /** Ist `id` in der Liste? Vergleich ueber Number, weil Bruecken-IDs je nach
- *  Route als Zahl oder String ankommen. */
+ *  Route als Zahl oder String ankommen. Nur fuer die NUMERISCHEN Anker
+ *  (page_id/chapter_id) — Figuren tragen eine TEXT-Identitaet, siehe `figKey`. */
 const hasId = (ids, id) =>
   id != null && Array.isArray(ids) && ids.some(x => x != null && Number(x) === Number(id));
+
+/** Identitaet einer Figur als Vergleichsschluessel. Die Achse ist die TEXT-
+ *  `fig_id` (`/figures/:book_id` UND `/figures/chapter/:book_id/:chapter_id`
+ *  liefern sie als `id`) — sie darf nie durch `Number()` laufen: 'fig_7' wird
+ *  dabei zu NaN, jeder Vergleich schlaegt fehl, und die Vereinigung unten haelt
+ *  dann jede Kapitel-Figur fuer unbekannt und rendert sie doppelt. */
+const figKey = (f) => (f?.id == null ? '' : String(f.id));
 
 export const referenceContextMethods = {
   // ── Memo (ein Helper pro Modul, Array-Deps mit ===) ──────────────────────
@@ -85,20 +93,23 @@ export const referenceContextMethods = {
     const chapterFigs = app?.chapterFigures || [];
     return this._memo('figuren', [this.referenceScope, this._pageKey(), all, chapterFigs], () => {
       if (!this._contextActive()) return all;
-      const chapIds = chapterFigs.map(f => f?.id);
+      const chapKeys = new Set(chapterFigs.map(figKey).filter(Boolean));
       const chapNames = new Set(chapterFigs.map(f => String(f?.name || '').toLowerCase()).filter(Boolean));
-      const inChap = (f) => hasId(chapIds, f?.id) || chapNames.has(String(f?.name || '').toLowerCase());
+      const inChap = (f) => chapKeys.has(figKey(f)) || chapNames.has(String(f?.name || '').toLowerCase());
       const onPage = [];
       const inChapter = [];
       const known = new Set();
       for (const f of all) {
-        if (f?.id != null) known.add(Number(f.id));
+        const k = figKey(f);
+        if (k) known.add(k);
         if (this._nameInPage([f.name, f.kurzname])) onPage.push(f);
         else if (inChap(f)) inChapter.push(f);
       }
       // Kapitel-Figuren ohne Katalog-Gegenstueck: der Slot laedt den Katalog
-      // asynchron nach — bis dahin darf die Liste nicht leer wirken.
-      const orphans = chapterFigs.filter(f => f?.id == null || !known.has(Number(f.id)));
+      // asynchron nach — bis dahin darf die Liste nicht leer wirken. Beide
+      // Listen sprechen dieselbe Identitaet (`figKey`), sonst ist hier JEDE
+      // Kapitel-Figur ein Waisenkind und steht ein zweites Mal in der Liste.
+      const orphans = chapterFigs.filter(f => !figKey(f) || !known.has(figKey(f)));
       return [...markCtx(onPage, 'page'), ...markCtx([...inChapter, ...orphans], 'chapter')];
     });
   },

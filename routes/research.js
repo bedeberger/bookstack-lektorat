@@ -22,12 +22,14 @@ const contentStore = require('../lib/content-store');
 const { NOW_ISO_SQL } = require('../db/now');
 const searchIndex = require('../lib/search');
 const {
-  RESEARCH_KINDS, LIST_FILTER_KINDS, TITLE_MAX, BODY_MAX, SOURCE_MAX, TAG_MAX, cleanStr,
+  RESEARCH_KINDS, LIST_FILTER_KINDS, RESEARCH_STATUS_SET,
+  TITLE_MAX, BODY_MAX, SOURCE_MAX, TAG_MAX, cleanStr,
   FTS_PREFILTER_LIMIT, CLIENT_LIST_LIMIT, clampListLimit, toClientItem,
 } = require('../lib/research-validate');
 const logger = require('../logger');
 const { researchMediaRouter } = require('./research-media');
 const { interviewMediaRouter } = require('./interview');
+const { researchScrapeRouter } = require('./research-scrape');
 
 const router = express.Router();
 const jsonBody = express.json();
@@ -38,6 +40,10 @@ const jsonBody = express.json();
 // bleiben — der Client-Vertrag (docs/clients.md) ändert sich nicht.
 router.use('/', researchMediaRouter);
 router.use('/', interviewMediaRouter);
+// Link-Scrape (POST /:id/scrape) ebenso — eigenes Modul, weil der ausgehende
+// Request samt SSRF-Schutz, Timeout und Fehlerabbildung nichts mit dem CRUD des
+// Boards zu tun hat. Siehe routes/research-scrape.js.
+router.use('/', researchScrapeRouter);
 
 // Item-Modell (Anlegen, Kind-Tabellen, Ausgabeform, LINK_TARGETS) liegt in
 // db/research-items.js, weil routes/capture.js (Browser-Erweiterung) denselben
@@ -60,6 +66,7 @@ const PATCH_FIELDS = [
   { name: 'title',    clean: (v) => cleanStr(v, TITLE_MAX) },
   { name: 'body',     clean: (v) => cleanStr(v, BODY_MAX) },
   { name: 'source',   clean: (v) => cleanStr(v, SOURCE_MAX) },
+  { name: 'status',   validate: (v) => RESEARCH_STATUS_SET.has(v), error: 'INVALID_STATUS' },
   { name: 'pinned',   clean: (v) => v ? 1 : 0 },
   { name: 'archived', clean: (v) => v ? 1 : 0 },
 ];
@@ -154,7 +161,7 @@ router.get('/', (req, res) => {
   const rows = db.prepare(
     `SELECT ri.id, ri.book_id, ri.user_email, ri.kind, ri.title, ri.body,
             ri.source, ri.image_mime, ri.doc_mime, ri.doc_name, ri.doc_pages, ri.doc_chars,
-            ri.pinned, ri.archived, ri.created_at, ri.updated_at${selectExtra}
+            ri.status, ri.pinned, ri.archived, ri.created_at, ri.updated_at${selectExtra}
        FROM research_items ri
       WHERE ${where.join(' AND ')}
       ORDER BY ${orderBy}${limit ? '\n      LIMIT ?' : ''}`

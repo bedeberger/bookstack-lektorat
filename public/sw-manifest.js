@@ -4,7 +4,7 @@
 //
 // __SHELL_BUILD: content hash over all listed assets → drives SHELL_CACHE.
 // __SHELL_MANIFEST: the coherent set precached atomically at SW install.
-self.__SHELL_BUILD = "76001c3e2e9ebb9c";
+self.__SHELL_BUILD = "7e3b59721f183463";
 self.__SHELL_MANIFEST = [
   "/css/admin/admin-backup.css",
   "/css/admin/admin-home.css",
@@ -121,6 +121,7 @@ self.__SHELL_MANIFEST = [
   "/css/entities/recherche/board.css",
   "/css/entities/recherche/chat.css",
   "/css/entities/recherche/dialog.css",
+  "/css/entities/recherche/status-board.css",
   "/css/entities/sources.css",
   "/css/entities/szenen.css",
   "/css/entities/world-facts.css",
@@ -289,7 +290,9 @@ self.__SHELL_MANIFEST = [
   "/js/book/recherche/items.js",
   "/js/book/recherche/links.js",
   "/js/book/recherche/media.js",
+  "/js/book/recherche/scrape.js",
   "/js/book/recherche/shared.js",
+  "/js/book/recherche/status.js",
   "/js/book/redundanz.js",
   "/js/book/review.js",
   "/js/book/songs.js",
@@ -803,6 +806,7 @@ self.__SHELL_MANIFEST = [
   "/partials/motiv-band.html",
   "/partials/motiv-befunde.html",
   "/partials/motiv-graph-menu.html",
+  "/partials/motiv-panel-theme.html",
   "/partials/motiv-panel.html",
   "/partials/motiv.html",
   "/partials/my-books.html",
@@ -843,6 +847,7 @@ self.__SHELL_MANIFEST = [
   "/partials/recherche-item-relations.html",
   "/partials/recherche-item-urls.html",
   "/partials/recherche-item.html",
+  "/partials/recherche-status-board.html",
   "/partials/recherche-transcript.html",
   "/partials/recherche.html",
   "/partials/redundanz.html",

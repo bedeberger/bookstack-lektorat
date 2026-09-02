@@ -402,3 +402,178 @@ test('Nur-Lese-Token: liest, darf aber nicht schreiben', async () => {
   const del = await api('DELETE', `/research/${read.json[0].id}`);
   assert.equal(del.status, 403);
 });
+
+// ── Link scrapen (POST /:id/scrape) ─────────────────────────────────────────
+// Der Weg fuer Links, die ohne Text ankommen (aus der Android-App geteilt).
+// Die Extraktion selbst deckt tests/unit/url-scrape.test.mjs; hier steht die
+// UEBERNAHME-Regel: was wird gefuellt, was bleibt stehen, was meldet die Antwort.
+//
+// `globalThis.fetch` wird nur fuer den Ziel-Host ersetzt — die api()-Requests
+// dieses Tests laufen selbst ueber fetch gegen 127.0.0.1 und muessen durch.
+
+const SCRAPE_HOST = 'https://zeitung.test';
+const SCRAPE_PAGE = `<!doctype html><html lang="de"><head>
+  <meta property="og:title" content="Die Prozessakten von 1892">
+  <meta name="description" content="Ein Fund im Landesarchiv.">
+  <meta property="og:site_name" content="Beispielzeitung">
+</head><body><article>
+  <p>Im Keller lagen sie über hundert Jahre, und niemand hatte je hineingesehen.</p>
+  <p>${'Ein zweiter Absatz, lang genug fuer die Substanz-Schwelle des Kandidaten. '.repeat(4)}</p>
+</article></body></html>`;
+
+let scrapeReply = null;   // (url) => Response-artiges Objekt, oder null für 200/HTML
+let scrapeCalls = [];
+
+function installScrapeStub() {
+  const orig = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    const u = String(url);
+    if (!u.startsWith(SCRAPE_HOST)) return orig(url, opts);
+    scrapeCalls.push(u);
+    if (scrapeReply) return scrapeReply(u);
+    const h = new Map([['content-type', 'text/html; charset=utf-8']]);
+    return {
+      ok: true, status: 200,
+      headers: { get: (k) => h.get(k.toLowerCase()) ?? null },
+      arrayBuffer: async () => Buffer.from(SCRAPE_PAGE, 'utf8'),
+    };
+  };
+  return () => { globalThis.fetch = orig; };
+}
+
+// Reserved-TLD-Host (.test) loest per DNS nicht auf — derselbe Seam, den die
+// Blog-Sync-Tests nutzen (lib/ssrf-guard.js).
+process.env.SSRF_SKIP_DNS_CHECK = '1';
+
+test.beforeEach(() => { scrapeReply = null; scrapeCalls = []; });
+
+test('POST /:id/scrape: leeres Fundstueck bekommt Titel, Text, Herkunft und Linkbezeichnung', async () => {
+  const BOOK = 8330;
+  seedBook(BOOK);
+  const restore = installScrapeStub();
+  try {
+    const item = await createItem(BOOK, { kind: 'link', title: '', urls: [{ url: `${SCRAPE_HOST}/a` }] });
+    const { status, json } = await api('POST', `/research/${item.id}/scrape`, {});
+    assert.equal(status, 200, JSON.stringify(json));
+    assert.deepEqual(json.filled.slice().sort(), ['body', 'source', 'title', 'url_label']);
+    assert.deepEqual(json.skipped, []);
+    assert.equal(json.item.title, 'Die Prozessakten von 1892');
+    assert.equal(json.item.source, 'Beispielzeitung');
+    // Beschreibung fuehrt, Haupttext folgt.
+    assert.match(json.item.body, /^Ein Fund im Landesarchiv\.\n\nIm Keller lagen sie/);
+    // Die nackte URL aus der Teilen-Funktion wird lesbar benannt …
+    assert.equal(json.item.urls[0].label, 'Die Prozessakten von 1892');
+    // … ohne dass sie eine neue url_id bekommt (das Frontend haelt sie als x-for-key).
+    assert.equal(json.item.urls[0].url_id, item.urls[0].url_id);
+  } finally { restore(); }
+});
+
+test('POST /:id/scrape: vorhandener Text bleibt stehen und wird gemeldet', async () => {
+  const BOOK = 8331;
+  seedBook(BOOK);
+  const restore = installScrapeStub();
+  try {
+    const item = await createItem(BOOK, {
+      kind: 'link', title: 'Meine eigene Ueberschrift', body: 'Handgeschriebene Notiz.',
+      urls: [{ url: `${SCRAPE_HOST}/a` }],
+    });
+    const { status, json } = await api('POST', `/research/${item.id}/scrape`, {});
+    assert.equal(status, 200);
+    assert.deepEqual(json.skipped.slice().sort(), ['body', 'title']);
+    assert.equal(json.item.title, 'Meine eigene Ueberschrift');
+    assert.equal(json.item.body, 'Handgeschriebene Notiz.');
+    // Was leer war, wird trotzdem gefuellt — der Knopf ist nicht alles-oder-nichts.
+    assert.ok(json.filled.includes('source'));
+  } finally { restore(); }
+});
+
+test('POST /:id/scrape: overwrite ersetzt, aber nur auf ausdrueckliche Ansage', async () => {
+  const BOOK = 8332;
+  seedBook(BOOK);
+  const restore = installScrapeStub();
+  try {
+    const item = await createItem(BOOK, {
+      kind: 'link', title: 'Alt', body: 'Alter Text.', urls: [{ url: `${SCRAPE_HOST}/a` }],
+    });
+    const { status, json } = await api('POST', `/research/${item.id}/scrape`, { overwrite: true });
+    assert.equal(status, 200);
+    assert.equal(json.item.title, 'Die Prozessakten von 1892');
+    assert.match(json.item.body, /Im Keller lagen sie/);
+    assert.deepEqual(json.skipped, []);
+  } finally { restore(); }
+});
+
+test('POST /:id/scrape: url_id waehlt den Link — nicht den ersten', async () => {
+  const BOOK = 8333;
+  seedBook(BOOK);
+  const restore = installScrapeStub();
+  try {
+    const item = await createItem(BOOK, {
+      kind: 'link', title: '',
+      urls: [{ url: 'https://ignoriert.test/x' }, { url: `${SCRAPE_HOST}/gewuenscht` }],
+    });
+    const { status } = await api('POST', `/research/${item.id}/scrape`,
+      { url_id: item.urls[1].url_id });
+    assert.equal(status, 200);
+    assert.deepEqual(scrapeCalls, [`${SCRAPE_HOST}/gewuenscht`]);
+  } finally { restore(); }
+});
+
+test('POST /:id/scrape: Fundstueck ohne Link → NO_URL, kein Request', async () => {
+  const BOOK = 8334;
+  seedBook(BOOK);
+  const restore = installScrapeStub();
+  try {
+    const item = await createItem(BOOK, { title: 'Reine Notiz' });
+    const { status, json } = await api('POST', `/research/${item.id}/scrape`, {});
+    assert.equal(status, 400);
+    assert.equal(json.error_code, 'NO_URL');
+    assert.deepEqual(scrapeCalls, []);
+  } finally { restore(); }
+});
+
+test('POST /:id/scrape: Seite ohne Inhalt → 422 SCRAPE_EMPTY, Fundstueck unberuehrt', async () => {
+  const BOOK = 8335;
+  seedBook(BOOK);
+  const restore = installScrapeStub();
+  try {
+    // Der typische Fall: eine Seite, die ihren Text erst im Browser zusammensetzt.
+    scrapeReply = () => ({
+      ok: true, status: 200,
+      headers: { get: (k) => (k.toLowerCase() === 'content-type' ? 'text/html' : null) },
+      arrayBuffer: async () => Buffer.from('<html><body><div id="app"></div></body></html>', 'utf8'),
+    });
+    const item = await createItem(BOOK, { kind: 'link', title: '', urls: [{ url: `${SCRAPE_HOST}/spa` }] });
+    const { status, json } = await api('POST', `/research/${item.id}/scrape`, {});
+    assert.equal(status, 422);
+    assert.equal(json.error_code, 'SCRAPE_EMPTY');
+    const after = await api('GET', `/research?book_id=${BOOK}`);
+    assert.equal(after.json[0].body, null);
+  } finally { restore(); }
+});
+
+test('POST /:id/scrape: HTTP-Fehler des Ziels ist 502, kein 500', async () => {
+  const BOOK = 8336;
+  seedBook(BOOK);
+  const restore = installScrapeStub();
+  try {
+    scrapeReply = () => ({ ok: false, status: 503, headers: { get: () => null } });
+    const item = await createItem(BOOK, { kind: 'link', title: '', urls: [{ url: `${SCRAPE_HOST}/weg` }] });
+    const { status, json } = await api('POST', `/research/${item.id}/scrape`, {});
+    assert.equal(status, 502);
+    assert.equal(json.error_code, 'SCRAPE_HTTP_ERROR');
+  } finally { restore(); }
+});
+
+test('POST /:id/scrape: fremdes Buch → ACL greift vor dem Request', async () => {
+  const BOOK = 8337;
+  seedBook(BOOK);
+  const restore = installScrapeStub();
+  try {
+    const item = await createItem(BOOK, { kind: 'link', title: '', urls: [{ url: `${SCRAPE_HOST}/a` }] });
+    sessionUser = 'fremd@test.dev';
+    const { status } = await api('POST', `/research/${item.id}/scrape`, {});
+    assert.equal(status, 403);
+    assert.deepEqual(scrapeCalls, [], 'ohne Recht geht kein Request raus');
+  } finally { restore(); }
+});

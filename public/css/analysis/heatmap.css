@@ -205,17 +205,14 @@
 .heatmap-detail-title {
   font-weight: var(--fw-medium);
 }
+/* Schliessen: Kern aus dem Primitive `.btn-close` (components/btn-close.css),
+   hier nur die Abweichung dieser Box — Groesse und Polsterung des Drawer-Kopfs.
+   Der frueher eigene Rahmen ist entfallen: jede andere Schliessen-Taste der App
+   ist randlos, und der Kasten liess das `x` im Drawer-Kopf wie einen zweiten
+   Aktions-Button neben dem Titel aussehen. */
 .heatmap-detail-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--space-2xs) var(--space-sm);
-  font-size: var(--font-size-sm);
-  background: transparent;
-  color: var(--color-muted);
-  border: 0.5px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
+  --close-size: var(--font-size-sm);
+  --close-pad: var(--space-2xs) var(--space-sm);
 }
 .heatmap-detail-list {
   display: flex;

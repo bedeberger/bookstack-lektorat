@@ -262,9 +262,9 @@ textarea.recherche-input { resize: vertical; min-height: 2.75rem; }
   flex-direction: column;
   gap: var(--space-2xs);
 }
-/* Eine Zeile = ein Link + seine „als Quelle übernehmen"-Aktion. Die Aktion hängt
-   an der Zeile, nicht am Fundstück (nur der User weiss, welcher Link der Nachweis
-   ist) — Markup in partials/recherche-item-urls.html. */
+/* Eine Zeile = ein Link + seine Aktionen („Seite lesen", „als Quelle
+   übernehmen"). Sie hängen an der Zeile, nicht am Fundstück (nur der User weiss,
+   welcher Link gemeint ist) — Markup in partials/recherche-item-urls.html. */
 .research-item-url-row {
   display: flex;
   align-items: center;
@@ -277,12 +277,19 @@ textarea.recherche-input { resize: vertical; min-height: 2.75rem; }
   color: var(--card-accent);
   font-size: var(--font-size-sm);
   word-break: break-all;
+  /* Die Aktionen stehen rechts am Zeilenende; ohne min-width:0 drückt eine
+     lange URL sie aus der Zeile (Flex-Item schrumpft sonst nicht unter seinen
+     Inhalt). */
+  min-width: 0;
+  margin-right: auto;
 }
 .research-item-url .icon { width: 0.9em; height: 0.9em; flex-shrink: 0; }
 
 /* Kontext-Verkleinerung des generischen Icon-Buttons (28px wären in einer Liste
-   aus font-size-sm-Zeilen die höchste Zeile und würden die Liste auftreiben). */
-.research-url-tosource {
+   aus font-size-sm-Zeilen die höchste Zeile und würden die Liste auftreiben).
+   Ein Name für ALLE Zeilen-Aktionen: eine zweite Klasse mit denselben Werten
+   wäre nur ein zweiter Ort, an dem sich die Grösse ändern kann. */
+.research-url-action {
   width: 22px;
   height: 22px;
   flex-shrink: 0;

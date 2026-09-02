@@ -15,6 +15,25 @@
     <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#zap"/></svg>
     <span x-text="$app.t('recherche.suggest.btn')"></span>
   </button>
+  <!-- Einarbeitungs-Status: der tastaturerreichbare Weg auf die Achse, die im
+       Status-Board per Drag bedient wird. Steht hier und nicht in einem eigenen
+       Widget, weil das Menue in ALLEN drei Oberflaechen dasselbe ist (Liste,
+       Detailansicht, Board-Karte) — ein zweiter Schalter daneben waere eine
+       Kopie zum Auseinanderlaufen. Der aktive Eintrag ist markiert (--on), er
+       bleibt klickbar und setzt nichts (setItemStatus ist bei Gleichstand ein
+       No-op, schliesst aber das Menue). -->
+  <div class="context-menu-sep" role="separator"></div>
+  <div class="context-menu-header context-menu-header--inline" x-text="$app.t('recherche.status.label')"></div>
+  <template x-for="st in statuses()" :key="st">
+    <button type="button" class="context-menu-item context-menu-item--icon" role="menuitemradio"
+            :class="{ 'context-menu-item--on': itemStatus(item) === st }"
+            :aria-checked="itemStatus(item) === st"
+            @click="setItemStatus(item, st)" :disabled="busy">
+      <svg class="icon" aria-hidden="true"><use :href="itemStatus(item) === st ? '/icons.svg?v=693#check' : '/icons.svg?v=693#circle'"/></svg>
+      <span x-text="statusLabel(st)"></span>
+    </button>
+  </template>
+
   <div class="context-menu-sep" role="separator"></div>
   <button type="button" class="context-menu-item context-menu-item--icon" role="menuitem" @click="togglePin(item)">
     <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#pin"/></svg>

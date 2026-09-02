@@ -1,0 +1,269 @@
+@layer components {
+/* Recherche-Board, Ansicht „Status" — Kanban ueber die Einarbeitungs-Stufen
+   (Spalten = STATUSES aus public/js/book/recherche/shared.js, Karten = dieselben
+   Fundstuecke wie die Liste). Laedt NACH board.css: die Karte benutzt dessen
+   Vokabular weiter (.research-kind-badge, .research-item-title,
+   .research-link-chip, .research-item-actions) und traegt hier nur die Deltas
+   der Board-Form.
+
+   Bewusst KEINE Kopie des Plot-Board-CSS: die Geometrie ist eine andere (vier
+   feste Spalten gleicher Breite statt beliebig vieler Akte), und ein geteiltes
+   `.kanban-*`-Vokabular haette beide Boards aneinandergebunden, obwohl nur die
+   Drag-Mechanik (public/js/sortable-dnd.js) wirklich geteilt ist. */
+
+/* ── Board ──────────────────────────────────────────────────────────────── */
+/* Vier Spalten nebeneinander, horizontal scrollend wenn der Platz nicht reicht.
+   `align-items: stretch` haelt die Spalten gleich hoch — ein Kanban, dessen
+   Spalten unterschiedlich hoch enden, hat unerreichbare Drop-Zonen. */
+.research-status-board {
+  display: flex;
+  gap: var(--space-md);
+  align-items: stretch;
+  overflow-x: auto;
+  padding-bottom: var(--space-sm);
+  scroll-snap-type: x proximity;
+  transition: opacity 0.12s ease;
+}
+/* Refetch bei Filter/Sort/Suche: gleiche Regel wie die Liste (gedimmt + inert
+   statt Skeleton-Swap). */
+.research-status-board.is-refreshing {
+  opacity: var(--opacity-disabled);
+  pointer-events: none;
+}
+
+.research-status-column {
+  --status-accent: var(--card-accent);
+  flex: 1 1 0;
+  min-width: 14rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm);
+  scroll-snap-align: start;
+}
+
+/* Stufen-Farben: offen neutral, in Arbeit warnend-warm, eingearbeitet ok,
+   verworfen zurueckgenommen. Semantische Tokens, keine Hex-Werte. */
+.research-status-column--offen         { --status-accent: var(--color-muted); }
+.research-status-column--in_arbeit     { --status-accent: var(--color-warn-text); }
+.research-status-column--eingearbeitet { --status-accent: var(--color-ok-border); }
+.research-status-column--verworfen     { --status-accent: var(--color-border); }
+
+.research-status-column-head {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-base);
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  border-bottom: 2px solid var(--status-accent);
+  padding-bottom: var(--space-xs);
+  background: var(--color-surface);
+}
+.research-status-column-title {
+  flex: 1 1 auto;
+  font-weight: var(--fw-semibold);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+.research-status-column-count {
+  flex: 0 0 auto;
+  font-size: var(--font-size-micro);
+  color: var(--color-muted);
+  background: var(--color-tag-bg);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-xs);
+  min-width: 1.4em;
+  text-align: center;
+}
+
+/* SortableJS-Container. Waechst ueber die Karten hinaus und fuellt die Spalte,
+   damit die ganze Flaeche unter den Karten Drop-Ziel ist. */
+.research-status-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  flex: 1 1 auto;
+  min-height: 3rem;
+}
+/* Waehrend eines Drags leere Spalten zur erreichbaren Drop-Zone aufblaehen
+   (gesetzt an <body> in recherche/status.js). */
+body.research-dnd-active .research-status-cell {
+  min-height: 6rem;
+  border-radius: var(--radius-sm);
+  outline: 1px dashed color-mix(in srgb, var(--status-accent) 55%, transparent);
+  outline-offset: var(--space-3);
+}
+
+.research-status-column-empty {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-muted);
+  text-align: center;
+  padding: var(--space-sm) 0;
+}
+
+/* ── Karte ──────────────────────────────────────────────────────────────── */
+.research-status-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  background: var(--color-card-bg);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--status-accent);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm);
+  /* Nur transform animieren (Compositor-billig) — dieselbe Ueberlegung wie an
+     der Beat-Karte: eine box-shadow-Transition erzwingt beim Scrollen ueber die
+     Karten eine Repaint-Kaskade. */
+  transition: transform var(--transition-fast);
+}
+.research-status-card:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+.research-status-card--pinned { background: var(--color-bg); }
+.research-status-card--archived { opacity: 0.6; }
+.research-status-card--open { border-color: var(--card-accent); }
+
+.research-status-card-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+}
+.research-status-card-actions { margin-left: auto; }
+
+/* Drag-Griff: einzige Greiffläche (SortableJS handle), dezent bis Hover.
+   touch-action:none laesst den Fallback-Drag auf Touch sauber starten. */
+.research-status-grip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  margin-left: calc(-1 * var(--space-3));
+  color: var(--color-border);
+  cursor: grab;
+  touch-action: none;
+  transition: color var(--transition-fast);
+}
+.research-status-card:hover .research-status-grip { color: var(--color-muted); }
+.research-status-grip:hover { color: var(--color-text); }
+.research-status-grip:active { cursor: grabbing; }
+.research-status-grip .icon { width: 16px; height: 16px; }
+
+/* Titel: Vokabular aus board.css (.research-item-title), hier nur der
+   Zeilen-Cap — eine Kanban-Karte darf nicht auf Titellaenge wachsen. */
+.research-status-card-title {
+  font-size: var(--font-size-sm);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+/* Anriss: engerer Cap als in der Liste (2 statt 3 Zeilen) — die Spalte ist
+   schmal, und die Karte soll auf einen Blick lesbar bleiben. */
+.research-status-card-text {
+  font-size: var(--font-size-xs);
+  line-height: var(--lh-base);
+  color: color-mix(in srgb, var(--color-text) 78%, var(--color-muted));
+  white-space: pre-wrap;
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Stelle im Buch: dieselben Chips wie in der Liste, aber ohne Entfernen-Knopf
+   (der sitzt in der Detailansicht neben dem Picker) — darum ist der Chip hier
+   selbst der Knopf. */
+.research-status-places {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+.research-status-place {
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+
+/* „Eingearbeitet" ohne Stelle im Buch — Befund, kein Fehler: warnend getoent,
+   aber nicht rot (nichts ist kaputt, es fehlt nur die Angabe). */
+.research-status-noplace {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-warn-text);
+}
+.research-status-noplace .icon { width: 13px; height: 13px; flex: 0 0 auto; }
+
+.research-status-otherlinks {
+  font-size: var(--font-size-micro);
+  color: var(--color-muted);
+}
+
+/* ── SortableJS-Drag-Zustaende ──────────────────────────────────────────── */
+/* Ghost: reservierter Slot am Ziel — gestrichelter Rahmen, Inhalt unsichtbar
+   (der Drag-Klon ist die einzige sichtbare Repraesentation). */
+.research-status-card.research-status-card--ghost {
+  background: color-mix(in srgb, var(--status-accent) 14%, transparent);
+  border: 1px dashed var(--status-accent);
+  border-left-width: 3px;
+  opacity: 1;
+}
+.research-status-card.research-status-card--ghost > * { visibility: hidden; }
+.research-status-card.research-status-card--chosen { background: var(--color-accent-bg); }
+/* Drag-Klon: forceFallback klont in <body> — dort fehlt der Spalten-Kontext,
+   also kein --status-accent. Explizit auf den Karten-Akzent zurueckfallen, sonst
+   bleibt der Rahmen konturlos (var() ohne Wert → currentColor). Und `transition:
+   none`, weil SortableJS den Klon per inline transform pro Mousemove setzt: eine
+   geerbte transform-Transition liesse ihn der Maus nur hinterherlerpen. */
+.research-status-card.research-status-card--dragging {
+  box-shadow: 0 12px 28px var(--color-shadow);
+  background: var(--color-card-bg);
+  border: 1px solid var(--card-accent, var(--card-accent-recherche));
+  border-radius: var(--radius-sm);
+  opacity: 0.95;
+  cursor: grabbing;
+  transition: none;
+}
+
+/* ── Status-Plakette (Liste + Detailansicht) ────────────────────────────── */
+/* Damit beide Ansichten dieselbe Aussage zeigen. Kein palette-badge (die
+   Hue-Familie ist fuer die Fundstueck-ART belegt) — die Stufe traegt ihre
+   semantische Farbe, denselben Tokensatz wie die Spalte. */
+.research-status-badge {
+  flex: 0 0 auto;
+  display: inline-block;
+  padding: 0.1em 0.5em;
+  border: 1px solid var(--status-accent);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-micro);
+  font-weight: var(--fw-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-muted);
+  background: color-mix(in srgb, var(--status-accent) 12%, transparent);
+  white-space: nowrap;
+}
+.research-status-badge--offen         { --status-accent: var(--color-muted); }
+.research-status-badge--in_arbeit     { --status-accent: var(--color-warn-text); color: var(--color-warn-text); }
+.research-status-badge--eingearbeitet { --status-accent: var(--color-ok-border);   color: var(--color-ok-text); }
+.research-status-badge--verworfen     { --status-accent: var(--color-border); }
+/* Mobile: Spalten untereinander statt in einem 4-fach-Scroll, den man auf einem
+   Telefon nicht bedienen kann. */
+@media (max-width: 700px) {
+  .research-status-board {
+    flex-direction: column;
+    overflow-x: visible;
+  }
+  .research-status-column { min-width: 0; }
+}
+}

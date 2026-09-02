@@ -2,6 +2,7 @@
 // try/catch). Keys: `sw:<bereich>:<email>:<bookId>[:<scope>]`.
 //
 // Bereiche:
+//   - lastBookId:<email>                   -> Rückfall-Merker fürs Startbuch
 //   - lastPage:<email>:<bookId>            -> letzte geöffnete Seiten-ID
 //   - filters:<email>:<bookId>:<scope>     -> Filter-Objekt pro Karten-Scope
 //   - userpref:<email>:<key>               -> book-unabhängiger User-Pref (JSON)
@@ -16,6 +17,28 @@ function safeSet(key, value) {
 }
 function safeRemove(key) {
   try { localStorage.removeItem(key); } catch {}
+}
+
+// Startbuch-Rückfall. Die WAHRHEIT dazu ist serverseitig
+// (`book_shelf.last_opened_at`, ein Zeitstempel pro Buch und User) — dieser
+// Merker greift nur, wenn kein Buch der Liste einen Server-Zeitstempel trägt:
+// erster Besuch auf diesem Gerät, oder offline geschrieben und noch nicht
+// gemeldet. Er ist bewusst kein zweiter Schiedsrichter: localStorage ist
+// browserweit und nicht pro Tab, konkurrierende Tabs können daran nichts
+// entscheiden. Geschrieben wird er an genau denselben Stellen wie der
+// Server-Zeitstempel (`_touchBookOpened`), nie beim Boot allein.
+function lastBookKey(email) {
+  return `${PREFIX}:lastBookId:${email || ''}`;
+}
+
+export function getLastBookId(email) {
+  const raw = safeGet(lastBookKey(email));
+  return raw ? String(raw) : '';
+}
+
+export function setLastBookId(email, bookId) {
+  if (!bookId) return;
+  safeSet(lastBookKey(email), String(bookId));
 }
 
 function lastPageKey(email, bookId) {

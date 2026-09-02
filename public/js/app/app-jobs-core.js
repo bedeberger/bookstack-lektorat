@@ -275,6 +275,9 @@ export const appJobsCoreMethods = {
       this._applyingHash = true;
       try {
         this.$store.nav.selectedBookId = String(job.bookId);
+        // `_applyingHash` haelt den selectedBookId-Watcher still, also hier
+        // selbst stempeln — der Sprung IST ein Buchwechsel des Users.
+        this._touchBookOpened(job.bookId, { force: true });
         this._resetBookScopedState();
         await this.loadPages({ source: 'bookSwitch' });
         await this._reloadVisibleBookCards();

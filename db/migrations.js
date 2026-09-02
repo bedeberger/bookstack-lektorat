@@ -11365,6 +11365,71 @@ function _runMigrationsLocked() {
     logger.info('DB-Migration auf Version 280 abgeschlossen (figure_ages.gerechnet).');
   }
 
+  if (version < 281) {
+    // `research_items.status` — die Einarbeitungs-Achse des Recherche-Boards:
+    // wo steht dieses Fundstueck auf dem Weg vom Fund in den Buchtext. Vier
+    // Stufen, `offen` als Default (jeder Bestandsfund ist per Definition
+    // unbearbeitet, bis jemand etwas anderes sagt).
+    //
+    // Bewusst NEBEN `archived`, nicht darin: `archived` raeumt ein Fundstueck aus
+    // dem Board (es faellt aus jeder Standard-Liste und aus den Seiten-/Kapitel-
+    // Indikatoren), `verworfen` ist ein SICHTBARES Urteil — geprueft, nicht
+    // verwendet. Waere `verworfen` bloss Archiv, verschwaende genau die
+    // Information, um derentwillen man es festhaelt.
+    //
+    // Additiv per ALTER (kein Recreate): SQLite erlaubt am ADD COLUMN eine
+    // CHECK-Klausel und erzwingt sie danach auch. Die Kind-Tabellen
+    // (research_item_urls/_tags/_links, interview_transcripts) zeigen auf
+    // research_items(id) und bleiben unberuehrt.
+    const riCols281 = db.pragma('table_info(research_items)').map(c => c.name);
+    if (riCols281.length > 0 && !riCols281.includes('status')) {
+      db.exec(`ALTER TABLE research_items ADD COLUMN status TEXT NOT NULL DEFAULT 'offen'
+                 CHECK(status IN ('offen','in_arbeit','eingearbeitet','verworfen'))`);
+      db.exec('CREATE INDEX IF NOT EXISTS idx_research_items_status ON research_items(book_id, status)');
+    }
+
+    const fkErrors281 = db.pragma('foreign_key_check');
+    if (fkErrors281.length) {
+      throw new Error(`Migration 281: foreign_key_check meldet ${fkErrors281.length} Verstoesse.`);
+    }
+    db.prepare('UPDATE schema_version SET version = 281').run();
+    logger.info('DB-Migration auf Version 281 abgeschlossen (research_items.status).');
+  }
+
+  if (version < 282) {
+    // `book_shelf.last_opened_at` — die dritte persoenliche Achse des Regals:
+    // wann der User dieses Buch zuletzt vor sich hatte. Sie beantwortet die
+    // Frage, mit welchem Buch die App beim Aufruf der Stamm-URL startet.
+    //
+    // Serverseitig und mit Zeitstempel, weil der Merker sonst nicht
+    // entscheidbar ist: localStorage ist browserweit und NICHT pro Tab — bei
+    // mehreren gleichzeitig offenen Tabs (je ein Buch) gewann dort der zuletzt
+    // GELADENE Tab, nicht der zuletzt benutzte, und nach einem Deploy-Reload
+    // aller Tabs entschied die Netz-Latenz. Ein Zeitstempel pro Buch macht die
+    // Reihenfolge explizit; der Client bleibt der Schreiber, aber nicht mehr
+    // der Schiedsrichter.
+    //
+    // Eigene Spalte statt Ableitung aus `user_page_usage`: dort steht nur, wann
+    // eine SEITE geoeffnet wurde. Ein Buch hat man auch offen, wenn man im
+    // Plot-Board, in den Figuren oder in der Uebersicht arbeitet.
+    //
+    // Additiv (ADD COLUMN), nullable: bestehende Regal-Zeilen stammen aus der
+    // Zeit vor dieser Spalte, und NULL heisst hier korrekt „nie gemessen" —
+    // ein Default `now()` haette jedem Buch dieselbe Zeit gegeben und die
+    // Reihenfolge damit erneut willkuerlich gemacht.
+    const shelfCols282 = db.pragma('table_info(book_shelf)').map(c => c.name);
+    if (shelfCols282.length > 0 && !shelfCols282.includes('last_opened_at')) {
+      db.exec('ALTER TABLE book_shelf ADD COLUMN last_opened_at TEXT');
+    }
+
+    const fkErrors282 = db.pragma('foreign_key_check');
+    if (fkErrors282.length) {
+      throw new Error(`Migration 282: foreign_key_check meldet ${fkErrors282.length} Verstoesse.`);
+    }
+    db.prepare('UPDATE schema_version SET version = 282').run();
+    logger.info('DB-Migration auf Version 282 abgeschlossen (book_shelf.last_opened_at).');
+  }
+
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);
   if (feColsCheck.length > 0 && !feColsCheck.includes('typ')) {

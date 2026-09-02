@@ -1,9 +1,11 @@
 'use strict';
-// Buecherregal (db/book-shelf.js): die zwei persoenlichen Achsen + die
+// Buecherregal (db/book-shelf.js): die drei persoenlichen Achsen + die
 // Kennzahlen-Aggregation. Zwei Eigenschaften sind hier die eigentlichen
 // Testgegenstaende:
 //   1. `setShelf` ist ein TEIL-Update — eine Achse zu schalten darf die andere
-//      nicht loeschen (die Karte hat zwei unabhaengige Knoepfe pro Zeile).
+//      nicht loeschen (die Karte hat zwei unabhaengige Knoepfe pro Zeile), und
+//      `touchOpened` (die dritte Achse, vom Client gemeldet) darf keine von
+//      beiden anfassen.
 //   2. Die Kennzahlen sind zweiachsig skopiert: Umfang/Fassungen/Exporte gelten
 //      buchweit, Schreibzeit und Share-/Kommentarzahlen gehoeren dem
 //      anfragenden User. Ein Lektor darf die Share-Links des Autors nicht sehen.
@@ -128,4 +130,82 @@ test('metricsForBooks: buchweite Zahlen vs. eigene Zahlen', () => {
 test('metricsForBooks: leere Eingabe erzeugt kein SQL mit leerem IN', () => {
   assert.equal(bookShelf.metricsForBooks(AUTOR, []).size, 0);
   assert.equal(bookShelf.metricsForBooks('', [BOOK]).size, 0);
+});
+
+test('touchOpened: dritte Achse, unabhaengig von Anheften und Archivieren', () => {
+  // `last_opened_at` beantwortet „mit welchem Buch startet die App" und wird
+  // vom Client gemeldet (Buchwechsel, Seitenoeffnung, Tab wird sichtbar) — also
+  // oft und ungefragt. Genau darum darf der Stempel nichts anderes anfassen:
+  // ein Tab-Wechsel wuerde sonst ein Archiv aufheben oder einen Pin abwerfen.
+  const BOOK3 = 503;
+  schema.upsertBookByName(BOOK3, 'Drittes Buch');
+
+  // Ohne Regal-Zeile: der Stempel legt sie an (der Normalfall — die meisten
+  // Buecher hat niemand je angeheftet).
+  assert.equal(bookShelf.shelfMap(LEKTOR).get(BOOK3), undefined);
+  const t1 = bookShelf.touchOpened(BOOK3, LEKTOR);
+  assert.ok(t1.last_opened_at, 'Zeitstempel geliefert');
+  assert.ok(bookShelf.shelfMap(LEKTOR).get(BOOK3).lastOpenedAt, 'Zeile angelegt');
+  assert.equal(bookShelf.shelfMap(LEKTOR).get(BOOK3).pinnedAt, null);
+  assert.equal(bookShelf.shelfMap(LEKTOR).get(BOOK3).archivedAt, null);
+
+  // Auf einer bestehenden Zeile: Pin und Archiv bleiben unberuehrt.
+  bookShelf.setShelf(BOOK3, LEKTOR, { pinned: true, archived: true });
+  const before = bookShelf.shelfMap(LEKTOR).get(BOOK3);
+  bookShelf.touchOpened(BOOK3, LEKTOR);
+  const after = bookShelf.shelfMap(LEKTOR).get(BOOK3);
+  assert.equal(after.pinnedAt, before.pinnedAt, 'pinned_at unveraendert');
+  assert.equal(after.archivedAt, before.archivedAt, 'archived_at unveraendert');
+
+  // Und umgekehrt: eine Regal-Aenderung darf den Stempel nicht loeschen, sonst
+  // verliert ein Pin-Klick die Startbuch-Reihenfolge.
+  const stamp = after.lastOpenedAt;
+  bookShelf.setShelf(BOOK3, LEKTOR, { pinned: false });
+  assert.equal(bookShelf.shelfMap(LEKTOR).get(BOOK3).lastOpenedAt, stamp);
+
+  // Pro User skopiert wie die uebrigen Achsen.
+  assert.equal(bookShelf.shelfMap(AUTOR).get(BOOK3), undefined);
+});
+
+test('touchOpened: ungueltige Eingaben werfen statt still zu schreiben', () => {
+  assert.throws(() => bookShelf.touchOpened(0, AUTOR), /book_id ungueltig/);
+  assert.throws(() => bookShelf.touchOpened(BOOK, ''), /touchOpened/);
+});
+
+test('lastOpenedBook: groesster Zeitstempel gewinnt, Archiv und ACL schneiden ab', () => {
+  // Hier liegt der Vergleich, der die Startbuch-Frage entscheidet — im SQL, weil
+  // nur der Server alle Buecher des Users sieht. Der Client bekommt EINE Antwort
+  // und kann darum nicht selbst den zweitbesten waehlen; deshalb muessen Archiv
+  // und ACL bereits hier greifen.
+  const A = 601; const Bk = 602; const C = 603;
+  schema.upsertBookByName(A, 'Alpha');
+  schema.upsertBookByName(Bk, 'Beta');
+  schema.upsertBookByName(C, 'Gamma');
+  const ids = [A, Bk, C];
+
+  assert.equal(bookShelf.lastOpenedBook(AUTOR, ids), null, 'nie geoeffnet → null');
+
+  // Zeitstempel manuell setzen: `touchOpened` nimmt immer „jetzt", und drei
+  // Aufrufe in derselben Millisekunde waeren nicht unterscheidbar.
+  const stamp = (bookId, iso) => {
+    bookShelf.touchOpened(bookId, AUTOR);
+    db.prepare('UPDATE book_shelf SET last_opened_at = ? WHERE book_id = ? AND user_email = ?')
+      .run(iso, bookId, AUTOR);
+  };
+  stamp(A, '2026-09-01T08:00:00.000Z');
+  stamp(Bk, '2026-09-02T11:30:00.000Z');
+  stamp(C, '2026-08-01T23:59:59.999Z');
+
+  assert.equal(bookShelf.lastOpenedBook(AUTOR, ids).book_id, Bk);
+
+  // Der Spitzenreiter archiviert → der zweitbeste, nicht null.
+  bookShelf.setShelf(Bk, AUTOR, { archived: true });
+  assert.equal(bookShelf.lastOpenedBook(AUTOR, ids).book_id, A);
+
+  // ACL: nur was der Aufrufer sichtbar mitgibt, kommt in Frage.
+  assert.equal(bookShelf.lastOpenedBook(AUTOR, [C]).book_id, C);
+  assert.equal(bookShelf.lastOpenedBook(AUTOR, []), null);
+
+  // Fremder User sieht die eigenen Stempel nicht.
+  assert.equal(bookShelf.lastOpenedBook(LEKTOR, ids), null);
 });

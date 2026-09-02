@@ -7,10 +7,10 @@
      --close-size   Icon-/Schriftgroesse   (Default: --font-size-md)
      --close-pad    Polsterung             (Default: 0 var(--space-xs))
 
-   ADOPTIERT: .figur-lookup-close, .synonym-picker-close.
+   ADOPTIERT: .figur-lookup-close, .synonym-picker-close, .heatmap-detail-close.
    NACHZIEHEN bei Beruehrung (gleiches Vorgehen wie bei .danger-zone):
    .btn-card-close, .edit-find-close, .book-editor-find-close,
-   .entity-popover-close, .heatmap-detail-close, .job-toast-close,
+   .entity-popover-close, .job-toast-close,
    .revision-viewer__close, .shortcuts-close. Sie tragen heute je eigene
    font-size/padding-Werte — beim Umstellen den bestehenden Wert als
    --close-size/--close-pad setzen, NICHT auf den Default vereinheitlichen

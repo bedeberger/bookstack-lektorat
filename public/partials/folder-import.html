@@ -103,6 +103,8 @@
           x-text="$app.t('folderImport.result.skipped', { n: result?.skipped?.length || 0 })"></li>
       <li x-show="result?.extras?.analysis"
           x-text="$app.t('folderImport.result.analysis', { figures: result?.extras?.analysis?.figures || 0, locations: result?.extras?.analysis?.locations || 0, scenes: result?.extras?.analysis?.scenes || 0 })"></li>
+      <li x-show="(result?.extras?.analysis?.skippedRows || 0) > 0"
+          x-text="$app.t('folderImport.result.analysisScopeSkipped', { rows: result?.extras?.analysis?.skippedRows || 0 })"></li>
       <li x-show="result?.extras?.lektorat"
           x-text="$app.t('folderImport.result.lektorat', { n: result?.extras?.lektorat?.pageChecks || 0 })"></li>
       <li x-show="result?.extras?.chats"

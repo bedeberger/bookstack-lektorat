@@ -14,7 +14,7 @@ const { collectExtras } = require('../db/book-migration-data');
 const { slugify } = require('../lib/slug');
 const { toIntId } = require('../lib/validate');
 const { setContext } = require('../lib/log-context');
-const { requireBookAccess, sendACLError } = require('../lib/acl');
+const { requireBookAccess, sendACLError, sessionEmail } = require('../lib/acl');
 
 const router = express.Router();
 
@@ -83,10 +83,18 @@ router.get('/:bookId', async (req, res) => {
   // Optionale Extra-Bloecke einsammeln (synchroner DB-Read, kein KI-Call).
   let extras = {};
   if (wantsExtras) {
-    try { extras = collectExtras(bookId, includes); }
+    // Analyse-Block: genau EINE Analyse reist mit, die des exportierenden Users
+    // (er ist hier zwangslaeufig der Owner, siehe ACL oben). Nimmt der Export
+    // zwei mit, verschmelzen sie beim Restore zu einem Katalog, in dem jede
+    // Figur zweimal steht — Details an _pickScope in db/book-migration-data.js.
+    try { extras = collectExtras(bookId, includes, sessionEmail(req)); }
     catch (e) {
       logger.error(`swbook-Export Extras fehlgeschlagen (book=${bookId}): ${e.message}`);
       return res.status(502).json({ error_code: 'EXPORT_FAILED' });
+    }
+    const sc = extras.analysisScope;
+    if (sc?.skippedScopes) {
+      logger.info(`swbook-Export: ${sc.skippedScopes} weitere Analyse(n) mit ${sc.skippedRows} Zeilen nicht mitgenommen (book=${bookId}, Scope=${sc.email || 'ohne User'}).`);
     }
   }
 

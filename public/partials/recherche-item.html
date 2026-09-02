@@ -17,6 +17,12 @@
                  Titel steht die Typ-Bezeichnung da — sonst gaebe es kein Sprungziel. -->
             <button type="button" class="research-item-title" @click="openDetail(item)"
                     x-text="item.title || kindLabel(item.kind)"></button>
+            <!-- Einarbeitungs-Status: dieselbe Aussage wie die Spalte im
+                 Status-Board, damit beide Ansichten nicht verschieden aussehen.
+                 Gesetzt wird er im Aktionsmenue (oder per Drag im Board). -->
+            <span class="research-status-badge" :class="'research-status-badge--' + itemStatus(item)"
+                  x-show="showStatusBadge(item)" x-cloak
+                  :data-tip="$app.t('recherche.status.label')" x-text="statusLabel(itemStatus(item))"></span>
             <div class="research-item-actions" x-data="{ menuCtx: 'list' }">
               <button type="button" class="icon-btn" @click="openDetail(item, { edit: true })" :disabled="busy" :data-tip="$app.t('recherche.edit')" :aria-label="$app.t('recherche.edit')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#pencil"/></svg></button>
               <!-- @include recherche-item-menu -->

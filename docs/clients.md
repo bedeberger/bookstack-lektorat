@@ -181,6 +181,11 @@ Serverseitig braucht sie nichts Eigenes außer dem Scope, einem Sammel-Endpunkt 
   - **Idempotenz mit zwei verschiedenen Regeln, absichtlich:** eine **Quelle** darf pro Dokument nur einmal existieren (buchübergreifend, Bibliothek) → bekannte URL wird wiederverwendet und nur noch verlinkt. Ein **Fundstück** darf pro Dokument beliebig oft existieren (zwei Zitate aus derselben Seite sind zwei Funde) → deduped wird nur ein *wortgleicher* Fund (kind + Titel + Text + URL) aus einem 10-Minuten-Fenster, also der Doppelklick.
 - **`GET /sources/by-url?url=&book_id=`** ([routes/sources.js](../routes/sources.js)) — „liegt das schon in meiner Bibliothek?" vor dem Erfassen. Nur der eigene Pool; `linked_to_book` sagt, ob im Zielbuch schon zugeordnet.
 - **`GET /research?book_id=&q=&kind=&limit=`** ([routes/research.js](../routes/research.js)) — Bestandsblick aufs Recherche-Board: „habe ich zu dieser Seite schon etwas erfasst?" vor dem Erfassen, plus Suche im Warteschlangen-Fenster. Rein lesend, keine Nebenwirkung. Scope `content:read`, Rolle `editor` auf dem Buch (Buch-ACL greift für ein Token exakt wie für eine Session — das Token löst auf den echten User auf).
+- **`POST /research/:id/scrape`** ([routes/research-scrape.js](../routes/research-scrape.js)) — den Link eines Fundstücks **serverseitig** lesen und Titel/Text/Herkunft/Linkbezeichnung daraus übernehmen. Body `{ url_id?, overwrite? }`, Antwort `{ item, filled[], skipped[], truncated, final_url }`. Rolle `editor`; **nicht** im `capture:write`-Scope (nur `content:write`).
+  - **Das ist das schlechtere der beiden Verfahren, und das ist Absicht.** Die Erweiterung liest das *gerenderte* Dokument im Tab des Nutzers — mit ausgeführtem JavaScript und der Sitzung des Nutzers — und bleibt damit der Weg erster Wahl. Dieser Endpunkt holt nach, was ohne Browser erreichbar ist, und existiert für die Lage, in der es keine Erweiterung gibt: ein aus der Android-App **geteilter** Link kommt als nackte URL an, und das Fundstück hätte sonst keinen Text (unauffindbar in Volltextsuche und Semantik-Index).
+  - **Es wird nie geraten:** kein KI-Aufruf, keine Zusammenfassung. Was zurückkommt, steht im Dokument (`og:*`/`<meta>`/`<title>` plus Haupttext ohne Navigation, Kopf-, Fuss- und Randbereiche).
+  - **Nicht-destruktiv per Default:** gefüllt wird nur, was leer ist; alles Übrige nennt `skipped` und bleibt stehen. `overwrite: true` ersetzt — die SPA fragt davor nach. `filled`/`skipped` tragen Feldnamen (`title`, `body`, `source`, `url_label`), `truncated` sagt, dass der Text an `BODY_MAX` gekappt wurde.
+  - `url_id` wählt **gezielt** einen der Links (gleiche Regel wie `POST /sources/from-research`); ohne Angabe gilt der erste. Die `url_id` bleibt beim Benennen **stabil** — der Weg ist ein gezieltes `UPDATE`, kein Neuschreiben der Link-Liste.
   - **Reduzierte Ausgabeform für Device-Token-Requests** (`toClientItem` in [lib/research-validate.js](../lib/research-validate.js)): `id, kind, title, source, created_at, updated_at, body_snippet, urls[{url,label}]`. Der volle `body` geht **nicht** mit — er trägt bis zu `BODY_MAX` (20 000) Zeichen Seitentext, den die Erweiterung selbst hochgeladen hat, und würde sich bei jeder Dublettenprüfung zurückschicken; `body_snippet` ist der auf 200 Zeichen normalisierte Anriss. `urls` bleibt drin, weil die Frage ohne sie nicht beantwortbar wäre. Board-Zubehör (`tags`, `links`, `doc_*`, `pinned`, `archived`) fällt weg. **Die SPA-Antwort ist unverändert** — die Verzweigung hängt allein an `session.user.via === 'device_token'`.
   - **`limit`**: Default 50 für Device-Token-Requests, Maximum 200; ein unbrauchbarer Wert (0, negativ, Text) fällt auf den Default zurück statt 400 zu werfen. Ohne Token-Kontext (SPA) gilt weiterhin **kein** Limit, sofern keines mitgeschickt wird.
   - **`q` deckelt vorher bei `FTS_PREFILTER_LIMIT` = 500**: die Suche läuft als FTS5-Vorfilter über den Index und holt höchstens 500 Treffer, die erst danach gefiltert, sortiert und auf `limit` gekürzt werden. Bei sehr breiten Queries in sehr grossen Büchern liegen Funde jenseits davon ausserhalb der Antwort — **der Client soll die Grenze spiegeln** und breite Queries als „unvollständig" kennzeichnen statt als „nicht vorhanden".
@@ -225,7 +230,7 @@ Jede Fehlerantwort ist JSON mit dem Feld `error_code` (Ausnahmen unten). **Diese
 | `SOURCE_IDENTITY_REQ` | 400 | Quellen-Entwurf ohne Titel und ohne Person (`mode` ∈ `source\|both`) |
 | `CITEKEY_TAKEN` | 409 | `UNIQUE(owner_email, citekey)` verletzt. Der Entwurf trägt bewusst keinen `citekey`, der Fall ist praktisch ein Wettlauf |
 
-**Recherche-Board** ([routes/research.js](../routes/research.js), Rolle `editor`) — `GET /research`, `GET /research/tags`, `POST /research`, `POST /research/:id/{image,doc}`:
+**Recherche-Board** ([routes/research.js](../routes/research.js), Rolle `editor`) — `GET /research`, `GET /research/tags`, `POST /research`, `POST /research/:id/{image,doc,scrape}`:
 
 | `error_code` | HTTP | Wann | Endpunkt |
 |---|---|---|---|
@@ -234,6 +239,7 @@ Jede Fehlerantwort ist JSON mit dem Feld `error_code` (Ausnahmen unten). **Diese
 | `INVALID_ID` | 400 | `book_id` (Query) bzw. `:id` (Pfad) fehlt/ungültig | `GET /research`, `GET /research/tags`, alle `/:id/*` |
 | `EMPTY` | 400 | weder Titel noch Text noch `http(s)`-URL | `POST /research` |
 | `INVALID_KIND` | 400 | `kind` nicht in `note, link, quote, fact, image` | `PATCH /research/:id` — **nicht allowlistet** (kein `PATCH` im Capture-Scope); hier nur genannt, weil `kind` sonst wie ein prüfender Wert aussieht: bei `POST` wird ein unbekannter `kind` **still** auf `note` gesetzt, nicht abgewiesen |
+| `INVALID_STATUS` | 400 | `status` nicht in `offen, in_arbeit, eingearbeitet, verworfen` | `PATCH /research/:id` — wie `INVALID_KIND` **nicht allowlistet**; die Einarbeitungs-Achse des Status-Boards wird ausschliesslich per `PATCH` gesetzt, `POST /research` kennt das Feld nicht (jedes neue Fundstück startet auf `offen`) |
 | `ITEM_NOT_FOUND` | 404 | Fundstück-Id existiert nicht | `/research/:id/{image,doc}` |
 | `NO_IMAGE` | 400 | leerer Body oder kein `image/*`-Content-Type | `POST /research/:id/image` |
 | `IMAGE_INVALID` | 400 | `sharp` kann das Bild nicht lesen/normalisieren | `POST /research/:id/image` |
@@ -241,6 +247,16 @@ Jede Fehlerantwort ist JSON mit dem Feld `error_code` (Ausnahmen unten). **Diese
 | `DOC_TOO_LARGE` | 413 | PDF über 25 MB. **In der Praxis kommt der Client hier nicht an:** der Body-Parser hat dieselbe Schwelle und antwortet vorher mit 413 **ohne** `error_code` (siehe unten) | `POST /research/:id/doc` |
 | `DOC_NOT_PDF` | 415 | Magic-Bytes sind nicht `%PDF-` | `POST /research/:id/doc` |
 | `DOC_UNREADABLE` | 400 | Parser-Fehler (verschlüsselt, beschädigt) | `POST /research/:id/doc` |
+| `NO_URL` | 400 | Fundstück hat keinen Link zum Lesen (bzw. `url_id` gehört nicht dazu) | `POST /research/:id/scrape` |
+| `INVALID_URL` | 400 | der Link ist keine gültige `http(s)`-Adresse | `POST /research/:id/scrape` |
+| `SCRAPE_BLOCKED` | 400 | Ziel zeigt nicht ins offene Netz (loopback/privat/link-local). Der Request geht **nicht** raus, und **jeder** Redirect-Hop wird erneut geprüft | `POST /research/:id/scrape` |
+| `SCRAPE_NOT_HTML` | 400 | `content-type` ist keine Webseite. Ein PDF gehört über `POST /research/:id/doc` ans Fundstück | `POST /research/:id/scrape` |
+| `SCRAPE_EMPTY` | 422 | erreicht, aber ohne Text — typischerweise eine Seite, die ihren Inhalt erst im Browser zusammensetzt. **Kein Fehler des Clients:** hier ist die Browser-Erweiterung der Weg, weil sie das gerenderte Dokument liest | `POST /research/:id/scrape` |
+| `SCRAPE_HTTP_ERROR` | 502 | das Ziel antwortet nicht-2xx (oder mit einem Redirect ohne `location` / zu langer Kette) | `POST /research/:id/scrape` |
+| `SCRAPE_TOO_LARGE` | 502 | Dokument über 5 MB (angekündigt oder beim Lesen gezählt) | `POST /research/:id/scrape` |
+| `SCRAPE_UNAVAILABLE` | 502 | Ziel nicht auflösbar/nicht erreichbar | `POST /research/:id/scrape` |
+| `SCRAPE_FAILED` | 502 | unerwarteter Fehler beim Lesen (Sammelcode) | `POST /research/:id/scrape` |
+| `SCRAPE_TIMEOUT` | 504 | Ziel hat 12 s nicht geantwortet | `POST /research/:id/scrape` |
 
 **Quellen-Bibliothek** ([routes/sources.js](../routes/sources.js), [routes/sources-doc.js](../routes/sources-doc.js)):
 
@@ -290,6 +306,7 @@ Textfelder werden **still gekürzt, nicht abgewiesen** (`cleanStr` in [lib/resea
 | `CLIENT_LIST_LIMIT` / `LIST_LIMIT_MAX` | 50 (Default am Token) / 200 (Maximum) | [lib/research-validate.js](../lib/research-validate.js) |
 | `FTS_PREFILTER_LIMIT` | 500 Treffer vor Filter/Sortierung | [lib/research-validate.js](../lib/research-validate.js) |
 | Bild-Upload | 12 MB | [routes/research.js](../routes/research.js) (`rawImage`) |
+| Scrape: Timeout / Dokumentgrösse / Redirect-Hops | 12 s / 5 MB / 5 | [lib/url-scrape.js](../lib/url-scrape.js) |
 | PDF-Upload | 25 MB | [lib/pdf-extract.js](../lib/pdf-extract.js) (`MAX_INPUT_BYTES`) |
 | Gespeicherter PDF-Text | 200 000 Zeichen, danach `doc_truncated: true` | [lib/pdf-extract.js](../lib/pdf-extract.js) (`MAX_TEXT_CHARS`) |
 | Dateiname eines Anhangs (`?name=`) | 200 Zeichen | [lib/pdf-attachment.js](../lib/pdf-attachment.js) (`DOCNAME_MAX`) |
