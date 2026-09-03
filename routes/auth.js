@@ -322,6 +322,20 @@ router.get('/auth/callback', async (req, res) => {
           invitedBy: acceptedInvite.invited_by,
         });
         appUsers.acceptInvite(acceptedInvite.id);
+        // Das KI-Profil erbt createUser vom Einladenden (db/app-users.js). Die
+        // Herkunft gehoert in die Audit-Spur, sonst steht im Admin-Drawer ein
+        // Profil ohne jede Zuweisung.
+        if (user?.ai_profile_id) {
+          appUsers.recordAuditEvent(email, 'ai-provider-changed', {
+            ip, userAgent,
+            meta: { from: null, to: user.ai_profile_id, by: acceptedInvite.invited_by, reason: 'invite-inherited' },
+          });
+        }
+        logger.info(
+          `Invite angenommen: ${email} von ${acceptedInvite.invited_by}`
+          + ` (ki-profil=${user?.ai_profile_id ?? 'global'})`,
+          { user: email },
+        );
       } else if (appSettings.get('auth.allow_open_signup') === true) {
         user = appUsers.createUser({
           email,

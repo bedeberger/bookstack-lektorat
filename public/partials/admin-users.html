@@ -95,6 +95,8 @@
             <td>
               <div x-text="u.display_name || u.email"></div>
               <div class="muted-msg muted-msg--sm" x-text="u.email"></div>
+              <div class="muted-msg muted-msg--sm" x-show="u.invited_by"
+                   x-text="$app.t('admin.users.invitedBy', { name: u.invited_by_name || u.invited_by })"></div>
             </td>
             <td>
               <div x-data="combobox($app.t('admin.users.role'))"

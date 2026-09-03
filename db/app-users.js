@@ -32,8 +32,9 @@ const _stmtFindByEmail = db.prepare(`
 
 const _stmtInsertUser = db.prepare(`
   INSERT INTO app_users (email, display_name, global_role, status, language,
-                         can_invite_users, first_seen_at, invited_by, invited_at, created_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ${NOW_ISO_SQL})
+                         can_invite_users, first_seen_at, invited_by, invited_at,
+                         ai_profile_id, created_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${NOW_ISO_SQL})
 `);
 
 const _stmtTouchLogin = db.prepare(`
@@ -81,14 +82,22 @@ const _stmtSetInviteFlag = db.prepare(`
   UPDATE app_users SET can_invite_users = ? WHERE email = ?
 `);
 
+// `invited_by` traegt die Einladungs-Herkunft des Kontos: wer diesen User ins
+// Haus geholt hat. Der Name des Einladenden kommt per JOIN zur Lesezeit (keine
+// Snapshot-Spalte) und kann NULL sein — bei Open-Signup, beim ENV-Admin und
+// wenn das einladende Konto inzwischen geloescht ist (account-delete anonymisiert
+// `app_users.invited_by`, siehe USER_REF_PLAN).
 const _stmtListUsers = db.prepare(`
   SELECT u.id, u.email, u.display_name, u.global_role, u.status, u.language,
          u.can_invite_users, u.first_seen_at, u.last_seen_at, u.created_at,
+         u.invited_by, u.invited_at,
+         inv.display_name AS invited_by_name,
          u.monthly_budget_usd, u.budget_mode, u.ai_profile_id,
          p.name     AS ai_profile_name,
          p.provider AS ai_profile_provider
     FROM app_users u
     LEFT JOIN ai_profiles p ON p.id = u.ai_profile_id
+    LEFT JOIN app_users inv ON inv.email = u.invited_by COLLATE NOCASE
    ORDER BY u.created_at DESC, u.email
 `);
 
@@ -223,10 +232,30 @@ function getActiveAdminEmails() {
   return _stmtActiveAdminEmails.all().map(r => r.email).filter(Boolean);
 }
 
-function createUser({ email, displayName = null, globalRole = 'user', status = 'active', language = 'de', canInviteUsers = 1, invitedBy = null }) {
+// KI-Profil eines eingeladenen Kontos: es erbt das Profil des Einladenden.
+//
+// Why: wer einen Mitautor/Lektor einlaedt, holt ihn in den eigenen Betrieb —
+// laeuft das Haus auf einem lokalen Endpunkt oder einem bezahlten Frontier-
+// Modell, soll der Neue nicht stumm auf dem globalen `ai.provider` landen, den
+// niemand fuer ihn gewaehlt hat. Geerbt wird EINMAL bei der Kontoanlage (eine
+// Kopie, keine Verknuepfung): spaetere Profilwechsel des Einladenden duerfen
+// den Eingeladenen nicht mitziehen, sonst wechselt sein Modell ohne Anlass.
+// Gelesen wird der Stand zur ANNAHME-Zeit, nicht zur Einladungs-Zeit — der
+// Einladende ist die SSoT, ein Schnappschuss in `user_invites` waere eine
+// zweite Wahrheit ueber dasselbe. NULL bleibt NULL: hat der Einladende selbst
+// kein Profil, folgt der Neue wie er dem globalen Provider.
+function _inheritedAiProfileId(inviterEmail) {
+  if (!inviterEmail) return null;
+  const inviter = getUser(inviterEmail);
+  return inviter?.ai_profile_id ?? null;
+}
+
+function createUser({ email, displayName = null, globalRole = 'user', status = 'active', language = 'de', canInviteUsers = 1, invitedBy = null, aiProfileId = undefined }) {
   const e = _normEmail(email);
   if (!e) throw new Error('createUser: email required');
+  const inviter = invitedBy ? _normEmail(invitedBy) : null;
   const nowIso = new Date().toISOString();
+  const profileId = aiProfileId === undefined ? _inheritedAiProfileId(inviter) : (aiProfileId ?? null);
   _stmtInsertUser.run(
     e,
     displayName,
@@ -235,8 +264,9 @@ function createUser({ email, displayName = null, globalRole = 'user', status = '
     language,
     canInviteUsers ? 1 : 0,
     status === 'active' ? nowIso : null,
-    invitedBy ? _normEmail(invitedBy) : null,
-    invitedBy ? nowIso : null,
+    inviter,
+    inviter ? nowIso : null,
+    profileId,
   );
   return getUser(e);
 }

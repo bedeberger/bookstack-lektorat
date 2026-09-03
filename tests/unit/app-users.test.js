@@ -252,6 +252,53 @@ test('listActiveInvites: gibt Click+Reminder-Felder zurueck', () => {
   }
 });
 
+// ── Einladungs-Herkunft + KI-Profil-Vererbung ──────────────────────────────
+//
+// Ein eingeladenes Konto erbt das KI-Profil des Einladenden EINMAL bei der
+// Anlage. Ohne das landet ein per Buch-Freigabe hereingeholter Mitautor stumm
+// auf dem globalen Provider, den niemand fuer ihn gewaehlt hat.
+
+test('createUser: invitedBy wird gespeichert (Herkunft des Kontos)', () => {
+  appUsers.createUser({ email: 'inviter@example.com', displayName: 'Ida Inviter' });
+  appUsers.createUser({ email: 'invitee@example.com', invitedBy: 'Inviter@Example.com' });
+  const u = appUsers.getUser('invitee@example.com');
+  assert.equal(u.invited_by, 'inviter@example.com', 'invited_by nicht normalisiert gespeichert');
+  assert.ok(u.invited_at, 'invited_at fehlt');
+});
+
+test('createUser: eingeladener User erbt das KI-Profil des Einladenden', () => {
+  const aiProfiles = require('../../db/ai-profiles');
+  const prof = aiProfiles.createProfile({ name: `Erb-Profil-${Date.now()}`, provider: 'claude' }, 'inviter@example.com');
+  appUsers.setAiProfile('inviter@example.com', prof.id);
+
+  appUsers.createUser({ email: 'erbe@example.com', invitedBy: 'inviter@example.com' });
+  assert.equal(appUsers.getUser('erbe@example.com').ai_profile_id, prof.id);
+
+  // Kopie, keine Verknuepfung: der Wechsel beim Einladenden zieht den
+  // Eingeladenen nicht mit.
+  appUsers.setAiProfile('inviter@example.com', null);
+  assert.equal(appUsers.getUser('erbe@example.com').ai_profile_id, prof.id);
+
+  // Ohne Einladenden bleibt es beim globalen Provider (NULL).
+  appUsers.createUser({ email: 'selbst@example.com' });
+  assert.equal(appUsers.getUser('selbst@example.com').ai_profile_id, null);
+
+  // Expliziter Wert schlaegt die Vererbung.
+  appUsers.setAiProfile('inviter@example.com', prof.id);
+  appUsers.createUser({ email: 'explizit@example.com', invitedBy: 'inviter@example.com', aiProfileId: null });
+  assert.equal(appUsers.getUser('explizit@example.com').ai_profile_id, null);
+});
+
+test('listUsers: liefert Einladungs-Herkunft inkl. Name des Einladenden', () => {
+  const row = appUsers.listUsers().find(u => u.email === 'invitee@example.com');
+  assert.ok(row, 'invitee fehlt in listUsers');
+  assert.equal(row.invited_by, 'inviter@example.com');
+  assert.equal(row.invited_by_name, 'Ida Inviter');
+  const self = appUsers.listUsers().find(u => u.email === 'selbst@example.com');
+  assert.equal(self.invited_by, null);
+  assert.equal(self.invited_by_name, null);
+});
+
 test('foreign_key_check nach Mig 107 leer', () => {
   const errs = db.pragma('foreign_key_check');
   assert.equal(errs.length, 0, `${errs.length} FK-Verstoesse: ${JSON.stringify(errs.slice(0, 5))}`);

@@ -142,6 +142,28 @@ test('PUT /admin/users/:email role-changed → audit event', async () => {
   });
 });
 
+// Regression: die Profil-Zuweisung schreibt eine Audit-Zeile. Ein Event-Name
+// ausserhalb des CHECK-Enums von `user_sessions_audit` liess die Route werfen,
+// NACHDEM das Profil schon gesetzt war.
+test('PUT /admin/users/:email ai_profile_id → 200 + audit event', async () => {
+  const aiProfiles = require('../../db/ai-profiles');
+  const prof = aiProfiles.createProfile(
+    { name: `Route-Profil-${Date.now()}`, provider: 'ollama', host: 'http://localhost:11434' },
+    'alice@example.com',
+  );
+  const r = await _request('PUT', '/admin/users/bob@example.com', {
+    user: 'alice@example.com', role: 'admin',
+    body: { ai_profile_id: prof.id },
+  });
+  assert.equal(r.status, 200, r.raw);
+  assert.equal(r.body.user.ai_profile_id, prof.id);
+  const events = appUsers.listAuditForUser('bob@example.com');
+  assert.ok(events.some(e => e.event === 'ai-provider-changed'), 'Audit-Event fehlt');
+  await _request('PUT', '/admin/users/bob@example.com', {
+    user: 'alice@example.com', role: 'admin', body: { ai_profile_id: null },
+  });
+});
+
 test('PUT /admin/users/:email mit invalidem status → 400', async () => {
   const r = await _request('PUT', '/admin/users/bob@example.com', {
     user: 'alice@example.com', role: 'admin',

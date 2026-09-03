@@ -3670,6 +3670,7 @@
   "admin.users.invites.empty": "Keine offenen Einladungen.",
   "admin.users.invites.invitedAt": "Eingeladen am",
   "admin.users.invites.expiresAt": "Gültig bis",
+  "admin.users.invitedBy": "Eingeladen von {name}",
   "admin.users.invites.invitedBy": "von {email}",
   "admin.users.invites.clickStatus": "Link geöffnet",
   "admin.users.invites.click.never": "Noch nicht geöffnet",

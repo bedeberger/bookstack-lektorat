@@ -216,7 +216,7 @@ router.put('/:email', express.json(), (req, res) => {
     if (next !== (user.ai_profile_id || null)) {
       try { appUsers.setAiProfile(target, next); }
       catch (e) { return res.status(400).json({ error_code: 'AI_PROFILE_INVALID', detail: e.message }); }
-      appUsers.recordAuditEvent(target, 'ai-profile-changed', {
+      appUsers.recordAuditEvent(target, 'ai-provider-changed', {
         ip, userAgent,
         meta: { from: user.ai_profile_id || null, to: next, by: actor },
       });

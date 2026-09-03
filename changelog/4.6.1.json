@@ -1,0 +1,21 @@
+{
+  "version": "4.6.1",
+  "date": "2026-09-03",
+  "entries": [
+    {
+      "kind": "neu",
+      "de": "Wer jemanden neu einlädt, gibt sein KI-Profil mit: Das neue Konto arbeitet von Anfang an mit demselben Modell statt mit der Voreinstellung des Servers.",
+      "en": "Inviting someone new passes on your AI profile: the new account works with the same model from the start instead of the server default."
+    },
+    {
+      "kind": "neu",
+      "de": "Benutzerverwaltung: In der Benutzerliste steht jetzt unter jedem Konto, wer es eingeladen hat. So bleibt nachvollziehbar, wie jemand dazugekommen ist.",
+      "en": "User management: The user list now shows under every account who invited it. That keeps it traceable how someone joined."
+    },
+    {
+      "kind": "behoben",
+      "de": "Benutzerverwaltung: Das Zuweisen eines KI-Profils an einen Benutzer endete mit einer Fehlermeldung, obwohl das Profil gesetzt wurde.",
+      "en": "User management: Assigning an AI profile to a user ended with an error message even though the profile had been set."
+    }
+  ]
+}
