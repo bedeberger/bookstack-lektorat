@@ -1,6 +1,6 @@
 {
   "name": "schreibwerkstatt",
-  "version": "4.6.1",
+  "version": "4.6.2",
   "description": "Schreibwerkstatt — Schreiben, Lektorat und Buchanalyse mit KI",
   "license": "AGPL-3.0-or-later",
   "main": "server.js",

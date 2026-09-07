@@ -1,0 +1,11 @@
+{
+  "version": "4.6.2",
+  "date": "2026-09-07",
+  "entries": [
+    {
+      "kind": "verbessert",
+      "de": "PDF-Export, Inhaltsverzeichnis: Lange Kapitel- und Seitentitel werden nicht mehr abgeschnitten, sondern vollständig auf mehrere Zeilen umgebrochen. Seitenzahl und Leitpunkte stehen am Ende des Eintrags.",
+      "en": "PDF export, table of contents: Long chapter and page titles are no longer cut off but wrap onto several lines. Page number and leader dots sit at the end of the entry."
+    }
+  ]
+}

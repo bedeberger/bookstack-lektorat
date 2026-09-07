@@ -498,6 +498,47 @@ test('TOC bei mirrorMargins: jede Zeile folgt dem Bundsteg IHRER Buchseite (Vers
   assert.ok(seenMm.has(15), 'Verso-Seite (15mm) fehlt — TOC spiegelt den Bundsteg nicht');
 });
 
+test('TOC: langer Titel bricht um, Anker für Seitenzahl liegt auf der LETZTEN Zeile', async () => {
+  const PDFDocument = (await import('pdfkit')).default;
+  const { MM_TO_PT } = await import('../../lib/pdf-render/layout.js');
+  const { _renderToc } = await import('../../lib/pdf-render/pages.js');
+
+  const margins = { top: 25 * MM_TO_PT, right: 15 * MM_TO_PT, bottom: 25 * MM_TO_PT, left: 20 * MM_TO_PT };
+  const doc = new PDFDocument({ size: [400, 600], margins, autoFirstPage: false, bufferPages: true });
+  doc.on('data', () => {});
+  doc.registerFont('toc', 'Helvetica');
+  doc.registerFont('toc-title', 'Helvetica-Bold');
+
+  const writes = [];
+  const origText = doc.text.bind(doc);
+  doc.text = function (str, x, y, opts) {
+    if (typeof x === 'number' && typeof str === 'string') writes.push({ str, y });
+    return origText(str, x, y, opts);
+  };
+
+  const entries = [
+    { title: 'Ein kurzer Titel', num: '', level: 0, blockIdx: 0, itemIdx: -1, pageIdx: -1 },
+    { title: 'Ein sehr langer Kapiteltitel, der unmöglich in eine einzige Zeile des Verzeichnisses passt', num: '', level: 0, blockIdx: 1, itemIdx: -1, pageIdx: -1 },
+  ];
+  const toc = { enabled: true, depth: 1, showPageNumbers: true, title: 'Inhalt', leader: 'dots', indentMm: 0, pageNumReserveMm: 14 };
+  const font = { toc: { sizePt: 11, lineHeight: 1.45 }, tocTitle: { sizePt: 20 } };
+
+  const positions = _renderToc(doc, toc, entries, 'de', font);
+  doc.end();
+
+  const shortWrites = writes.filter(w => w.str === 'Ein kurzer Titel');
+  assert.equal(shortWrites.length, 1, 'kurzer Titel muss einzeilig bleiben');
+  assert.equal(positions[0].y, shortWrites[0].y, 'Anker eines einzeiligen Eintrags = seine Zeile');
+
+  // Alle übrigen Writes (ausser Verzeichnis-Überschrift) gehören dem langen Titel.
+  const longWrites = writes.filter(w => w.str !== 'Ein kurzer Titel' && w.str !== 'Inhalt');
+  assert.ok(longWrites.length >= 2, `langer Titel muss umbrechen (Writes: ${longWrites.length})`);
+  assert.equal(positions[1].y, longWrites[longWrites.length - 1].y,
+    'Anker (Seitenzahl/Leader) muss auf der letzten Zeile des umgebrochenen Eintrags liegen');
+  assert.equal(positions[1].tocPageIdx, positions[0].tocPageIdx,
+    'umgebrochener Eintrag darf nicht über zwei TOC-Seiten zerrissen werden');
+});
+
 test('widowOrphanControl: schiebt Absatz auf neue Seite statt Single-Line-Witwe/Waise', async () => {
   // Vier mittellange Absätze, plus ein letzter Absatz, der eine Single-Line-
   // Witwe/Waise produzieren würde. Mit Kontrolle wird er als Ganzes
